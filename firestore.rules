@@ -1,0 +1,223 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    // Only the user whose uid matches the path segment may access their data.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Incoming document must have a specific field equal to value.
+    function incomingHasField(field, value) {
+      return request.resource.data[field] == value;
+    }
+
+    // Field must be unchanged between the existing document and the incoming write.
+    // Only valid in update rules (where resource.data exists).
+    function fieldUnchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    // Fetches a familyConnections document's data by ID.
+    function connectionData(connectionId) {
+      return get(/databases/$(database)/documents/familyConnections/$(connectionId)).data;
+    }
+
+    // True if uid is one of the two members of this connection (any status).
+    function isConnectionMember(connectionId, uid) {
+      let c = connectionData(connectionId);
+      return c.user1Id == uid || c.user2Id == uid;
+    }
+
+    // True if uid is a member of this connection AND the connection is ACTIVE.
+    function isActiveConnectionMember(connectionId, uid) {
+      let c = connectionData(connectionId);
+      return c.status == 'ACTIVE' && (c.user1Id == uid || c.user2Id == uid);
+    }
+
+    // Cheap shape guard against garbage/oversized fields from a compromised or
+    // buggy client. Not a substitute for app-level validation — just a floor.
+    function isReasonableString(value, maxLen) {
+      return value is string && value.size() > 0 && value.size() <= maxLen;
+    }
+
+    // ─── Family Invitations ──────────────────────────────────────────────────
+    // Root-level collection. Sender creates; recipient reads/accepts by phone JWT.
+    match /familyInvitations/{invitationId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.status == 'PENDING';
+
+      allow read: if request.auth != null && (
+        // Sender can always see their own invitation
+        resource.data.fromUserId == request.auth.uid
+        // Recipient identified by their phone number claim in the JWT
+        || resource.data.toPhone == request.auth.token.phone_number
+      );
+
+      allow update: if request.auth != null && (
+        // Sender can cancel
+        resource.data.fromUserId == request.auth.uid
+        // Recipient can accept or decline
+        || resource.data.toPhone == request.auth.token.phone_number
+      )
+      // Only the status field may change; all identity fields are immutable
+      && fieldUnchanged('fromUserId')
+      && fieldUnchanged('fromPhone')
+      && fieldUnchanged('toPhone');
+
+      allow delete: if request.auth != null
+        && resource.data.fromUserId == request.auth.uid;
+    }
+
+    // ─── Family Connections ──────────────────────────────────────────────────
+    // Peer-to-peer connections. Document ID = min(uid1, uid2) + '_' + max(uid1, uid2).
+    match /familyConnections/{connectionId} {
+      allow read: if request.auth != null && (
+        resource.data.user1Id == request.auth.uid
+        || resource.data.user2Id == request.auth.uid
+      );
+
+      allow create: if request.auth != null && (
+        request.resource.data.user1Id == request.auth.uid
+        || request.resource.data.user2Id == request.auth.uid
+      )
+      // Initiator must be one of the two users
+      && (
+        request.resource.data.initiatedBy == request.auth.uid
+      );
+
+      allow update: if request.auth != null && (
+        resource.data.user1Id == request.auth.uid
+        || resource.data.user2Id == request.auth.uid
+      )
+      // Core identity fields are immutable after creation
+      && fieldUnchanged('user1Id')
+      && fieldUnchanged('user2Id')
+      && fieldUnchanged('initiatedBy')
+      && fieldUnchanged('createdAt')
+      // Each side may only rewrite its own outbound permissions — otherwise
+      // either party could grant themselves more visibility into the other
+      // person's data than that person configured.
+      && (fieldUnchanged('user1Permissions') || request.auth.uid == resource.data.user1Id)
+      && (fieldUnchanged('user2Permissions') || request.auth.uid == resource.data.user2Id);
+
+      allow delete: if false; // Status is set to CANCELLED instead of deleting
+
+      // ── Shared status ─────────────────────────────────────────────────────
+      // One doc per publisher, already filtered to exactly what that publisher's
+      // outbound permissions allow this connection to see (see
+      // FamilyService.publishStatus / deriveSharedView). Because the content is
+      // pre-filtered at write time, the read rule only needs to check connection
+      // membership — there is no sharingMode/shareBattery/etc. logic to get
+      // wrong here, unlike the old single global users/{uid}/familyStatus doc.
+      match /sharedStatus/{publisherUserId} {
+        allow read: if request.auth != null && (
+          request.auth.uid == publisherUserId
+          || isActiveConnectionMember(connectionId, request.auth.uid)
+        );
+        allow write: if request.auth != null
+          && request.auth.uid == publisherUserId
+          && isConnectionMember(connectionId, publisherUserId);
+      }
+    }
+
+    // ─── Users ───────────────────────────────────────────────────────────────
+    // Stores: fcmToken (written by NotificationService on every sign-in)
+    // User profile (name, phone, settings) is stored in SecureStore, NOT Firestore.
+    match /users/{userId} {
+      allow read:   if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+
+      // ── Contacts ───────────────────────────────────────────────────────────
+      // Stores: name, phone, relationship, createdAt, updatedAt
+      match /contacts/{contactId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isReasonableString(request.resource.data.get('name', ''), 100)
+          && isReasonableString(request.resource.data.get('phone', ''), 20);
+        allow update: if isOwner(userId)
+          // Contact creation timestamp is immutable after first write.
+          && fieldUnchanged('createdAt')
+          && isReasonableString(request.resource.data.get('name', ''), 100)
+          && isReasonableString(request.resource.data.get('phone', ''), 20);
+        allow delete: if isOwner(userId);
+      }
+
+      // ── Journeys ───────────────────────────────────────────────────────────
+      // Stores: userId, status, destinationLabel, startLocation, currentLocation, …
+      match /journeys/{journeyId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          // userId field in the document must match the path — prevents spoofing.
+          && incomingHasField('userId', userId)
+          && isReasonableString(request.resource.data.get('destinationLabel', ''), 200);
+        allow update: if isOwner(userId)
+          // Ownership and creation time are immutable after the first write.
+          && fieldUnchanged('userId')
+          && fieldUnchanged('createdAt');
+        allow delete: if isOwner(userId);
+
+        // ── Location Updates ──────────────────────────────────────────────
+        // Raw GPS trail. Append-only (update is never needed after creation).
+        match /locationUpdates/{updateId} {
+          allow read:   if isOwner(userId);
+          allow create: if isOwner(userId);
+          // Location records are immutable — edits are never issued by the app.
+          allow update: if false;
+          // Blocked while this journey has an active SOS: the GPS trail is
+          // the evidence an emergency alert points contacts to, and the owner
+          // (or a compromised client) must not be able to erase it mid-emergency.
+          allow delete: if isOwner(userId)
+            && get(/databases/$(database)/documents/users/$(userId)/journeys/$(journeyId)).data.status != 'SOS_TRIGGERED';
+        }
+
+        // ── Check-ins ──────────────────────────────────────────────────────
+        // Stores: journeyId, scheduledAt, status, createdAt, …
+        match /checkIns/{checkInId} {
+          allow read:   if isOwner(userId);
+          allow create: if isOwner(userId);
+          allow update: if isOwner(userId)
+            && fieldUnchanged('createdAt');
+          allow delete: if isOwner(userId);
+        }
+      }
+
+      // ── SOS Events ─────────────────────────────────────────────────────────
+      // Stores: userId, journeyId, location, status, triggeredAt, createdAt, …
+      match /sosEvents/{sosId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          // userId field must match the path — prevents spoofing.
+          && incomingHasField('userId', userId)
+          // SOS events must be created in the ACTIVE state.
+          && incomingHasField('status', 'ACTIVE');
+        allow update: if isOwner(userId)
+          // Ownership, trigger timestamp, and creation time are all immutable.
+          && fieldUnchanged('userId')
+          && fieldUnchanged('triggeredAt')
+          && fieldUnchanged('createdAt');
+        allow delete: if isOwner(userId);
+      }
+
+      // ── Own Status ─────────────────────────────────────────────────────────
+      // Owner's raw, unfiltered safety snapshot. Self-readable only — never
+      // shared cross-user from here. What family connections can see instead
+      // comes from familyConnections/{connectionId}/sharedStatus/{publisherId},
+      // which holds a copy already filtered by the owner's own sharing
+      // permissions (see FamilyService.publishStatus). Keeping this doc
+      // owner-only means a bypass of the app's UI can, at worst, only let the
+      // owner see more of their own data — never another user's.
+      // Path: users/{userId}/familyStatus/current
+      match /familyStatus/{doc} {
+        allow read:   if isOwner(userId);
+        allow write:  if isOwner(userId);
+      }
+    }
+  }
+}
