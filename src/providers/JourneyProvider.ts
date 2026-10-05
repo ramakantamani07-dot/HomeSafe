@@ -69,4 +69,14 @@ export interface JourneyProvider {
    * The journey document itself is NOT deleted — only the detailed trail.
    */
   deleteJourneyLocationHistory(userId: string, journeyId: string): Promise<void>;
+
+  /**
+   * Creates a public share link for a journey and returns its token.
+   * See models/JourneyShare.ts for exactly what this does and doesn't expose.
+   * Each call creates a new, independent token — there's no single "the"
+   * share link per journey, and no revoke: validity is tied entirely to the
+   * linked journey's own status (checked server-side on read), not this
+   * document's existence.
+   */
+  createShareLink(userId: string, journeyId: string, displayName: string): Promise<string>;
 }

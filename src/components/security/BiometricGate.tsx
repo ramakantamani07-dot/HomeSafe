@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
+import { SPACING, TYPOGRAPHY } from '../../config/theme';
 import { useAuth } from '../../hooks/useAuth';
 import { usePrivacy } from '../../hooks/usePrivacy';
+import { Icon } from '../ui/Icon';
+import { Button } from '../ui/Button';
+import type { ThemeColors } from '../../config/theme';
 
 /**
  * Module-level flag: true once the user has authenticated this process lifetime.
@@ -18,6 +16,8 @@ import { usePrivacy } from '../../hooks/usePrivacy';
 let sessionUnlocked = false;
 
 export function BiometricGate({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { user } = useAuth();
   const { biometricLockEnabled, biometricAvailable, isLoading, unlockWithBiometric } = usePrivacy();
   const [unlocked, setUnlocked] = useState(sessionUnlocked);
@@ -56,73 +56,66 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.logo}>🛡️</Text>
-      <Text style={styles.appName}>HomeSafe</Text>
+      <View style={styles.logoCircle}>
+        <Icon name="shield" size={40} color={theme.textOnColor} />
+      </View>
+      <Text style={styles.appName}>wayLoc</Text>
       <Text style={styles.subtitle}>Unlock to continue</Text>
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <TouchableOpacity
-        style={[styles.unlockButton, authenticating && styles.unlockButtonBusy]}
+      <Button
+        label="Unlock with Biometrics"
+        icon="lock"
         onPress={handleUnlock}
-        disabled={authenticating}
-        activeOpacity={0.85}
-      >
-        {authenticating ? (
-          <ActivityIndicator color={COLORS.white} />
-        ) : (
-          <Text style={styles.unlockButtonText}>🔐  Unlock with Biometrics</Text>
-        )}
-      </TouchableOpacity>
+        loading={authenticating}
+        fullWidth={false}
+        style={styles.unlockButton}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 12,
-  },
-  logo: {
-    fontSize: 64,
-    marginBottom: 4,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginBottom: 16,
-  },
-  error: {
-    fontSize: 14,
-    color: COLORS.danger,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  unlockButton: {
-    marginTop: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    minWidth: 260,
-    alignItems: 'center',
-  },
-  unlockButtonBusy: {
-    backgroundColor: COLORS.textMuted,
-  },
-  unlockButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: theme.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: SPACING.xxl - 8,
+      gap: SPACING.md,
+    },
+    logoCircle: {
+      width: 84,
+      height: 84,
+      borderRadius: 42,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.xs,
+    },
+    appName: {
+      fontSize: TYPOGRAPHY.title.fontSize + 4,
+      fontWeight: '800',
+      color: theme.textPrimary,
+      letterSpacing: -0.5,
+    },
+    subtitle: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.textSecondary,
+      marginBottom: SPACING.lg,
+    },
+    error: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.critical.fg,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    unlockButton: {
+      marginTop: SPACING.sm,
+      paddingHorizontal: SPACING.xxl,
+      minWidth: 260,
+    },
+  });
+}

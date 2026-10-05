@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -11,13 +10,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useFamily } from '../../src/hooks/useFamily';
 import { PhoneInput } from '../../src/components/common/PhoneInput';
 import { FAMILY_RELATIONSHIPS } from '../../src/models/Family';
 import type { FamilyRelationship } from '../../src/models/Family';
+import { Button } from '../../src/components/ui/Button';
+import type { ThemeColors } from '../../src/config/theme';
 
 export default function FamilyInviteScreen() {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const router = useRouter();
   const { inviteMember } = useFamily();
 
@@ -33,7 +37,7 @@ export default function FamilyInviteScreen() {
       await inviteMember(phone, relationship);
       Alert.alert(
         'Invitation Sent',
-        `An invitation has been sent to ${phone}. They can accept it when they open HomeSafe.`,
+        `An invitation has been sent to ${phone}. They can accept it when they open wayLoc.`,
         [{ text: 'OK', onPress: () => router.back() }],
       );
     } catch (err) {
@@ -65,7 +69,7 @@ export default function FamilyInviteScreen() {
         {/* Explanation */}
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>
-            Enter the phone number of a HomeSafe user you want to connect with.
+            Enter the phone number of a wayLoc user you want to connect with.
             They will receive a pending invitation and can accept or decline.
           </Text>
         </View>
@@ -79,7 +83,7 @@ export default function FamilyInviteScreen() {
         />
 
         {/* Relationship */}
-        <Text style={[styles.label, { marginTop: 20 }]}>Your relationship to them</Text>
+        <Text style={[styles.label, { marginTop: SPACING.xl }]}>Your relationship to them</Text>
         <View style={styles.relationshipGrid}>
           {FAMILY_RELATIONSHIPS.map((rel) => (
             <TouchableOpacity
@@ -111,18 +115,12 @@ export default function FamilyInviteScreen() {
         )}
 
         {/* Send button */}
-        <TouchableOpacity
-          style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
+        <Button
+          label="Send Invitation"
           onPress={handleSend}
-          disabled={isSending}
-          activeOpacity={0.8}
-        >
-          {isSending ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.sendButtonText}>Send Invitation</Text>
-          )}
-        </TouchableOpacity>
+          loading={isSending}
+          style={styles.sendButton}
+        />
 
         <Text style={styles.footerNote}>
           Family members can only see your location and journey details based on
@@ -133,113 +131,103 @@ export default function FamilyInviteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  backButton: { width: 64 },
-  backText: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  disabled: { opacity: 0.4 },
-  screenTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  container: {
-    padding: 20,
-    paddingBottom: 48,
-  },
-  infoCard: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-  },
-  infoText: {
-    fontSize: 13,
-    color: COLORS.primary,
-    lineHeight: 19,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  relationshipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  relChip: {
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  relChipSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
-  },
-  relChipText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  relChipTextSelected: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  errorCard: {
-    backgroundColor: COLORS.dangerLight,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 14,
-  },
-  errorText: {
-    fontSize: 13,
-    color: COLORS.danger,
-    lineHeight: 18,
-  },
-  sendButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  footerNote: {
-    marginTop: 16,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    backButton: { width: 64 },
+    backText: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.accent,
+      fontWeight: '600',
+    },
+    disabled: { opacity: 0.4 },
+    screenTitle: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: '700',
+      color: theme.textPrimary,
+    },
+    container: {
+      padding: SPACING.xl,
+      paddingBottom: SPACING.xxxl,
+    },
+    infoCard: {
+      backgroundColor: theme.accentMuted,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md + 2,
+      marginBottom: SPACING.xl,
+    },
+    infoText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.accent,
+      lineHeight: 19,
+    },
+    label: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: SPACING.sm,
+    },
+    relationshipGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: SPACING.sm,
+    },
+    relChip: {
+      borderRadius: RADIUS.pill,
+      paddingHorizontal: SPACING.md + 2,
+      paddingVertical: SPACING.sm,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    relChipSelected: {
+      borderColor: theme.accent,
+      backgroundColor: theme.accentMuted,
+    },
+    relChipText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      fontWeight: '500',
+    },
+    relChipTextSelected: {
+      color: theme.accent,
+      fontWeight: '700',
+    },
+    errorCard: {
+      backgroundColor: theme.critical.bg,
+      borderRadius: RADIUS.sm + 2,
+      padding: SPACING.md,
+      marginTop: SPACING.md + 2,
+    },
+    errorText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.critical.fg,
+      lineHeight: 18,
+    },
+    sendButton: {
+      marginTop: SPACING.xl,
+    },
+    footerNote: {
+      marginTop: SPACING.lg,
+      fontSize: 12,
+      color: theme.textTertiary,
+      textAlign: 'center',
+      lineHeight: 17,
+    },
+  });
+}

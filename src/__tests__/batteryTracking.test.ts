@@ -1,3 +1,5 @@
+import { AppState } from 'react-native';
+
 import { MockBatteryProvider } from '../implementations/battery/MockBatteryProvider';
 import { BatteryService } from '../services/BatteryService';
 import { LocationTrackingService } from '../services/LocationTrackingService';
@@ -24,9 +26,11 @@ function makeUpdate(overrides: Partial<LocationUpdate> = {}): LocationUpdate {
   };
 }
 
-function makeLocationProvider() {
+function makeLocationProvider(options: { usingBackground?: boolean } = {}) {
   let handler: LocationUpdateHandler | null = null;
   let tracking = false;
+  let usingBackground = options.usingBackground ?? false;
+  let backgroundPermissionGranted = true;
 
   const provider = {
     async emit(update: LocationUpdate): Promise<void> {
@@ -43,6 +47,13 @@ function makeLocationProvider() {
     },
     async stopTracking() { handler = null; tracking = false; },
     isTracking() { return tracking; },
+    isUsingBackgroundMode() { return usingBackground; },
+    async hasBackgroundPermission() { return backgroundPermissionGranted; },
+    async startGeofencing() { /* not exercised by these tests */ },
+    async stopGeofencing() { /* not exercised by these tests */ },
+    // Test-only hooks
+    _setUsingBackground(value: boolean) { usingBackground = value; },
+    _revokeBackgroundPermission() { backgroundPermissionGranted = false; },
   };
 
   return provider;
@@ -260,4 +271,102 @@ test('SOS-only tracking (null journeyId) forwards coords but skips Firestore', a
   expect(journeyProvider.saveCount).toBe(0);
 
   await service.stopTracking();
+});
+
+// ─── 15. Background permission downgrade detection ──────────────────────────
+// There's no push-based OS event for a silent "Always" → "While Using"
+// downgrade — detection only happens reactively, on app-foreground resume.
+// These tests simulate that resume via the same AppState.addEventListener
+// callback the service itself registers.
+
+// AppState.addEventListener is a persistent mock (from the RN jest preset)
+// whose call history isn't reset between tests in this file — take the LAST
+// matching registration, not the first, so this always resolves to the
+// handler this specific test's service instance just registered.
+function getAppStateHandler(spy: jest.SpyInstance): (state: string) => void {
+  const calls = spy.mock.calls.filter(([event]) => event === 'change');
+  const lastCall = calls[calls.length - 1];
+  if (!lastCall) throw new Error('AppState.addEventListener("change", ...) was not registered');
+  return lastCall[1] as (state: string) => void;
+}
+
+// handleAppStateChange's permission re-check is fire-and-forget (not awaited
+// by the caller), and hasBackgroundPermission() is itself an async function —
+// several microtask hops separate calling the handler from the .then()
+// callback actually running. A generous flush avoids a flaky one-tick guess.
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+  }
+}
+
+test('fires onBackgroundPermissionRevoked when background mode was engaged but permission is later revoked', async () => {
+  const addEventListenerSpy = jest.spyOn(AppState, 'addEventListener');
+  const locProvider = makeLocationProvider({ usingBackground: true });
+  const journeyProvider = makeJourneyProvider();
+  const service = new LocationTrackingService(locProvider, journeyProvider);
+
+  const revoked = jest.fn();
+  service.onBackgroundPermissionRevoked = revoked;
+
+  await service.startTracking('u1', 'j1', () => {});
+
+  // Simulate the downgrade: background mode is no longer engaged and the OS
+  // permission check now comes back denied.
+  locProvider._setUsingBackground(false);
+  locProvider._revokeBackgroundPermission();
+
+  const handler = getAppStateHandler(addEventListenerSpy);
+  handler('active');
+  await flushMicrotasks();
+
+  expect(revoked).toHaveBeenCalledTimes(1);
+
+  await service.stopTracking();
+  addEventListenerSpy.mockRestore();
+});
+
+test('does not fire onBackgroundPermissionRevoked when background mode was never engaged', async () => {
+  const addEventListenerSpy = jest.spyOn(AppState, 'addEventListener');
+  const locProvider = makeLocationProvider({ usingBackground: false });
+  const journeyProvider = makeJourneyProvider();
+  const service = new LocationTrackingService(locProvider, journeyProvider);
+
+  const revoked = jest.fn();
+  service.onBackgroundPermissionRevoked = revoked;
+
+  await service.startTracking('u1', 'j1', () => {});
+
+  const handler = getAppStateHandler(addEventListenerSpy);
+  handler('active');
+  await flushMicrotasks();
+
+  expect(revoked).not.toHaveBeenCalled();
+
+  await service.stopTracking();
+  addEventListenerSpy.mockRestore();
+});
+
+test('does not fire onBackgroundPermissionRevoked when permission is still granted on resume', async () => {
+  const addEventListenerSpy = jest.spyOn(AppState, 'addEventListener');
+  // Background mode still reports true (no downgrade) even though this looks
+  // like a resume — the service's own isUsingBackgroundMode() check short-
+  // circuits before ever asking about permission.
+  const locProvider = makeLocationProvider({ usingBackground: true });
+  const journeyProvider = makeJourneyProvider();
+  const service = new LocationTrackingService(locProvider, journeyProvider);
+
+  const revoked = jest.fn();
+  service.onBackgroundPermissionRevoked = revoked;
+
+  await service.startTracking('u1', 'j1', () => {});
+
+  const handler = getAppStateHandler(addEventListenerSpy);
+  handler('active');
+  await flushMicrotasks();
+
+  expect(revoked).not.toHaveBeenCalled();
+
+  await service.stopTracking();
+  addEventListenerSpy.mockRestore();
 });

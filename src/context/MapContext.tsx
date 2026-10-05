@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 
 import type { MapProvider } from '../providers/MapProvider';
 
@@ -15,8 +15,10 @@ export function MapStateProvider({
   mapProvider: MapProvider;
   children: React.ReactNode;
 }) {
+  const value = useMemo(() => ({ mapProvider }), [mapProvider]);
+
   return (
-    <MapContext.Provider value={{ mapProvider }}>
+    <MapContext.Provider value={value}>
       {children}
     </MapContext.Provider>
   );

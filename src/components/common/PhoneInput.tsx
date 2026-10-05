@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { COLORS } from '../../config/constants';
+
+import { useTheme } from '../../context/ThemeContext';
+import { ELEVATION, RADIUS, SPACING, TYPOGRAPHY } from '../../config/theme';
 
 const COUNTRY_CODES = [
   { code: '+91', flag: '🇮🇳', name: 'India' },
@@ -43,6 +45,7 @@ interface PhoneInputProps {
 }
 
 export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: PhoneInputProps) {
+  const theme = useTheme();
   const parsed = initialValue ? parseE164(initialValue) : null;
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>(parsed?.country ?? COUNTRY_CODES[0]);
   const [localNumber, setLocalNumber] = useState(parsed?.local ?? '');
@@ -62,25 +65,25 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
 
   return (
     <View>
-      <View style={styles.row}>
+      <View style={[styles.row, { borderColor: theme.border, backgroundColor: theme.surface }]}>
         <TouchableOpacity
-          style={styles.countryButton}
+          style={[styles.countryButton, { borderRightColor: theme.border }]}
           onPress={() => setPickerOpen((v: boolean) => !v)}
           disabled={disabled}
           activeOpacity={0.7}
         >
           <Text style={styles.flag}>{selectedCountry.flag}</Text>
-          <Text style={styles.countryCode}>{selectedCountry.code}</Text>
-          <Text style={styles.caret}>▾</Text>
+          <Text style={[styles.countryCode, { color: theme.textPrimary }]}>{selectedCountry.code}</Text>
+          <Text style={[styles.caret, { color: theme.textSecondary }]}>▾</Text>
         </TouchableOpacity>
 
         <TextInput
-          style={[styles.input, disabled && styles.inputDisabled]}
+          style={[styles.input, { color: disabled ? theme.textTertiary : theme.textPrimary }]}
           value={localNumber}
           onChangeText={handleNumberChange}
           keyboardType="phone-pad"
           placeholder="Phone number"
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor={theme.textTertiary}
           returnKeyType="done"
           onSubmitEditing={onSubmit}
           editable={!disabled}
@@ -89,19 +92,25 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
       </View>
 
       {pickerOpen && (
-        <View style={styles.picker}>
+        <View
+          style={[
+            styles.picker,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+            ELEVATION.float,
+          ]}
+        >
           {COUNTRY_CODES.map((c) => (
             <TouchableOpacity
               key={c.code}
               style={[
                 styles.pickerItem,
-                c.code === selectedCountry.code && styles.pickerItemActive,
+                c.code === selectedCountry.code && { backgroundColor: theme.accentMuted },
               ]}
               onPress={() => handleCountrySelect(c)}
             >
               <Text style={styles.pickerFlag}>{c.flag}</Text>
-              <Text style={styles.pickerName}>{c.name}</Text>
-              <Text style={styles.pickerCode}>{c.code}</Text>
+              <Text style={[styles.pickerName, { color: theme.textPrimary }]}>{c.name}</Text>
+              <Text style={[styles.pickerCode, { color: theme.textSecondary }]}>{c.code}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -114,49 +123,37 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     overflow: 'hidden',
-    backgroundColor: COLORS.surface,
   },
   countryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.lg,
     borderRightWidth: 1.5,
-    borderRightColor: COLORS.border,
     gap: 4,
   },
   flag: { fontSize: 20 },
   countryCode: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: '600',
-    color: COLORS.textPrimary,
   },
   caret: {
     fontSize: 10,
-    color: COLORS.textSecondary,
     marginLeft: 2,
   },
   input: {
     flex: 1,
     fontSize: 17,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: COLORS.textPrimary,
-  },
-  inputDisabled: {
-    color: COLORS.textMuted,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.lg,
   },
   picker: {
-    marginTop: 4,
-    backgroundColor: COLORS.surface,
+    marginTop: SPACING.xs,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     overflow: 'hidden',
-    shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -165,22 +162,17 @@ const styles = StyleSheet.create({
   pickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  pickerItemActive: {
-    backgroundColor: COLORS.primaryLight,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.sm + 2,
   },
   pickerFlag: { fontSize: 20 },
   pickerName: {
     flex: 1,
-    fontSize: 15,
-    color: COLORS.textPrimary,
+    fontSize: TYPOGRAPHY.body.fontSize,
   },
   pickerCode: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.callout.fontSize,
     fontWeight: '500',
   },
 });

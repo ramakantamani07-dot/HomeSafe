@@ -27,6 +27,7 @@ type StoredSOS = {
   triggeredAt: Timestamp;
   resolvedAt: Timestamp | null;
   createdAt: Timestamp;
+  duressTriggered?: boolean;
 };
 
 function sosCol(db: Firestore, userId: string) {
@@ -43,6 +44,7 @@ function fromFirestore(id: string, data: StoredSOS): SOSEvent {
     triggeredAt: data.triggeredAt.toDate(),
     resolvedAt: data.resolvedAt ? data.resolvedAt.toDate() : null,
     createdAt: data.createdAt.toDate(),
+    duressTriggered: data.duressTriggered ?? false,
   };
 }
 
@@ -87,6 +89,7 @@ export class FirebaseSOSProvider implements SOSProvider {
       triggeredAt: now,
       resolvedAt: null,
       createdAt: now,
+      duressTriggered: false,
     };
     await setDoc(ref, data);
     return fromFirestore(ref.id, data);
@@ -95,6 +98,14 @@ export class FirebaseSOSProvider implements SOSProvider {
   async resolveSOS(userId: string, sosId: string): Promise<SOSEvent> {
     const ref = doc(sosCol(this.db, userId), sosId);
     await updateDoc(ref, { status: 'RESOLVED', resolvedAt: Timestamp.now() });
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('SOS event not found after update.');
+    return fromFirestore(snap.id, snap.data() as StoredSOS);
+  }
+
+  async markDuress(userId: string, sosId: string): Promise<SOSEvent> {
+    const ref = doc(sosCol(this.db, userId), sosId);
+    await updateDoc(ref, { duressTriggered: true });
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('SOS event not found after update.');
     return fromFirestore(snap.id, snap.data() as StoredSOS);

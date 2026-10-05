@@ -132,6 +132,7 @@ export class OfflineSyncService {
       triggeredAt: new Date(now),
       resolvedAt: null,
       createdAt: new Date(now),
+      duressTriggered: false,
     };
   }
 
@@ -462,6 +463,7 @@ export class OfflineSyncService {
       triggeredAt: new Date(item.originalTimestamp),
       resolvedAt: null,
       createdAt: new Date(item.originalTimestamp),
+      duressTriggered: false,
     };
   }
 }

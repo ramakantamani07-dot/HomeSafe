@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SOSEvent } from '../models/SOS';
 import type { SOSService } from '../services/SOSService';
@@ -17,6 +11,12 @@ interface SOSContextValue {
   isSOSLoading: boolean;
   triggerSOS(): Promise<void>;
   resolveSOS(): Promise<void>;
+  /**
+   * Duress ("fake") resolve: clears the alert from the local screen exactly
+   * like a real resolve, but the underlying event stays ACTIVE and tracking
+   * keeps running — see SOSService.triggerDuress.
+   */
+  triggerDuress(): Promise<void>;
 }
 
 const NOOP = async () => {};
@@ -26,6 +26,7 @@ export const SOSContext = createContext<SOSContextValue>({
   isSOSLoading: false,
   triggerSOS: NOOP,
   resolveSOS: NOOP,
+  triggerDuress: NOOP,
 });
 
 export function SOSStateProvider({
@@ -66,7 +67,9 @@ export function SOSStateProvider({
     return () => { mounted = false; };
   }, [user?.id, sosService]);
 
-  const triggerSOS = async (): Promise<void> => {
+  const userId = user?.id ?? null;
+
+  const triggerSOS = useCallback(async (): Promise<void> => {
     if (!user?.id) return;
     const location = currentLocation ?? activeJourney?.startLocation ?? null;
     const journeyId = activeJourney?.id ?? null;
@@ -79,17 +82,36 @@ export function SOSStateProvider({
     // Clear the journey from local context so CheckIn timer stops.
     // Location tracking continues at SOS priority via setSosTracking(true) above.
     journeyCtxRef.current.clearJourneyForSOS();
-  };
+  }, [userId, currentLocation, activeJourney, setSosTracking, sosService]);
 
-  const resolveSOS = async (): Promise<void> => {
+  const resolveSOS = useCallback(async (): Promise<void> => {
     if (!user?.id || !activeSOS) return;
     await sosService.resolveSOS(user.id, activeSOS.id, activeSOS.journeyId);
     setSosTracking(false);
     setActiveSOS(null);
-  };
+  }, [user?.id, activeSOS, setSosTracking, sosService]);
+
+  const triggerDuress = useCallback(async (): Promise<void> => {
+    if (!user?.id || !activeSOS) return;
+    try {
+      await sosService.triggerDuress(user.id, activeSOS.id);
+    } catch {
+      // Never surface — see SOSService.triggerDuress. The screen must look
+      // exactly like a successful resolve either way.
+    }
+    // Deliberately do NOT call setSosTracking(false) and do NOT touch the
+    // journey: location must keep flowing at SOS priority. Only the local
+    // screen state changes, so the UI navigates home like a real resolve.
+    setActiveSOS(null);
+  }, [user?.id, activeSOS, sosService]);
+
+  const value = useMemo<SOSContextValue>(
+    () => ({ activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress }),
+    [activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress],
+  );
 
   return (
-    <SOSContext.Provider value={{ activeSOS, isSOSLoading, triggerSOS, resolveSOS }}>
+    <SOSContext.Provider value={value}>
       {children}
     </SOSContext.Provider>
   );

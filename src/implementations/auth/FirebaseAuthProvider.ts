@@ -8,10 +8,15 @@ import {
   signOut as firebaseSignOut,
   deleteUser as firebaseDeleteUser,
   Auth,
-} from 'firebase/auth';
+  // Imported from '@firebase/auth' (the scoped package), not the 'firebase/auth'
+  // wrapper — see metro.config.js's unstable_enablePackageExports comment for
+  // why. getReactNativePersistence itself stays a lazy require() below (not a
+  // static import here) since it doesn't exist in the browser build this same
+  // file also gets bundled as on web.
+} from '@firebase/auth';
 import type { FirebaseApp } from 'firebase/app';
-import type { ApplicationVerifier } from 'firebase/auth';
-import * as SecureStore from 'expo-secure-store';
+import type { ApplicationVerifier } from '@firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 import type { AuthProvider } from '../../providers/AuthProvider';
@@ -64,10 +69,16 @@ type ReactNativePersistenceStorage = {
 
 type ReactNativePersistenceFactory = (storage: ReactNativePersistenceStorage) => Persistence;
 
-const secureStorePersistence: ReactNativePersistenceStorage = {
-  getItem: (key) => SecureStore.getItemAsync(key),
-  setItem: (key, value) => SecureStore.setItemAsync(key, value),
-  removeItem: (key) => SecureStore.deleteItemAsync(key),
+// Firebase Auth's persistence keys are colon-delimited
+// (firebase:authUser:<apiKey>:<appName> — verified directly in
+// @firebase/auth's source, _persistenceKeyName). expo-secure-store rejects
+// keys containing ':' outright, so SecureStore cannot back this — AsyncStorage
+// has no such restriction and is Firebase's own documented choice for React
+// Native.
+const asyncStoragePersistence: ReactNativePersistenceStorage = {
+  getItem: (key) => AsyncStorage.getItem(key),
+  setItem: (key, value) => AsyncStorage.setItem(key, value),
+  removeItem: (key) => AsyncStorage.removeItem(key),
 };
 
 const getNativePersistence = (): Persistence => {
@@ -79,7 +90,7 @@ const getNativePersistence = (): Persistence => {
     throw new Error('React Native Firebase auth persistence is not available.');
   }
 
-  return authModule.getReactNativePersistence(secureStorePersistence);
+  return authModule.getReactNativePersistence(asyncStoragePersistence);
 };
 
 export class FirebaseAuthProvider implements AuthProvider {
@@ -104,8 +115,11 @@ export class FirebaseAuthProvider implements AuthProvider {
 
   /**
    * Called by the UI layer (phone screen) before sendOTP.
-   * expo-firebase-recaptcha's FirebaseRecaptchaVerifierModal satisfies
-   * the ApplicationVerifier interface.
+   *
+   * No verifier exists today — see FirebaseRecaptchaVerifier for why the
+   * WebView shim was removed and what replaces it. The seam is kept so
+   * swapping in @react-native-firebase/auth touches neither this port nor the
+   * auth screens.
    */
   setAppVerifier(verifier: ApplicationVerifier): void {
     this.appVerifier = verifier;
@@ -113,9 +127,16 @@ export class FirebaseAuthProvider implements AuthProvider {
 
   async sendOTP(phone: string): Promise<void> {
     if (!this.appVerifier) {
+      // Deliberately explicit rather than a generic failure: this is the one
+      // thing standing between the app and real phone auth, and a vague
+      // message here would send someone hunting through the auth screens
+      // instead of at the actual gap.
       throw new AuthError(
-        'Recaptcha verifier not configured. Call setAppVerifier first.',
-        'auth/missing-verifier'
+        'Phone sign-in is not wired up yet. The Firebase JS SDK needs a ' +
+          'reCAPTCHA verifier that React Native cannot provide; install ' +
+          '@react-native-firebase/auth and use its native phone verification ' +
+          'instead. See src/components/auth/FirebaseRecaptchaVerifier.tsx.',
+        'auth/missing-verifier',
       );
     }
     try {

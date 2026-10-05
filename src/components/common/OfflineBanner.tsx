@@ -3,7 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useOfflineSyncContext } from '../../context/OfflineSyncContext';
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
+import { SPACING, TYPOGRAPHY } from '../../config/theme';
 
 /**
  * Displays a coloured banner at the top of any screen when the device is
@@ -16,6 +17,7 @@ import { COLORS } from '../../config/constants';
  *   </SafeAreaView>
  */
 export function OfflineBanner() {
+  const theme = useTheme();
   const { isOffline } = useNetworkStatus();
   const { pendingCount, isSyncing } = useOfflineSyncContext();
 
@@ -29,28 +31,26 @@ export function OfflineBanner() {
       : 'No internet connection';
 
   return (
-    <View style={[styles.banner, isSyncingBanner ? styles.syncing : styles.offline]}>
-      <Text style={styles.label}>{label}</Text>
+    <View
+      style={[
+        styles.banner,
+        { backgroundColor: isSyncingBanner ? theme.warning.fg : theme.critical.fg },
+      ]}
+    >
+      <Text style={[styles.label, { color: theme.textOnColor }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   banner: {
-    paddingVertical: 7,
-    paddingHorizontal: 16,
+    paddingVertical: SPACING.sm - 1,
+    paddingHorizontal: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  offline: {
-    backgroundColor: COLORS.danger,
-  },
-  syncing: {
-    backgroundColor: '#D97706', // amber-600
-  },
   label: {
-    color: COLORS.white,
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.callout.fontSize,
     fontWeight: '600',
     letterSpacing: 0.1,
   },

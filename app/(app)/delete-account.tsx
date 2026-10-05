@@ -12,10 +12,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useAccountDeletion } from '../../src/hooks/useAccountDeletion';
+import { Icon } from '../../src/components/ui/Icon';
+import { Button } from '../../src/components/ui/Button';
+import type { ThemeColors } from '../../src/config/theme';
 
 export default function DeleteAccountScreen() {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const router = useRouter();
   const {
     stage,
@@ -79,10 +85,10 @@ export default function DeleteAccountScreen() {
 
         {/* Warning banner */}
         <View style={styles.warningCard}>
-          <Text style={styles.warningIcon}>⚠️</Text>
+          <Icon name="warning" size={28} color={theme.critical.fg} />
           <Text style={styles.warningTitle}>This cannot be undone</Text>
           <Text style={styles.warningDesc}>
-            Deleting your account permanently removes all your data from HomeSafe. You
+            Deleting your account permanently removes all your data from wayLoc. You
             will not be able to recover journeys, contacts, or SOS history.
           </Text>
         </View>
@@ -125,14 +131,14 @@ export default function DeleteAccountScreen() {
         {/* Deletion progress / status */}
         {stage === 'authenticating' && (
           <View style={styles.progressCard}>
-            <ActivityIndicator color={COLORS.primary} />
+            <ActivityIndicator color={theme.accent} />
             <Text style={styles.progressText}>Verifying your identity…</Text>
           </View>
         )}
 
         {stage === 'deleting' && (
           <View style={styles.progressCard}>
-            <ActivityIndicator color={COLORS.danger} />
+            <ActivityIndicator color={theme.critical.fg} />
             <Text style={styles.progressText}>Deleting your account…</Text>
           </View>
         )}
@@ -161,23 +167,19 @@ export default function DeleteAccountScreen() {
               value={confirmationText}
               onChangeText={setConfirmationText}
               placeholder="Type DELETE"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textTertiary}
               autoCapitalize="characters"
               autoCorrect={false}
               editable={!isWorking && !isBlocked}
             />
 
-            <TouchableOpacity
-              style={[
-                styles.deleteButton,
-                (!canDelete || isBlocked) && styles.deleteButtonDisabled,
-              ]}
+            <Button
+              label="Delete My Account"
               onPress={handleDelete}
-              disabled={!canDelete || isWorking || isBlocked}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.deleteButtonText}>Delete My Account</Text>
-            </TouchableOpacity>
+              disabled={!canDelete || isBlocked}
+              variant="destructive"
+              style={styles.deleteButton}
+            />
           </View>
         )}
 
@@ -186,184 +188,173 @@ export default function DeleteAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  backButton: { width: 64 },
-  backText: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  disabled: { opacity: 0.4 },
-  screenTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 48,
-  },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-  warningCard: {
-    backgroundColor: COLORS.danger + '12',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.danger + '40',
-    padding: 16,
-    marginBottom: 20,
-    alignItems: 'center',
-    gap: 8,
-  },
-  warningIcon: { fontSize: 28 },
-  warningTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.danger,
-  },
-  warningDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 20,
-    gap: 8,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  bulletDot: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
-  bulletText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-  },
-  sosBlockCard: {
-    backgroundColor: COLORS.warning + '18',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.warning + '60',
-    padding: 14,
-    marginBottom: 16,
-  },
-  sosBlockText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-    lineHeight: 19,
-  },
-  progressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 16,
-  },
-  progressText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  errorCard: {
-    backgroundColor: COLORS.danger + '10',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.danger + '40',
-    padding: 14,
-    marginBottom: 16,
-    gap: 6,
-  },
-  errorTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.danger,
-  },
-  errorText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-    lineHeight: 19,
-  },
-  errorHint: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  confirmSection: {
-    gap: 10,
-  },
-  confirmDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginBottom: 2,
-  },
-  confirmWord: {
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    fontFamily: 'monospace',
-  },
-  confirmInput: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    letterSpacing: 2,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    backgroundColor: COLORS.danger,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  deleteButtonDisabled: {
-    opacity: 0.35,
-  },
-  deleteButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    backButton: { width: 64 },
+    backText: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.accent,
+      fontWeight: '600',
+    },
+    disabled: { opacity: 0.4 },
+    screenTitle: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: '700',
+      color: theme.textPrimary,
+    },
+    container: {
+      padding: SPACING.lg,
+      paddingBottom: SPACING.xxxl + 8,
+    },
+    sectionHeader: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: SPACING.sm + 2,
+      marginTop: SPACING.sm,
+    },
+    warningCard: {
+      backgroundColor: theme.critical.bg,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: theme.critical.fg,
+      padding: SPACING.lg,
+      marginBottom: SPACING.xl,
+      alignItems: 'center',
+      gap: SPACING.sm,
+    },
+    warningTitle: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: '700',
+      color: theme.critical.fg,
+    },
+    warningDesc: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      textAlign: 'center',
+      lineHeight: 19,
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: SPACING.lg,
+      marginBottom: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    bulletRow: {
+      flexDirection: 'row',
+      gap: SPACING.sm,
+    },
+    bulletDot: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      marginTop: 1,
+    },
+    bulletText: {
+      flex: 1,
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textPrimary,
+      lineHeight: 20,
+    },
+    sosBlockCard: {
+      backgroundColor: theme.warning.bg,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: theme.warning.fg,
+      padding: SPACING.md + 2,
+      marginBottom: SPACING.lg,
+    },
+    sosBlockText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textPrimary,
+      lineHeight: 19,
+    },
+    progressCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: SPACING.md + 2,
+      marginBottom: SPACING.lg,
+    },
+    progressText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+    },
+    errorCard: {
+      backgroundColor: theme.critical.bg,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: theme.critical.fg,
+      padding: SPACING.md + 2,
+      marginBottom: SPACING.lg,
+      gap: 6,
+    },
+    errorTitle: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '700',
+      color: theme.critical.fg,
+    },
+    errorText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textPrimary,
+      lineHeight: 19,
+    },
+    errorHint: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textSecondary,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+    confirmSection: {
+      gap: SPACING.sm + 2,
+    },
+    confirmDesc: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      lineHeight: 18,
+      marginBottom: 2,
+    },
+    confirmWord: {
+      fontWeight: '700',
+      color: theme.textPrimary,
+      fontFamily: 'monospace',
+    },
+    confirmInput: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      fontSize: 16,
+      color: theme.textPrimary,
+      letterSpacing: 2,
+      fontWeight: '600',
+    },
+    deleteButton: {
+      marginTop: SPACING.xs,
+    },
+  });
+}

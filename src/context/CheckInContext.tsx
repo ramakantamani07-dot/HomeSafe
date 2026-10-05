@@ -1,10 +1,15 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
+
+import { useInterval } from '../hooks/useInterval';
 
 import type { CheckIn } from '../models/CheckIn';
 import { GRACE_PERIOD_MINUTES } from '../models/CheckIn';
@@ -24,6 +29,13 @@ interface CheckInContextValue {
 }
 
 const NOOP = async () => {};
+
+/**
+ * How often deadlines are re-checked while the app is backgrounded. Coarse on
+ * purpose: transitions are timestamp-based, so this governs latency in
+ * noticing one, not whether it is noticed.
+ */
+const DEADLINE_CHECK_INTERVAL_MS = 15_000;
 
 export const CheckInContext = createContext<CheckInContextValue>({
   phase: 'inactive',
@@ -62,6 +74,14 @@ export function CheckInStateProvider({
   const graceStartedAtRef = useRef<Date | null>(null);
   // Prevents overlapping async ops (Firestore calls) inside the tick
   const pendingRef = useRef(false);
+
+  /**
+   * The deadline evaluation, rebuilt by the effect below whenever the journey
+   * changes. Held in a ref so the two drivers underneath never need to
+   * re-subscribe when it does.
+   */
+  const evaluateRef = useRef<(() => void) | null>(null);
+  const evaluate = useCallback(() => evaluateRef.current?.(), []);
 
   // Keep currentCheckIn ref in sync with state so tick callbacks see latest value
   currentCheckInRef.current = currentCheckIn;
@@ -129,7 +149,11 @@ export function CheckInStateProvider({
       }
     }
 
-    const timerId = setInterval(() => {
+    evaluateRef.current = () => {
+      const userId = user?.id;
+      const journeyId = activeJourney?.id;
+      if (!userId || !journeyId) return;
+
       const tickNow = new Date();
       const currentPhase = phaseRef.current;
 
@@ -187,15 +211,15 @@ export function CheckInStateProvider({
             .finally(() => { pendingRef.current = false; });
         }
       }
-    }, 1_000);
+    };
 
-    return () => { cancelled = true; clearInterval(timerId); };
+    return () => { cancelled = true; evaluateRef.current = null; };
   // Re-run when the journey starts, ends, or its interval changes.
   // Deliberately excludes nextCheckInAt — that is managed locally via localNextCheckInAtRef.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeJourney?.id, activeJourney?.checkInIntervalMinutes, activeJourney?.status, checkInService]);
 
-  const confirmSafe = async (): Promise<void> => {
+  const confirmSafe = useCallback(async (): Promise<void> => {
     if (!user?.id || !activeJourney?.id || !activeJourney.checkInIntervalMinutes) return;
     if (pendingRef.current) return;
     pendingRef.current = true;
@@ -216,9 +240,9 @@ export function CheckInStateProvider({
     } finally {
       pendingRef.current = false;
     }
-  };
+  }, [user?.id, activeJourney?.id, activeJourney?.checkInIntervalMinutes, currentCheckIn?.id, checkInService]);
 
-  const extendTimer = async (byMinutes: number): Promise<void> => {
+  const extendTimer = useCallback(async (byMinutes: number): Promise<void> => {
     if (!user?.id || !activeJourney?.id) return;
     if (pendingRef.current) return;
     pendingRef.current = true;
@@ -239,16 +263,50 @@ export function CheckInStateProvider({
     } finally {
       pendingRef.current = false;
     }
-  };
+  }, [user?.id, activeJourney?.id, activeJourney?.checkInIntervalMinutes, currentCheckIn?.id, checkInService]);
 
-  const value: CheckInContextValue = {
-    phase,
-    timeRemainingSeconds,
-    graceRemainingSeconds,
-    currentCheckIn,
-    confirmSafe,
-    extendTimer,
-  };
+  /**
+   * Two drivers, deliberately.
+   *
+   * The 1-second tick only exists to animate the countdown on screen, so it
+   * pauses while the app is backgrounded — waking the JS thread once a second
+   * for a display nobody is looking at, for the whole length of a journey, is
+   * exactly the drain this app cannot afford.
+   *
+   * The slow tick is what actually matters: it keeps running in the background
+   * so the countdown → prompt → missed transitions still fire, and because
+   * every transition is computed from a stored timestamp rather than a
+   * decremented counter, a coarse cadence costs accuracy only in when the
+   * transition is *noticed*, never in whether it happens.
+   */
+  const isActive = phase !== 'inactive';
+  useInterval(evaluate, isActive ? 1_000 : null, { pauseInBackground: true });
+  useInterval(evaluate, isActive ? DEADLINE_CHECK_INTERVAL_MS : null, {
+    pauseInBackground: false,
+  });
+
+  // Returning to the foreground is when a paused display is most stale, and
+  // when a backgrounded transition most needs reflecting.
+  useEffect(() => {
+    if (!isActive) return;
+    const onChange = (next: AppStateStatus) => {
+      if (next === 'active') evaluate();
+    };
+    const subscription = AppState.addEventListener('change', onChange);
+    return () => subscription.remove();
+  }, [isActive, evaluate]);
+
+  const value = useMemo<CheckInContextValue>(
+    () => ({
+      phase,
+      timeRemainingSeconds,
+      graceRemainingSeconds,
+      currentCheckIn,
+      confirmSafe,
+      extendTimer,
+    }),
+    [phase, timeRemainingSeconds, graceRemainingSeconds, currentCheckIn, confirmSafe, extendTimer],
+  );
 
   return (
     <CheckInContext.Provider value={value}>

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { FakeCallSettings } from '../../models/FakeCall';
 import { defaultFakeCallSettings } from '../../models/FakeCall';
 
-const STORAGE_KEY = 'homesafe.fakecall.settings';
+const STORAGE_KEY = 'wayloc.fakecall.settings';
 
 export const FakeCallSettingsStore = {
   async load(): Promise<FakeCallSettings> {

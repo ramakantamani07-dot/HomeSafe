@@ -1,18 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useSOS } from '../../src/hooks/useSOS';
+import { usePrivacy } from '../../src/hooks/usePrivacy';
+import { PinEntryModal } from '../../src/components/security/PinEntryModal';
+import { Icon } from '../../src/components/ui/Icon';
+import { Button } from '../../src/components/ui/Button';
+import { Section, ListRow } from '../../src/components/ui/Section';
 import { formatCoordinates } from '../../src/models/Journey';
 
 function formatTime(date: Date): string {
@@ -24,9 +22,13 @@ function formatDate(date: Date): string {
 }
 
 export default function EmergencyModeScreen() {
+  const theme = useTheme();
   const router = useRouter();
-  const { activeSOS, isSOSLoading, resolveSOS } = useSOS();
-  const [resolving, setResolving] = useState(false);
+  const { activeSOS, isSOSLoading, resolveSOSWithAuth, resolveStage, triggerDuress } = useSOS();
+  const { verifyDuressCode } = usePrivacy();
+  const resolving = resolveStage === 'authenticating' || resolveStage === 'resolving';
+  const [showCodeEntry, setShowCodeEntry] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   // If there is no active SOS (already resolved, or navigated here incorrectly), go home.
   useEffect(() => {
@@ -35,11 +37,24 @@ export default function EmergencyModeScreen() {
     }
   }, [activeSOS, isSOSLoading, router]);
 
+  const handleCodeSubmit = async (pin: string) => {
+    const matches = await verifyDuressCode(pin);
+    if (!matches) {
+      setCodeError('Incorrect code.');
+      return;
+    }
+    setShowCodeEntry(false);
+    setCodeError(null);
+    // Looks identical to a real resolve from here: navigation is driven by
+    // the same useEffect watching activeSOS → null. See useSOS.triggerDuress.
+    await triggerDuress();
+  };
+
   if (isSOSLoading || !activeSOS) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.critical.bg }]} edges={['top', 'bottom']}>
         <View style={styles.loadingScreen}>
-          <ActivityIndicator size="large" color={COLORS.danger} />
+          <ActivityIndicator size="large" color={theme.critical.fg} />
         </View>
       </SafeAreaView>
     );
@@ -54,14 +69,11 @@ export default function EmergencyModeScreen() {
         {
           text: 'Yes, I am safe',
           onPress: async () => {
-            setResolving(true);
-            try {
-              await resolveSOS();
-              // Navigation is driven by the useEffect that watches activeSOS → null.
-            } catch {
-              Alert.alert('Error', 'Could not resolve the SOS. Please try again.');
-            } finally {
-              setResolving(false);
+            const result = await resolveSOSWithAuth();
+            // On success, navigation is driven by the useEffect that watches
+            // activeSOS → null.
+            if (!result.success && result.error) {
+              Alert.alert('Error', result.error);
             }
           },
         },
@@ -70,77 +82,63 @@ export default function EmergencyModeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      {/* Emergency header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>⚠️  EMERGENCY MODE</Text>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* SOS badge */}
-        <View style={styles.sosBadge}>
-          <Text style={styles.sosLabel}>SOS</Text>
-          <Text style={styles.sosSubLabel}>Alert Active</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.critical.bg }]} edges={['top', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={[styles.iconCircle, { backgroundColor: theme.critical.fg }]}>
+          <Icon name="sos" size={40} color={theme.textOnColor} />
         </View>
 
-        {/* Details card */}
-        <View style={styles.detailCard}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Triggered</Text>
-            <Text style={styles.detailValue}>
-              {formatDate(activeSOS.triggeredAt)} at {formatTime(activeSOS.triggeredAt)}
-            </Text>
-          </View>
+        <Text style={[styles.title, { color: theme.critical.fg }]}>SOS Active</Text>
+        <Text style={[styles.subtitle, { color: theme.textPrimary }]}>
+          Your trusted contacts have been notified.{'\n'}Your location is being shared.
+        </Text>
 
+        <Section>
+          <ListRow
+            icon="time"
+            title="Triggered"
+            value={`${formatDate(activeSOS.triggeredAt)} · ${formatTime(activeSOS.triggeredAt)}`}
+          />
           {activeSOS.journeyId && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Journey</Text>
-                <Text style={styles.detailValue}>Active when triggered</Text>
-              </View>
-            </>
+            <ListRow icon="compass" title="Journey" value="Active when triggered" />
           )}
-
           {activeSOS.location && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Last location</Text>
-                <Text style={styles.detailValue}>
-                  {formatCoordinates(activeSOS.location)}
-                </Text>
-              </View>
-            </>
+            <ListRow icon="location" title="Last location" value={formatCoordinates(activeSOS.location)} />
           )}
-        </View>
+        </Section>
 
-        {/* Notice */}
-        <View style={styles.noticeBox}>
-          <Text style={styles.noticeText}>
-            🔔 Your trusted contacts will be notified of this alert.
-            {'\n\n'}
-            If you are in danger, please contact emergency services directly.
-          </Text>
-        </View>
+        <Text style={[styles.emergencyNote, { color: theme.textSecondary }]}>
+          If you are in danger, please contact emergency services directly.
+        </Text>
 
-        {/* Resolve button */}
-        <TouchableOpacity
-          style={[styles.resolveButton, resolving && styles.buttonBusy]}
+        <Button
+          label="I am safe — Resolve SOS"
           onPress={handleResolve}
-          disabled={resolving}
-          activeOpacity={0.85}
+          variant="safe"
+          loading={resolving}
+          style={styles.resolveButton}
+          accessibilityHint="Ends the SOS alert and notifies your contacts you are safe"
+        />
+
+        <TouchableOpacity
+          onPress={() => { setCodeError(null); setShowCodeEntry(true); }}
+          activeOpacity={0.7}
+          style={styles.codeLinkButton}
+          accessibilityRole="button"
         >
-          {resolving ? (
-            <ActivityIndicator color={COLORS.danger} />
-          ) : (
-            <Text style={styles.resolveButtonText}>✅  I am safe — Resolve SOS</Text>
-          )}
+          <Text style={[styles.codeLinkText, { color: theme.textSecondary }]}>Enter code instead</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <PinEntryModal
+        visible={showCodeEntry}
+        title="Enter Code"
+        description="Enter your resolve code."
+        confirmLabel="Submit"
+        errorText={codeError}
+        onSubmit={handleCodeSubmit}
+        onCancel={() => setShowCodeEntry(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -148,120 +146,55 @@ export default function EmergencyModeScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: COLORS.dangerLight,
   },
   loadingScreen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
-    backgroundColor: COLORS.danger,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.white,
-    letterSpacing: 1,
-  },
   container: {
-    padding: 24,
-    paddingBottom: 48,
+    padding: SPACING.xl,
+    paddingBottom: SPACING.xxxl,
     alignItems: 'center',
   },
-  sosBadge: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: COLORS.danger,
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 28,
-    shadowColor: COLORS.danger,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 10,
-    borderWidth: 5,
-    borderColor: COLORS.dangerDark,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
-  sosLabel: {
-    fontSize: 44,
-    fontWeight: '900',
-    color: COLORS.white,
-    letterSpacing: 3,
+  title: {
+    fontSize: TYPOGRAPHY.title.fontSize,
+    fontWeight: TYPOGRAPHY.title.fontWeight,
+    letterSpacing: -0.3,
+    marginBottom: SPACING.sm,
   },
-  sosSubLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.85)',
-    letterSpacing: 1,
-    marginTop: 2,
+  subtitle: {
+    fontSize: TYPOGRAPHY.body.fontSize,
+    lineHeight: TYPOGRAPHY.body.lineHeight,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
   },
-  detailCard: {
-    width: '100%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.danger + '30',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  detailValue: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  noticeBox: {
-    width: '100%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: COLORS.danger + '30',
-  },
-  noticeText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 21,
+  emergencyNote: {
+    fontSize: TYPOGRAPHY.callout.fontSize,
+    lineHeight: TYPOGRAPHY.callout.lineHeight,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
   },
   resolveButton: {
     width: '100%',
-    borderRadius: 16,
-    paddingVertical: 18,
+  },
+  codeLinkButton: {
+    marginTop: SPACING.lg,
+    paddingVertical: SPACING.sm,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.danger,
-    backgroundColor: COLORS.surface,
   },
-  resolveButtonText: {
-    color: COLORS.danger,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  buttonBusy: {
-    opacity: 0.6,
+  codeLinkText: {
+    fontSize: TYPOGRAPHY.caption.fontSize,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });

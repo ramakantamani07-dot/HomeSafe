@@ -14,6 +14,17 @@ import type { RouteResult } from '../models/RouteResult';
  *  - The base URL and any API keys are injected at construction time, not
  *    hardcoded, so the provider remains swappable.
  */
+export interface RouteRequestOptions {
+  /**
+   * Ask the provider for per-leg steps, for the journey timeline on screen 03.
+   *
+   * Off by default because it makes the response substantially larger, and the
+   * live-journey recalculation loop — which runs repeatedly while travelling —
+   * has no use for them.
+   */
+  includeSteps?: boolean;
+}
+
 export interface RoutingProvider {
   /**
    * Returns the best route between `from` and `to`.
@@ -24,5 +35,6 @@ export interface RoutingProvider {
     from: Coordinates,
     to: Coordinates,
     signal?: AbortSignal,
+    options?: RouteRequestOptions,
   ): Promise<RouteResult>;
 }

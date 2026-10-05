@@ -5,10 +5,24 @@
  * No React rendering, no real timers (jest.useFakeTimers), no real AsyncStorage.
  */
 
-import { FakeCallService } from '../services/FakeCallService';
+// ─── expo-notifications mock ──────────────────────────────────────────────────
+// Real notification scheduling has no native binding in the Jest environment —
+// mocked here specifically so the backstop-notification wiring in
+// FakeCallService is actually exercised, rather than silently swallowed by
+// its own try/catch (which is what happens with no mock at all).
+
+jest.mock('expo-notifications', () => ({
+  scheduleNotificationAsync: jest.fn().mockResolvedValue(undefined),
+  cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
+  dismissNotificationAsync: jest.fn().mockResolvedValue(undefined),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+}));
+
+import { FakeCallService, FAKE_CALL_NOTIFICATION_ID } from '../services/FakeCallService';
 import { FakeCallSettingsStore } from '../implementations/fakeCall/FakeCallSettingsStore';
 import { defaultFakeCallSettings } from '../models/FakeCall';
 import type { FakeCallSettings } from '../models/FakeCall';
+import * as Notifications from 'expo-notifications';
 
 // ─── AsyncStorage mock ────────────────────────────────────────────────────────
 
@@ -19,11 +33,19 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Resolve pending mocked async notification calls (scheduleBackstopNotification
+// etc. are fire-and-forget `void` promises inside FakeCallService) before
+// asserting on them. Deliberately microtask-only (chained Promise.resolve(),
+// not setImmediate/setTimeout) — jest.useFakeTimers() mocks macrotask APIs
+// too, which would otherwise make this never settle.
+const flushMicrotasks = () => Promise.resolve().then(() => Promise.resolve());
+
 // ─── FakeCallService ──────────────────────────────────────────────────────────
 
 describe('FakeCallService', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
@@ -92,6 +114,65 @@ describe('FakeCallService', () => {
     const onFire2 = jest.fn();
     service.schedule(0, onFire2);
     expect(onFire2).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Backstop notification wiring ────────────────────────────────────────────
+  // Covers the reliability fix: a delayed fake call must also schedule an
+  // OS-level notification, since the JS timer alone is unreliable if the
+  // screen locks or the app backgrounds during the wait.
+
+  // 6. Delayed schedule also schedules a backstop notification
+  test('schedules a backstop notification for a delayed call', async () => {
+    const service = new FakeCallService();
+    service.schedule(30, jest.fn(), 'Mum');
+    await flushMicrotasks();
+
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: FAKE_CALL_NOTIFICATION_ID,
+        trigger: expect.objectContaining({ seconds: 30 }),
+        content: expect.objectContaining({ title: expect.stringContaining('Mum') }),
+      }),
+    );
+  });
+
+  // 7. Immediate (delay=0) calls need no backstop — there's nothing to protect against
+  test('does not schedule a backstop notification when delay is 0', async () => {
+    const service = new FakeCallService();
+    service.schedule(0, jest.fn());
+    await flushMicrotasks();
+
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  // 8. Cancelling removes the pending notification
+  test('cancelling clears the scheduled backstop notification', async () => {
+    const service = new FakeCallService();
+    service.schedule(30, jest.fn());
+    await flushMicrotasks();
+
+    service.cancelPending();
+    await flushMicrotasks();
+
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith(
+      FAKE_CALL_NOTIFICATION_ID,
+    );
+    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith(FAKE_CALL_NOTIFICATION_ID);
+  });
+
+  // 9. The JS timer firing normally also clears the now-redundant notification,
+  // so the user doesn't get a duplicate alert on top of the in-app ringing UI.
+  test('the notification is cancelled once the JS timer fires normally', async () => {
+    const service = new FakeCallService();
+    service.schedule(10, jest.fn());
+    await flushMicrotasks();
+
+    jest.advanceTimersByTime(10_000);
+    await flushMicrotasks();
+
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith(
+      FAKE_CALL_NOTIFICATION_ID,
+    );
   });
 
   // 6. Ending the active call
@@ -173,7 +254,7 @@ describe('FakeCallSettingsStore', () => {
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     await FakeCallSettingsStore.save(custom);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'homesafe.fakecall.settings',
+      'wayloc.fakecall.settings',
       JSON.stringify(custom),
     );
 

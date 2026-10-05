@@ -25,6 +25,7 @@ function makeRoute(from: Coordinates, to: Coordinates, overrides: Partial<RouteR
     ],
     distanceMeters: 2_500,
     durationSeconds: 360,
+    steps: [],
     calculatedAt: new Date(),
     ...overrides,
   };

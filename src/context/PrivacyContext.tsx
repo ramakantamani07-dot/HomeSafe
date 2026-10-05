@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { AppPermissionStatus, PermissionsState, PrivacyPreferences } from '../models/Permission';
 import { DEFAULT_PERMISSIONS_STATE, DEFAULT_PRIVACY_PREFERENCES } from '../models/Permission';
@@ -7,10 +7,16 @@ import {
   loadPrivacyPreferences,
   savePrivacyPreferences,
 } from '../implementations/storage/SecurePrivacyStore';
+import {
+  loadDuressCode,
+  saveDuressCode,
+  clearDuressCode,
+} from '../implementations/storage/SecureDuressStore';
 
 interface PrivacyContextValue {
   // OS permission statuses
   locationStatus: AppPermissionStatus;
+  locationBackgroundStatus: AppPermissionStatus;
   notificationStatus: AppPermissionStatus;
   // Device capability
   biometricAvailable: boolean;
@@ -26,10 +32,17 @@ interface PrivacyContextValue {
   /** Runs biometric auth for the in-app lock gate. Returns true on success. */
   unlockWithBiometric(): Promise<boolean>;
   refreshPermissions(): Promise<void>;
+  // Duress ("silent SOS") code — a separate PIN that a fake-resolves an
+  // active SOS: see SOSContext.triggerDuress.
+  duressCodeSet: boolean;
+  setDuressCode(code: string): Promise<void>;
+  removeDuressCode(): Promise<void>;
+  verifyDuressCode(code: string): Promise<boolean>;
 }
 
 export const PrivacyContext = createContext<PrivacyContextValue>({
   locationStatus: 'undetermined',
+  locationBackgroundStatus: 'undetermined',
   notificationStatus: 'undetermined',
   biometricAvailable: false,
   biometricLockEnabled: false,
@@ -40,6 +53,10 @@ export const PrivacyContext = createContext<PrivacyContextValue>({
   disableBiometricLock: async () => {},
   unlockWithBiometric: async () => false,
   refreshPermissions: async () => {},
+  duressCodeSet: false,
+  setDuressCode: async () => {},
+  removeDuressCode: async () => {},
+  verifyDuressCode: async () => false,
 });
 
 export function PrivacyStateProvider({
@@ -53,6 +70,7 @@ export function PrivacyStateProvider({
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [preferences, setPreferences] = useState<PrivacyPreferences>(DEFAULT_PRIVACY_PREFERENCES);
   const [isLoading, setIsLoading] = useState(true);
+  const [duressCodeSet, setDuressCodeSet] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -61,12 +79,14 @@ export function PrivacyStateProvider({
       privacyService.getPermissionsState(),
       privacyService.isBiometricAvailable(),
       loadPrivacyPreferences(),
+      loadDuressCode(),
     ])
-      .then(([perms, bioAvailable, prefs]) => {
+      .then(([perms, bioAvailable, prefs, duressCode]) => {
         if (!mounted) return;
         setPermissions(perms);
         setBiometricAvailable(bioAvailable);
         setPreferences(prefs);
+        setDuressCodeSet(duressCode !== null);
       })
       .catch(() => { /* leave defaults */ })
       .finally(() => { if (mounted) setIsLoading(false); });
@@ -74,50 +94,96 @@ export function PrivacyStateProvider({
     return () => { mounted = false; };
   }, [privacyService]);
 
-  const savePrefs = async (next: PrivacyPreferences) => {
+  const savePrefs = useCallback(async (next: PrivacyPreferences) => {
     await savePrivacyPreferences(next);
     setPreferences(next);
-  };
+  }, []);
 
-  const value: PrivacyContextValue = {
-    locationStatus: permissions.location,
-    notificationStatus: permissions.notifications,
-    biometricAvailable,
-    biometricLockEnabled: preferences.biometricLockEnabled,
-    isLoading,
+  const requestLocationPermission = useCallback(async () => {
+    const status = await privacyService.requestLocation();
+    setPermissions((prev) => ({ ...prev, location: status }));
+    return status;
+  }, [privacyService]);
 
-    requestLocationPermission: async () => {
-      const status = await privacyService.requestLocation();
-      setPermissions((prev) => ({ ...prev, location: status }));
-      return status;
-    },
+  const requestNotificationPermission = useCallback(async () => {
+    const status = await privacyService.requestNotifications();
+    setPermissions((prev) => ({ ...prev, notifications: status }));
+    return status;
+  }, [privacyService]);
 
-    requestNotificationPermission: async () => {
-      const status = await privacyService.requestNotifications();
-      setPermissions((prev) => ({ ...prev, notifications: status }));
-      return status;
-    },
+  const enableBiometricLock = useCallback(async () => {
+    const success = await privacyService.authenticate(
+      'Confirm your identity to enable biometric lock.',
+    );
+    if (!success) throw new Error('Biometric confirmation failed. Biometric lock was not enabled.');
+    await savePrefs({ ...preferences, biometricLockEnabled: true });
+  }, [privacyService, preferences, savePrefs]);
 
-    enableBiometricLock: async () => {
-      const success = await privacyService.authenticate(
-        'Confirm your identity to enable biometric lock.'
-      );
-      if (!success) throw new Error('Biometric confirmation failed. Biometric lock was not enabled.');
-      await savePrefs({ ...preferences, biometricLockEnabled: true });
-    },
+  const disableBiometricLock = useCallback(async () => {
+    await savePrefs({ ...preferences, biometricLockEnabled: false });
+  }, [preferences, savePrefs]);
 
-    disableBiometricLock: async () => {
-      await savePrefs({ ...preferences, biometricLockEnabled: false });
-    },
+  const unlockWithBiometric = useCallback(
+    () => privacyService.authenticate('Unlock wayLoc'),
+    [privacyService],
+  );
 
-    unlockWithBiometric: () =>
-      privacyService.authenticate('Unlock HomeSafe'),
+  const refreshPermissions = useCallback(async () => {
+    setPermissions(await privacyService.getPermissionsState());
+  }, [privacyService]);
 
-    refreshPermissions: async () => {
-      const perms = await privacyService.getPermissionsState();
-      setPermissions(perms);
-    },
-  };
+  const setDuressCode = useCallback(async (code: string) => {
+    await saveDuressCode(code);
+    setDuressCodeSet(true);
+  }, []);
+
+  const removeDuressCode = useCallback(async () => {
+    await clearDuressCode();
+    setDuressCodeSet(false);
+  }, []);
+
+  const verifyDuressCode = useCallback(async (code: string) => {
+    const stored = await loadDuressCode();
+    return stored !== null && stored === code;
+  }, []);
+
+  const value = useMemo<PrivacyContextValue>(
+    () => ({
+      locationStatus: permissions.location,
+      locationBackgroundStatus: permissions.locationBackground,
+      notificationStatus: permissions.notifications,
+      biometricAvailable,
+      biometricLockEnabled: preferences.biometricLockEnabled,
+      isLoading,
+      requestLocationPermission,
+      requestNotificationPermission,
+      enableBiometricLock,
+      disableBiometricLock,
+      unlockWithBiometric,
+      refreshPermissions,
+      duressCodeSet,
+      setDuressCode,
+      removeDuressCode,
+      verifyDuressCode,
+    }),
+    [
+      permissions,
+      biometricAvailable,
+      preferences.biometricLockEnabled,
+      isLoading,
+      requestLocationPermission,
+      requestNotificationPermission,
+      enableBiometricLock,
+      disableBiometricLock,
+      unlockWithBiometric,
+      refreshPermissions,
+      duressCodeSet,
+      setDuressCode,
+      removeDuressCode,
+      verifyDuressCode,
+    ],
+  );
+
 
   return (
     <PrivacyContext.Provider value={value}>

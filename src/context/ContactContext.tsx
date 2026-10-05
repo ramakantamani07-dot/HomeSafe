@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { Contact } from '../models/Contact';
 import type { NewContact, ContactUpdates } from '../providers/ContactProvider';
@@ -52,41 +52,46 @@ export function ContactStateProvider({
     return () => { mounted = false; };
   }, [user?.id, contactService]);
 
-  const value: ContactContextValue = {
-    contacts,
-    isLoading,
+  const userId = user?.id ?? null;
 
-    addContact: async (input) => {
-      if (!user) throw new Error('You must be signed in.');
-      const contact = await contactService.addContact(user.id, input);
-      setContacts((prev) => [...prev, contact]);
-      return contact;
-    },
+  const addContact = useCallback<ContactContextValue['addContact']>(async (input) => {
+    if (!userId) throw new Error('You must be signed in.');
+    const contact = await contactService.addContact(userId, input);
+    setContacts((prev) => [...prev, contact]);
+    return contact;
+  }, [userId, contactService]);
 
-    updateContact: async (contactId, updates) => {
-      if (!user) throw new Error('You must be signed in.');
-      const updated = await contactService.updateContact(user.id, contactId, updates);
+  const updateContact = useCallback<ContactContextValue['updateContact']>(
+    async (contactId, updates) => {
+      if (!userId) throw new Error('You must be signed in.');
+      const updated = await contactService.updateContact(userId, contactId, updates);
       setContacts((prev) => prev.map((c) => (c.id === contactId ? updated : c)));
       return updated;
     },
+    [userId, contactService],
+  );
 
-    deleteContact: async (contactId) => {
-      if (!user) throw new Error('You must be signed in.');
-      await contactService.deleteContact(user.id, contactId);
-      setContacts((prev) => prev.filter((c) => c.id !== contactId));
-    },
+  const deleteContact = useCallback<ContactContextValue['deleteContact']>(async (contactId) => {
+    if (!userId) throw new Error('You must be signed in.');
+    await contactService.deleteContact(userId, contactId);
+    setContacts((prev) => prev.filter((c) => c.id !== contactId));
+  }, [userId, contactService]);
 
-    refresh: async () => {
-      if (!user) return;
-      setIsLoading(true);
-      try {
-        const data = await contactService.getContacts(user.id);
-        setContacts(data);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-  };
+  const refresh = useCallback<ContactContextValue['refresh']>(async () => {
+    if (!userId) return;
+    setIsLoading(true);
+    try {
+      setContacts(await contactService.getContacts(userId));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId, contactService]);
+
+  const value = useMemo<ContactContextValue>(
+    () => ({ contacts, isLoading, addContact, updateContact, deleteContact, refresh }),
+    [contacts, isLoading, addContact, updateContact, deleteContact, refresh],
+  );
+
 
   return (
     <ContactContext.Provider value={value}>

@@ -3,13 +3,22 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 
 import type { FakeCallPhase, FakeCallSettings } from '../models/FakeCall';
 import { defaultFakeCallSettings } from '../models/FakeCall';
-import type { FakeCallService } from '../services/FakeCallService';
+import { FAKE_CALL_NOTIFICATION_ID, type FakeCallService } from '../services/FakeCallService';
+
+// A tapped notification response older than this is treated as stale rather
+// than a live trigger — getLastNotificationResponseAsync() can otherwise
+// resurface a days-old tap on an unrelated later cold start. Generous buffer
+// over the 60s max fake-call delay to allow for real tap-reaction time.
+const STALE_RESPONSE_THRESHOLD_MS = 120_000;
 
 interface SettingsStore {
   load(): Promise<FakeCallSettings>;
@@ -62,6 +71,8 @@ export function FakeCallStateProvider({
   settingsStore: SettingsStore;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+
   const [phase, setPhase] = useState<FakeCallPhase>('idle');
   const [settings, setSettings] = useState<FakeCallSettings>(defaultFakeCallSettings());
   const [countdownSeconds, setCountdownSeconds] = useState(0);
@@ -139,8 +150,8 @@ export function FakeCallStateProvider({
       }, 500);
     }
 
-    fakeCallService.schedule(delay, onIncoming);
-  }, [settings.delaySeconds, fakeCallService, clearCountdownInterval]);
+    fakeCallService.schedule(delay, onIncoming, settings.callerName);
+  }, [settings.delaySeconds, settings.callerName, fakeCallService, clearCountdownInterval]);
 
   const cancelCountdown = useCallback(() => {
     resetToIdle();
@@ -181,18 +192,69 @@ export function FakeCallStateProvider({
     };
   }, [fakeCallService, clearCountdownInterval, clearDurationInterval]);
 
-  const value: FakeCallContextValue = {
-    phase,
-    settings,
-    countdownSeconds,
-    callDurationSeconds,
-    startFakeCall,
-    cancelCountdown,
-    acceptCall,
-    declineCall,
-    endCall,
-    updateSettings,
-  };
+  // Backstop path: if the JS countdown timer never got to run — the screen
+  // locked, or the app was backgrounded during the up-to-60s wait — the
+  // scheduled notification (see FakeCallService) still fires and can be
+  // tapped to jump straight into the ringing screen. Covers both the app
+  // already running (response listener) and the app cold-started by the tap
+  // (checked once via getLastNotificationResponseAsync).
+  useEffect(() => {
+    const isFakeCallResponse = (response: Notifications.NotificationResponse | null): boolean =>
+      response?.notification.request.identifier === FAKE_CALL_NOTIFICATION_ID;
+
+    const isFresh = (response: Notifications.NotificationResponse): boolean => {
+      const deliveredAtMs = response.notification.date * 1_000;
+      return Date.now() - deliveredAtMs < STALE_RESPONSE_THRESHOLD_MS;
+    };
+
+    const handleResponse = (response: Notifications.NotificationResponse) => {
+      if (!isFakeCallResponse(response) || !isFresh(response)) return;
+      if (phaseRef.current === 'incoming' || phaseRef.current === 'active') return;
+
+      countdownEndAtRef.current = null;
+      clearCountdownInterval();
+      setCountdownSeconds(0);
+      phaseRef.current = 'incoming';
+      setPhase('incoming');
+      router.push('/(app)/fake-incoming-call');
+    };
+
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) handleResponse(response);
+      })
+      .catch(() => {});
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    return () => subscription.remove();
+  }, [router, clearCountdownInterval]);
+
+  const value = useMemo<FakeCallContextValue>(
+    () => ({
+      phase,
+      settings,
+      countdownSeconds,
+      callDurationSeconds,
+      startFakeCall,
+      cancelCountdown,
+      acceptCall,
+      declineCall,
+      endCall,
+      updateSettings,
+    }),
+    [
+      phase,
+      settings,
+      countdownSeconds,
+      callDurationSeconds,
+      startFakeCall,
+      cancelCountdown,
+      acceptCall,
+      declineCall,
+      endCall,
+      updateSettings,
+    ],
+  );
 
   return (
     <FakeCallContext.Provider value={value}>{children}</FakeCallContext.Provider>

@@ -44,6 +44,21 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= maxLen;
     }
 
+    // A journey's nextCheckInAt is computed and written entirely client-side
+    // (CheckInService.confirmSafe/extendCheckIn) — nothing previously stopped
+    // a buggy or compromised client from writing an arbitrary future value to
+    // suppress detectMissedCheckIns indefinitely. Bounded to the app's own
+    // longest real interval/extend option (60 min — CHECK_IN_INTERVAL_OPTIONS
+    // and EXTEND_OPTIONS_MINUTES in src/models/CheckIn.ts) plus a 5-minute
+    // buffer for latency/clock skew. null is always valid — it means no
+    // check-in scheduled (missed/cancelled/completed journeys clear it).
+    function isValidNextCheckIn(value) {
+      return value == null
+        || (value is timestamp
+            && value >= request.time
+            && value <= request.time + duration.value(65, 'm'));
+    }
+
     // ─── Family Invitations ──────────────────────────────────────────────────
     // Root-level collection. Sender creates; recipient reads/accepts by phone JWT.
     match /familyInvitations/{invitationId} {
@@ -125,6 +140,23 @@ service cloud.firestore {
       }
     }
 
+    // ─── Journey Shares ─────────────────────────────────────────────────────
+    // Public, read-only tracking links for a guardian without the app (see
+    // models/JourneyShare.ts). The anonymous public read never touches
+    // Firestore directly — it goes through the getSharedJourney Cloud
+    // Function (Admin SDK, bypasses these rules entirely, and is the only
+    // path that checks the linked journey's live status). These rules only
+    // govern the authenticated owner creating/reading/deleting their own
+    // share links from within the app.
+    match /journeyShares/{shareId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && isReasonableString(request.resource.data.journeyId, 200)
+        && isReasonableString(request.resource.data.displayName, 100);
+      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update: if false; // immutable once created — create a new share instead
+    }
+
     // ─── Users ───────────────────────────────────────────────────────────────
     // Stores: fcmToken (written by NotificationService on every sign-in)
     // User profile (name, phone, settings) is stored in SecureStore, NOT Firestore.
@@ -160,7 +192,9 @@ service cloud.firestore {
         allow update: if isOwner(userId)
           // Ownership and creation time are immutable after the first write.
           && fieldUnchanged('userId')
-          && fieldUnchanged('createdAt');
+          && fieldUnchanged('createdAt')
+          && (fieldUnchanged('nextCheckInAt')
+              || isValidNextCheckIn(request.resource.data.get('nextCheckInAt', null)));
         allow delete: if isOwner(userId);
 
         // ── Location Updates ──────────────────────────────────────────────
@@ -186,6 +220,78 @@ service cloud.firestore {
             && fieldUnchanged('createdAt');
           allow delete: if isOwner(userId);
         }
+
+        // ── Safety checks ──────────────────────────────────────────────────
+        // The automatic "are you OK?" (screen 08). Stores: reason, status,
+        // raisedAt, respondedAt, escalatedAt, location, batteryPercent.
+        //
+        // An ESCALATED record is what tells the Cloud Function to alert the
+        // guardians, so it is deliberately a one-way door: once escalated, the
+        // client can no longer edit or delete it. Otherwise a coerced or
+        // compromised device could walk back an alert that has already gone
+        // out — the exact scenario this feature exists for.
+        match /safetyChecks/{safetyCheckId} {
+          allow read:   if isOwner(userId);
+          // `escalateAt` is required: it is the only thing the server-side
+          // backstop can act on, so a check raised without one would be
+          // invisible to escalation if the client then died.
+          allow create: if isOwner(userId)
+            && incomingHasField('status', 'PENDING')
+            && incomingHasField('journeyId', journeyId)
+            && request.resource.data.escalateAt is timestamp;
+          // escalateAt is the deadline the server enforces. A client that
+          // could push it back could silence its own alert indefinitely, which
+          // is precisely the coercion case this feature exists for — so it is
+          // immutable from the moment the check is raised.
+          allow update: if isOwner(userId)
+            && resource.data.status != 'ESCALATED'
+            && fieldUnchanged('journeyId')
+            && fieldUnchanged('raisedAt')
+            && fieldUnchanged('reason')
+            && fieldUnchanged('escalateAt');
+          allow delete: if isOwner(userId)
+            && resource.data.status != 'ESCALATED';
+        }
+      }
+
+      // ── Saved Places ───────────────────────────────────────────────────────
+      // Stores: name, kind, address {…}, arrivalRadiusMeters, createdAt.
+      // Owner-only in both directions: a saved place is a home address, and
+      // nothing outside the owner's own session ever needs to read one. What
+      // guardians see during a journey is the destination *name*, carried on
+      // the journey document, never this list.
+      match /savedPlaces/{savedPlaceId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isReasonableString(request.resource.data.get('name', ''), 100);
+        allow update: if isOwner(userId)
+          && fieldUnchanged('createdAt')
+          && isReasonableString(request.resource.data.get('name', ''), 100);
+        allow delete: if isOwner(userId);
+      }
+
+      // ── Walk feedback ──────────────────────────────────────────────────────
+      // How a journey felt: Fine / Uneasy / Unsafe (Option 15 `AI6`).
+      //
+      // Owner-only in both directions, and deliberately NOT reachable from the
+      // familyConnections path that guardians read. The spec requires this —
+      // "do not share it with guardians" — and it is a correctness property,
+      // not a preference: someone who felt unsafe on a route their parent
+      // chose has to be able to say so without that parent reading it, or the
+      // answers stop being honest and the data is worthless.
+      //
+      // Immutable timestamp so a rating cannot be backdated; the rating itself
+      // may be changed by its owner, since changing your mind about how
+      // something felt is legitimate.
+      match /walkFeedback/{journeyId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.journeyId == journeyId
+          && request.resource.data.rating in ['fine', 'uneasy', 'unsafe'];
+        allow update: if isOwner(userId)
+          && fieldUnchanged('journeyId')
+          && request.resource.data.rating in ['fine', 'uneasy', 'unsafe'];
+        allow delete: if isOwner(userId);
       }
 
       // ── SOS Events ─────────────────────────────────────────────────────────

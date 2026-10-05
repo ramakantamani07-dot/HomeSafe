@@ -12,13 +12,15 @@ import {
   View,
 } from 'react-native';
 
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../config/theme';
 import {
   CONTACT_RELATIONSHIPS,
   type Contact,
   type ContactRelationship,
 } from '../../models/Contact';
 import { PhoneInput } from '../common/PhoneInput';
+import { Button } from '../ui/Button';
 
 export type ContactFormData = {
   name: string;
@@ -41,6 +43,7 @@ export function ContactFormModal({
   onClose,
   onSave,
 }: ContactFormModalProps) {
+  const theme = useTheme();
   const isEdit = contact !== null;
 
   const [name, setName] = useState('');
@@ -85,14 +88,16 @@ export function ContactFormModal({
       <View style={styles.overlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.sheet}
+          style={[styles.sheet, { backgroundColor: theme.surface }]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>{isEdit ? 'Edit contact' : 'Add contact'}</Text>
+            <Text style={[styles.title, { color: theme.textPrimary }]}>
+              {isEdit ? 'Edit contact' : 'Add contact'}
+            </Text>
             <TouchableOpacity onPress={onClose} disabled={saving}>
-              <Text style={styles.cancel}>Cancel</Text>
+              <Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
@@ -100,19 +105,22 @@ export function ContactFormModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.label}>Full name</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Full name</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                { backgroundColor: theme.background, borderColor: theme.border, color: theme.textPrimary },
+              ]}
               value={name}
               onChangeText={setName}
               placeholder="Contact name"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textTertiary}
               returnKeyType="done"
               maxLength={60}
               editable={!saving}
             />
 
-            <Text style={styles.label}>Phone number</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Phone number</Text>
             {/*
               key forces remount when switching between contacts so that
               PhoneInput re-initialises from the new initialValue.
@@ -124,37 +132,42 @@ export function ContactFormModal({
               disabled={saving}
             />
 
-            <Text style={styles.label}>Relationship</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Relationship</Text>
             <View style={styles.chips}>
-              {CONTACT_RELATIONSHIPS.map((rel) => (
-                <TouchableOpacity
-                  key={rel}
-                  style={[styles.chip, relationship === rel && styles.chipActive]}
-                  onPress={() => setRelationship(rel)}
-                  disabled={saving}
-                >
-                  <Text
+              {CONTACT_RELATIONSHIPS.map((rel) => {
+                const selected = relationship === rel;
+                return (
+                  <TouchableOpacity
+                    key={rel}
                     style={[
-                      styles.chipText,
-                      relationship === rel && styles.chipTextActive,
+                      styles.chip,
+                      {
+                        borderColor: selected ? theme.accent : theme.border,
+                        backgroundColor: selected ? theme.accentMuted : theme.background,
+                      },
                     ]}
+                    onPress={() => setRelationship(rel)}
+                    disabled={saving}
                   >
-                    {rel}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: selected ? theme.accent : theme.textSecondary, fontWeight: selected ? '700' : '500' },
+                      ]}
+                    >
+                      {rel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <TouchableOpacity
-              style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            <Button
+              label={saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add contact'}
               onPress={handleSave}
-              disabled={saving}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.saveButtonText}>
-                {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add contact'}
-              </Text>
-            </TouchableOpacity>
+              loading={saving}
+              style={styles.saveButton}
+            />
 
             <View style={styles.bottomPad} />
           </ScrollView>
@@ -171,10 +184,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: RADIUS.lg + 4,
+    borderTopRightRadius: RADIUS.lg + 4,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: 0,
     maxHeight: '90%',
   },
@@ -182,89 +194,58 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.border,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 4,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   title: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.heading.fontSize,
     fontWeight: '700',
-    color: COLORS.textPrimary,
   },
   cancel: {
-    fontSize: 16,
-    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: '600',
   },
   label: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption.fontSize,
     fontWeight: '700',
-    color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.lg,
   },
   input: {
-    backgroundColor: COLORS.background,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md + 2,
     fontSize: 16,
-    color: COLORS.textPrimary,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: SPACING.sm,
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.pill,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-  },
-  chipActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
   },
   chipText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.callout.fontSize,
   },
   saveButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  saveButtonDisabled: {
-    backgroundColor: COLORS.textMuted,
-  },
-  saveButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
+    marginTop: SPACING.xl,
   },
   bottomPad: {
-    height: 24,
+    height: SPACING.xl,
   },
 });

@@ -16,7 +16,7 @@ export class DataRetentionService {
    * Removes expired local data according to the given policy.
    * Currently cleans failed offline-queue items older than the configured
    * retention window. Server-side data (journey location histories, SOS events)
-   * is cleaned by scheduled Cloud Functions — see DATA_RETENTION.md.
+   * is cleaned by scheduled Cloud Functions — see docs/reference/DATA_RETENTION.md.
    */
   async cleanupExpiredLocalData(
     policy: DataRetentionPolicy = defaultDataRetentionPolicy(),

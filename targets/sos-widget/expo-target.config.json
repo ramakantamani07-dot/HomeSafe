@@ -1,0 +1,12 @@
+{
+  "type": "widget",
+  "name": "sos_widget",
+  "displayName": "wayLoc SOS",
+  "deploymentTarget": "16.0",
+  "colors": {
+    "$accent": "#DC2626",
+    "$widgetBackground": "#DC2626"
+  },
+  "frameworks": ["SwiftUI", "WidgetKit"],
+  "bundleIdentifier": ".sos-widget"
+}

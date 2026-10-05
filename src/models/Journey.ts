@@ -1,3 +1,6 @@
+import type { AlertRules } from './AlertRules';
+import type { Place, TravelMode } from './Place';
+
 export type JourneyStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'MISSED_CHECKIN' | 'SOS_TRIGGERED';
 
 export interface Coordinates {
@@ -12,6 +15,22 @@ export interface Journey {
   startLocation: Coordinates;
   /** Coordinates of the destination. Null when the user did not supply them. */
   destinationCoordinates: Coordinates | null;
+  /**
+   * Full destination record — name, formatted address, postcode, placeId.
+   * Null only for journeys created before saved places existed, or by a code
+   * path that couldn't resolve one; `destinationLabel` and
+   * `destinationCoordinates` stay authoritative for display and routing so
+   * nothing breaks when this is absent.
+   */
+  destination: Place | null;
+  /** Id of the saved place this journey goes to, when it came from one. */
+  savedPlaceId: string | null;
+  /** How the user is travelling — drives the routing profile and ETA. */
+  travelMode: TravelMode;
+  /** Thresholds that raise a safety check. */
+  alertRules: AlertRules;
+  /** Metres from the destination that counts as arrived. */
+  arrivalRadiusMeters: number;
   /** Most recent tracked position. Null until the first tracking update arrives. */
   currentLocation: Coordinates | null;
   status: JourneyStatus;
@@ -36,6 +55,11 @@ export type StartJourneyInput = {
   checkInIntervalMinutes: number | null;
   /** Coordinates to route to. Null means routing will not be attempted. */
   destinationCoordinates: Coordinates | null;
+  destination: Place | null;
+  savedPlaceId: string | null;
+  travelMode: TravelMode;
+  alertRules: AlertRules;
+  arrivalRadiusMeters: number;
 };
 
 /** Returns "lat, lng" rounded to 5 decimal places for display. */

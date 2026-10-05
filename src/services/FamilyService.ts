@@ -9,6 +9,7 @@ import type {
   SharedFamilyView,
 } from '../models/Family';
 import { computeConnectionId, deriveSharedView } from '../models/Family';
+import type { Coordinates } from '../models/Journey';
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
@@ -19,6 +20,7 @@ export interface PublishStatusInput {
   activeJourneyEta: Date | null;
   activeSosId: string | null;
   batteryLevel: number | null;
+  location: Coordinates | null;
 }
 
 function deriveStatus(
@@ -196,6 +198,7 @@ export class FamilyService {
           activeJourneyId: wasShared ? view!.activeJourneyId : null,
           activeJourneyDestination: wasShared ? view!.activeJourneyDestination : null,
           activeJourneyEta: wasShared ? view!.activeJourneyEta : null,
+          location: wasShared && !isStale ? view!.location : null,
         } satisfies FamilyMember;
       }),
     );
@@ -243,6 +246,7 @@ export class FamilyService {
       activeJourneyId: input.activeJourneyId,
       activeJourneyDestination: input.activeJourneyDestination,
       activeJourneyEta: input.activeJourneyEta,
+      location: input.location,
       updatedAt: now,
     };
 

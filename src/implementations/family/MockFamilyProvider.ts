@@ -20,6 +20,75 @@ export class MockFamilyProvider implements FamilyProvider {
   private sharedStatuses: Map<string, SharedFamilyView> = new Map();
   private nextId = 1;
 
+  constructor() {
+    // Dev-mode-only demo data so the Family list/Home preview has something
+    // to render without needing a second device to accept a real invite.
+    // Matches MockAuthProvider's fixed dev user id ('dev-user-001').
+    //
+    // Built synchronously (no async/await) deliberately: an earlier version
+    // called the async createConnection/publishSharedStatus methods from
+    // here, which — even though their own bodies have no real async work —
+    // still defer past the first `await` to a microtask. That left a real,
+    // observed race: FamilyService's own initial fetch (kicked off from a
+    // useEffect moments after this constructor returns) could run before the
+    // seed's microtasks resolved, rendering members with no status ("Offline")
+    // that a manual refresh would never fix since nothing re-triggers it.
+    this.seedDemoData();
+  }
+
+  private seedDemoData(): void {
+    const me = 'dev-user-001';
+    const demoMembers = [
+      { id: 'demo-emma', name: 'Emma', relationship: 'Daughter', status: 'TRAVELLING' as const },
+      { id: 'demo-tom', name: 'Tom', relationship: 'Son', status: 'AT_SCHOOL' as const },
+    ];
+    const sharePerms: FamilyPermissions = {
+      sharingMode: 'SHARE_ALWAYS',
+      shareLocation: true,
+      shareJourneyDetails: true,
+      shareBattery: true,
+      shareStatus: true,
+    };
+
+    for (const demo of demoMembers) {
+      const connectionId = computeConnectionId(me, demo.id);
+      const isFromUser1 = me < demo.id;
+      const now = new Date();
+
+      this.connections.push({
+        id: connectionId,
+        user1Id: isFromUser1 ? me : demo.id,
+        user2Id: isFromUser1 ? demo.id : me,
+        user1DisplayName: isFromUser1 ? 'Dev User' : demo.name,
+        user2DisplayName: isFromUser1 ? demo.name : 'Dev User',
+        user1Phone: isFromUser1 ? '+911111111111' : '+910000000000',
+        user2Phone: isFromUser1 ? '+910000000000' : '+911111111111',
+        relationship: demo.relationship,
+        status: 'ACTIVE',
+        initiatedBy: me,
+        user1Permissions: sharePerms,
+        user2Permissions: sharePerms,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Emma's TRAVELLING status is only meaningful paired with real journey
+      // details — Home's redesigned family row renders "On the way home" +
+      // an ETA clock time when these are present, so the demo seed needs to
+      // actually populate them rather than leaving TRAVELLING as a bare label.
+      const isTravelling = demo.status === 'TRAVELLING';
+      this.sharedStatuses.set(this.sharedKey(connectionId, demo.id), {
+        status: demo.status,
+        batteryLevel: 0.8,
+        lastSeen: new Date(),
+        activeJourneyId: isTravelling ? `demo-journey-${demo.id}` : null,
+        activeJourneyDestination: isTravelling ? 'Home' : null,
+        activeJourneyEta: isTravelling ? new Date(Date.now() + 20 * 60 * 1000) : null,
+        location: null,
+      });
+    }
+  }
+
   private sharedKey(connectionId: string, publisherUserId: string): string {
     return `${connectionId}:${publisherUserId}`;
   }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 
 import type { AccountDeletionService, AccountDeletionResult } from '../services/AccountDeletionService';
 
@@ -24,10 +24,13 @@ export function AccountDeletionStateProvider({
   accountDeletionService: AccountDeletionService;
   children: React.ReactNode;
 }) {
+  const value = useMemo<AccountDeletionContextValue>(
+    () => ({ deleteAccount: (uid) => accountDeletionService.deleteAccount(uid) }),
+    [accountDeletionService],
+  );
+
   return (
-    <AccountDeletionContext.Provider
-      value={{ deleteAccount: (uid) => accountDeletionService.deleteAccount(uid) }}
-    >
+    <AccountDeletionContext.Provider value={value}>
       {children}
     </AccountDeletionContext.Provider>
   );

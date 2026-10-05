@@ -1,4 +1,5 @@
 import type {
+  ArrivalHandler,
   LocationProvider,
   LocationTrackingOptions,
   LocationUpdateHandler,
@@ -16,8 +17,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Simulated time-to-arrival so the arrival-confirmation UI is testable
+// without a real device or GPS movement.
+const MOCK_ARRIVAL_DELAY_MS = 15_000;
+
 export class MockLocationProvider implements LocationProvider {
   private intervalId: ReturnType<typeof setInterval> | null = null;
+  private geofenceTimerId: ReturnType<typeof setTimeout> | null = null;
   private mockLat = MOCK_ORIGIN.latitude;
   private mockLng = MOCK_ORIGIN.longitude;
 
@@ -74,5 +80,34 @@ export class MockLocationProvider implements LocationProvider {
 
   isTracking(): boolean {
     return this.intervalId !== null;
+  }
+
+  isUsingBackgroundMode(): boolean {
+    return this.intervalId !== null;
+  }
+
+  async hasBackgroundPermission(): Promise<boolean> {
+    return true;
+  }
+
+  async startGeofencing(
+    _destination: Coordinates,
+    _radiusMeters: number,
+    onArrival: ArrivalHandler,
+  ): Promise<void> {
+    await this.stopGeofencing();
+    // Simulates arrival after a fixed delay so the confirmation UI is
+    // testable in dev without real movement.
+    this.geofenceTimerId = setTimeout(() => {
+      this.geofenceTimerId = null;
+      onArrival();
+    }, MOCK_ARRIVAL_DELAY_MS);
+  }
+
+  async stopGeofencing(): Promise<void> {
+    if (this.geofenceTimerId !== null) {
+      clearTimeout(this.geofenceTimerId);
+      this.geofenceTimerId = null;
+    }
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,9 +12,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/config/theme';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useFamily } from '../../src/hooks/useFamily';
 import { FamilyStatusBadge } from '../../src/components/family/FamilyStatusBadge';
+import { Icon } from '../../src/components/ui/Icon';
+import { Button } from '../../src/components/ui/Button';
+import { Section, ListRow } from '../../src/components/ui/Section';
+import { formatCoordinates } from '../../src/models/Journey';
 import {
   SHARING_MODE_LABELS,
   type FamilyPermissions,
@@ -56,6 +63,8 @@ function initials(name: string): string {
 }
 
 export default function FamilyMemberScreen() {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const router = useRouter();
   const { connectionId } = useLocalSearchParams<{ connectionId: string }>();
   const { members, removeMember, updatePermissions } = useFamily();
@@ -84,6 +93,12 @@ export default function FamilyMemberScreen() {
   const perms = localPerms ?? member.myPermissions;
   const batteryPct =
     member.batteryLevel != null ? Math.round(member.batteryLevel * 100) : null;
+  const batteryColor =
+    batteryPct != null && batteryPct < 20
+      ? theme.critical.fg
+      : batteryPct != null && batteryPct < 40
+        ? theme.warning.fg
+        : theme.textSecondary;
   const eta = formatEta(member.activeJourneyEta);
 
   const handleRemove = () => {
@@ -144,7 +159,7 @@ export default function FamilyMemberScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        {/* Identity card */}
+        {/* Identity */}
         <View style={styles.identityCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials(member.displayName)}</Text>
@@ -155,37 +170,38 @@ export default function FamilyMemberScreen() {
         </View>
 
         {/* Live status */}
-        <Text style={styles.sectionHeader}>Live Status</Text>
-        <View style={styles.card}>
-          <View style={styles.statusRow}>
-            <FamilyStatusBadge status={member.status} />
-            <Text style={styles.lastSeen}>Last seen: {formatLastSeen(member.lastSeen)}</Text>
-          </View>
-
-          {batteryPct != null && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Battery</Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  batteryPct < 20
-                    ? { color: COLORS.danger }
-                    : batteryPct < 40
-                      ? { color: COLORS.warning }
-                      : { color: COLORS.success },
-                ]}
-              >
-                {batteryPct}%
-              </Text>
-            </View>
-          )}
+        <View style={styles.statusHeaderRow}>
+          <FamilyStatusBadge status={member.status} />
+          <Text style={styles.lastSeen}>Last seen: {formatLastSeen(member.lastSeen)}</Text>
         </View>
+
+        <Section>
+          {batteryPct != null && (
+            <ListRow
+              icon="battery"
+              iconColor={batteryColor}
+              title="Battery"
+              value={`${batteryPct}%`}
+            />
+          )}
+          {member.location && (
+            <ListRow
+              icon="location"
+              title="Location"
+              value={`${formatCoordinates(member.location)} · Open in Maps`}
+              onPress={() => {
+                const { latitude, longitude } = member.location!;
+                Linking.openURL(`https://maps.google.com/?q=${latitude},${longitude}`);
+              }}
+            />
+          )}
+        </Section>
 
         {/* Active journey */}
         {member.activeJourneyId && member.activeJourneyDestination && (
           <>
             <Text style={styles.sectionHeader}>Active Journey</Text>
-            <View style={[styles.card, styles.journeyCard]}>
+            <View style={[styles.card, { backgroundColor: theme.accentMuted, borderColor: theme.accent }]}>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Destination</Text>
                 <Text style={styles.infoValue} numberOfLines={2}>
@@ -195,7 +211,7 @@ export default function FamilyMemberScreen() {
               {eta && (
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>ETA</Text>
-                  <Text style={[styles.infoValue, { color: COLORS.primary }]}>{eta}</Text>
+                  <Text style={[styles.infoValue, { color: theme.accent }]}>{eta}</Text>
                 </View>
               )}
               <View style={styles.roViewNote}>
@@ -216,22 +232,20 @@ export default function FamilyMemberScreen() {
               key={mode}
               style={styles.modeRow}
               onPress={() => updatePerm('sharingMode', mode)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: perms.sharingMode === mode }}
             >
-              <View
-                style={[
-                  styles.radio,
-                  perms.sharingMode === mode && styles.radioSelected,
-                ]}
-              />
+              <View style={[styles.radio, perms.sharingMode === mode && styles.radioSelected]}>
+                {perms.sharingMode === mode && <Icon name="check" size={12} color={theme.textOnColor} />}
+              </View>
               <Text style={styles.modeLabel}>{SHARING_MODE_LABELS[mode]}</Text>
             </TouchableOpacity>
           ))}
 
-          <View style={styles.divider} />
-
           {/* Granular toggles — only meaningful when not NEVER_SHARE */}
           {perms.sharingMode !== 'NEVER_SHARE' && (
             <>
+              <View style={styles.divider} />
               {(
                 [
                   ['shareLocation', 'Share location'],
@@ -245,8 +259,8 @@ export default function FamilyMemberScreen() {
                   <Switch
                     value={perms[key] as boolean}
                     onValueChange={(v) => updatePerm(key, v)}
-                    trackColor={{ true: COLORS.primary, false: COLORS.border }}
-                    thumbColor={COLORS.white}
+                    trackColor={{ true: theme.accent, false: theme.border }}
+                    thumbColor={theme.textOnColor}
                   />
                 </View>
               ))}
@@ -254,238 +268,212 @@ export default function FamilyMemberScreen() {
           )}
 
           {permsDirty && (
-            <TouchableOpacity
-              style={[styles.saveButton, isSavingPerms && { opacity: 0.5 }]}
+            <Button
+              label={isSavingPerms ? 'Saving…' : 'Save Sharing Settings'}
               onPress={handleSavePermissions}
-              disabled={isSavingPerms}
-            >
-              <Text style={styles.saveButtonText}>
-                {isSavingPerms ? 'Saving…' : 'Save Sharing Settings'}
-              </Text>
-            </TouchableOpacity>
+              loading={isSavingPerms}
+              style={styles.saveButton}
+            />
           )}
         </View>
 
         {/* Remove member */}
-        <TouchableOpacity
-          style={[styles.removeButton, isRemoving && { opacity: 0.5 }]}
+        <Button
+          label={isRemoving ? 'Removing…' : `Remove ${member.displayName}`}
           onPress={handleRemove}
-          disabled={isRemoving}
-        >
-          <Text style={styles.removeButtonText}>
-            {isRemoving ? 'Removing…' : `Remove ${member.displayName}`}
-          </Text>
-        </TouchableOpacity>
+          loading={isRemoving}
+          variant="destructive"
+          style={styles.removeButton}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  backButton: { width: 64 },
-  backText: {
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  screenTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 48,
-  },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  identityCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 20,
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  avatarText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
-  memberName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-  },
-  memberPhone: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  memberRelationship: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 14,
-    gap: 10,
-  },
-  journeyCard: {
-    borderColor: COLORS.primary + '50',
-    backgroundColor: COLORS.primaryLight,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastSeen: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    flex: 1,
-  },
-  infoValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    flex: 2,
-    textAlign: 'right',
-  },
-  roViewNote: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    padding: 8,
-  },
-  roViewNoteText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  permLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  radio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-  },
-  radioSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary,
-  },
-  modeLabel: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 4,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  saveButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  saveButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  removeButton: {
-    marginTop: 24,
-    borderWidth: 1.5,
-    borderColor: COLORS.danger,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  removeButtonText: {
-    color: COLORS.danger,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  notFound: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  notFoundText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-  },
-  backLink: {
-    fontSize: 15,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    backButton: { width: 64 },
+    backText: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.accent,
+      fontWeight: '600',
+    },
+    screenTitle: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: '700',
+      color: theme.textPrimary,
+    },
+    container: {
+      padding: SPACING.lg,
+      paddingBottom: SPACING.xxxl,
+      gap: SPACING.md,
+    },
+    sectionHeader: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+    },
+    identityCard: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: SPACING.xl,
+      alignItems: 'center',
+      gap: 6,
+    },
+    avatar: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: theme.accentMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.xs,
+    },
+    avatarText: {
+      fontSize: 24,
+      fontWeight: '800',
+      color: theme.accent,
+    },
+    memberName: {
+      fontSize: TYPOGRAPHY.heading.fontSize,
+      fontWeight: '800',
+      color: theme.textPrimary,
+    },
+    memberPhone: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.textSecondary,
+    },
+    memberRelationship: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textTertiary,
+    },
+    statusHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    lastSeen: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textTertiary,
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: SPACING.sm,
+    },
+    infoLabel: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      flex: 1,
+    },
+    infoValue: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '600',
+      color: theme.textPrimary,
+      flex: 2,
+      textAlign: 'right',
+    },
+    roViewNote: {
+      backgroundColor: theme.background,
+      borderRadius: RADIUS.sm,
+      padding: SPACING.sm,
+    },
+    roViewNoteText: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textTertiary,
+      textAlign: 'center',
+    },
+    permLabel: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '600',
+      color: theme.textSecondary,
+      marginBottom: SPACING.xs,
+    },
+    modeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      paddingVertical: SPACING.xs,
+    },
+    radio: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: theme.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioSelected: {
+      borderColor: theme.accent,
+      backgroundColor: theme.accent,
+    },
+    modeLabel: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.textPrimary,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.border,
+      marginVertical: SPACING.sm,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: SPACING.xs,
+    },
+    toggleLabel: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.textPrimary,
+    },
+    saveButton: {
+      marginTop: SPACING.sm,
+    },
+    removeButton: {
+      marginTop: SPACING.md,
+    },
+    notFound: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: SPACING.md,
+    },
+    notFoundText: {
+      fontSize: TYPOGRAPHY.body.fontSize,
+      color: theme.textSecondary,
+    },
+    backLink: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.accent,
+      fontWeight: '600',
+    },
+  });
+}

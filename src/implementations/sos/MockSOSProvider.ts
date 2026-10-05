@@ -54,6 +54,7 @@ export class MockSOSProvider implements SOSProvider {
       triggeredAt: now,
       resolvedAt: null,
       createdAt: now,
+      duressTriggered: false,
     };
     this.userStore(userId).set(id, { ...sos });
     return { ...sos };
@@ -65,6 +66,16 @@ export class MockSOSProvider implements SOSProvider {
     const existing = store.get(sosId);
     if (!existing) throw new Error('SOS event not found.');
     const updated: SOSEvent = { ...existing, status: 'RESOLVED', resolvedAt: new Date() };
+    store.set(sosId, { ...updated });
+    return { ...updated };
+  }
+
+  async markDuress(userId: string, sosId: string): Promise<SOSEvent> {
+    await delay(100);
+    const store = this.userStore(userId);
+    const existing = store.get(sosId);
+    if (!existing) throw new Error('SOS event not found.');
+    const updated: SOSEvent = { ...existing, duressTriggered: true };
     store.set(sosId, { ...updated });
     return { ...updated };
   }

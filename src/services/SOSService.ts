@@ -76,6 +76,18 @@ export class SOSService {
     }
   }
 
+  /**
+   * Duress resolve: marks the record so it's clear what happened, but never
+   * touches status/resolvedAt or the journey — tracking and the alert both
+   * stay exactly as they were. Unlike triggerSOS/resolveSOS this has no
+   * offline queue: if the write fails there is nothing safe to retry silently
+   * later, so the caller (SOSContext) treats any failure here as a no-op
+   * rather than surfacing it — an error dialog would break the cover story.
+   */
+  async triggerDuress(userId: string, sosId: string): Promise<void> {
+    await this.sos.markDuress(userId, sosId);
+  }
+
   async getActiveSOS(userId: string): Promise<SOSEvent | null> {
     const firestoreSOS = await this.sos.getActiveSOS(userId);
     if (firestoreSOS) return firestoreSOS;

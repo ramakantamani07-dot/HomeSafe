@@ -1,21 +1,33 @@
 import type { Coordinates } from '../models/Journey';
 import type { RouteResult } from '../models/RouteResult';
-import type { RoutingProvider } from '../providers/RoutingProvider';
+import {
+  computeEta,
+  formatDistance,
+  formatDuration,
+  formatEta,
+} from '../models/RouteResult';
+import { haversineMeters, type TravelMode } from '../models/Place';
+import type { RouteRequestOptions, RoutingProvider } from '../providers/RoutingProvider';
 
-// ─── Haversine helper ─────────────────────────────────────────────────────────
-
-function haversineMeters(a: Coordinates, b: Coordinates): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLon = toRad(b.longitude - a.longitude);
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLon = Math.sin(dLon / 2);
-  const x =
-    sinDLat * sinDLat +
-    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * sinDLon * sinDLon;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
+/**
+ * Average speeds used to turn a route's distance into a per-mode duration,
+ * in metres/second.
+ *
+ * The routing provider returns a driving duration. Re-deriving the other
+ * modes from distance is an approximation — it doesn't know that a footpath
+ * cuts the corner or that the bus waits at three stops — but it is a far
+ * better ETA than showing a car's travel time to someone walking, and the
+ * whole safety model (late/stopped thresholds) keys off that ETA. Swap in a
+ * profile-aware routing instance (routed-foot / routed-bike) and this table
+ * stops being consulted for those modes.
+ */
+const MODE_SPEED_MPS: Record<Exclude<TravelMode, 'car'>, number> = {
+  walk: 1.35,
+  bike: 4.2,
+  // Deliberately slower than a bike: includes waiting and stopping time,
+  // which is what makes a bus ETA honest rather than optimistic.
+  bus: 5.0,
+};
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 
@@ -43,6 +55,28 @@ export interface RoutingServiceOptions {
   offRouteMeters?: number;
 }
 
+/**
+ * Defaults, named rather than inline.
+ *
+ * Every one of these is a battery or cost decision, not an arbitrary number:
+ * the cooldown and cache bound how often a journey hits the routing API, and
+ * the off-route threshold decides how often a recalculation is triggered at
+ * all. Naming them keeps that visible at the point someone is tempted to
+ * shrink one.
+ */
+export const ROUTING_DEFAULTS = {
+  /** Minimum gap between automatic recalculations. */
+  cooldownMs: 60_000,
+  /** How long a cached route stays fresh — also what makes Home's per-place ETA chips cheap. */
+  cacheTtlMs: 5 * 60_000,
+  /** Give up on a slow provider rather than holding the request open. */
+  timeoutMs: 15_000,
+  /** A route older than this is recalculated on the next opportunity. */
+  staleMs: 30 * 60_000,
+  /** Metres from the nearest route point before the traveller counts as off it. */
+  offRouteMeters: 250,
+} as const;
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class RoutingService {
@@ -61,11 +95,11 @@ export class RoutingService {
     private readonly provider: RoutingProvider,
     options: RoutingServiceOptions = {},
   ) {
-    this.cooldownMs = options.cooldownMs ?? 60_000;
-    this.cacheTtlMs = options.cacheTtlMs ?? 300_000;
-    this.timeoutMs = options.timeoutMs ?? 15_000;
-    this.staleMs = options.staleMs ?? 30 * 60_000;
-    this.offRouteMeters = options.offRouteMeters ?? 250;
+    this.cooldownMs = options.cooldownMs ?? ROUTING_DEFAULTS.cooldownMs;
+    this.cacheTtlMs = options.cacheTtlMs ?? ROUTING_DEFAULTS.cacheTtlMs;
+    this.timeoutMs = options.timeoutMs ?? ROUTING_DEFAULTS.timeoutMs;
+    this.staleMs = options.staleMs ?? ROUTING_DEFAULTS.staleMs;
+    this.offRouteMeters = options.offRouteMeters ?? ROUTING_DEFAULTS.offRouteMeters;
   }
 
   /**
@@ -77,8 +111,12 @@ export class RoutingService {
    * - Throws if the provider returns an error; callers must handle this gracefully
    *   (journey continues without route data).
    */
-  async calculateRoute(from: Coordinates, to: Coordinates): Promise<RouteResult> {
-    const key = routeCacheKey(from, to);
+  async calculateRoute(
+    from: Coordinates,
+    to: Coordinates,
+    mode: TravelMode = 'car',
+  ): Promise<RouteResult> {
+    const key = `${routeCacheKey(from, to)}|${mode}`;
     const cached = this.cache.get(key);
     if (cached !== undefined && Date.now() - cached.cachedAt < this.cacheTtlMs) {
       return cached.result;
@@ -93,7 +131,7 @@ export class RoutingService {
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const result = await this.provider.getRoute(from, to, controller.signal);
+      const raw = await this.provider.getRoute(from, to, controller.signal);
 
       // A newer calculateRoute call started while we were waiting — discard this result
       if (this.requestSeq !== seq) {
@@ -102,6 +140,7 @@ export class RoutingService {
         throw err;
       }
 
+      const result = this.applyTravelMode(raw, mode);
       this.cache.set(key, { result, cachedAt: Date.now() });
       this.lastCalcAt = Date.now();
       return result;
@@ -111,6 +150,44 @@ export class RoutingService {
         this.activeController = null;
       }
     }
+  }
+
+  /**
+   * A one-off route for screen 04's preview, calculated before any journey
+   * exists. Deliberately separate from calculateRoute: the preview must not
+   * abort — or be aborted by — the live journey's recalculation loop, and it
+   * must not reset the cooldown that throttles that loop.
+   */
+  async previewRoute(
+    from: Coordinates,
+    to: Coordinates,
+    mode: TravelMode,
+    signal?: AbortSignal,
+    options: RouteRequestOptions = {},
+  ): Promise<RouteResult> {
+    // Steps are part of the cache identity: a cached stepless route must not
+    // satisfy a caller that needs a timeline.
+    const key = `${routeCacheKey(from, to)}|${mode}|${options.includeSteps ? 'steps' : 'nosteps'}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined && Date.now() - cached.cachedAt < this.cacheTtlMs) {
+      return cached.result;
+    }
+
+    const raw = await this.provider.getRoute(from, to, signal, options);
+    const result = this.applyTravelMode(raw, mode);
+    this.cache.set(key, { result, cachedAt: Date.now() });
+    return result;
+  }
+
+  /**
+   * Rewrites the provider's driving duration into the chosen mode's. Distance
+   * and geometry are left alone — both are far less mode-sensitive than time,
+   * and re-deriving them would be inventing data.
+   */
+  private applyTravelMode(route: RouteResult, mode: TravelMode): RouteResult {
+    if (mode === 'car') return route;
+    const speed = MODE_SPEED_MPS[mode];
+    return { ...route, durationSeconds: Math.round(route.distanceMeters / speed) };
   }
 
   /** Abort the in-flight request, if any. Call when the journey ends. */
@@ -150,30 +227,23 @@ export class RoutingService {
 
   // ─── Formatting ───────────────────────────────────────────────────────────
 
-  /** Returns a Date representing when the user will arrive based on current time. */
+  /** @see computeEta in models/RouteResult — kept here for callers holding a service. */
   computeEta(durationSeconds: number, fromTime?: Date): Date {
-    const base = fromTime ?? new Date();
-    return new Date(base.getTime() + durationSeconds * 1_000);
+    return computeEta(durationSeconds, fromTime);
   }
 
-  /** "23 min", "1 h 5 min", "Less than a minute" */
+  /** @see formatDuration in models/RouteResult. */
   formatDuration(seconds: number): string {
-    if (seconds < 60) return 'Less than a minute';
-    const h = Math.floor(seconds / 3_600);
-    const m = Math.floor((seconds % 3_600) / 60);
-    if (h === 0) return `${m} min`;
-    if (m === 0) return `${h} h`;
-    return `${h} h ${m} min`;
+    return formatDuration(seconds);
   }
 
-  /** "450 m", "1.2 km" */
+  /** @see formatDistance in models/RouteResult. */
   formatDistance(meters: number): string {
-    if (meters < 1_000) return `${Math.round(meters)} m`;
-    return `${(meters / 1_000).toFixed(1)} km`;
+    return formatDistance(meters);
   }
 
-  /** "14:35" */
+  /** @see formatEta in models/RouteResult. */
   formatEta(eta: Date): string {
-    return eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return formatEta(eta);
   }
 }

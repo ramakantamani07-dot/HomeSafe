@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -12,45 +13,43 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as IntentLauncher from 'expo-intent-launcher';
+import Constants from 'expo-constants';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { usePrivacy } from '../../src/hooks/usePrivacy';
+import { useDataExport } from '../../src/hooks/useDataExport';
 import { useAuthContext } from '../../src/context/AuthContext';
 import { useSOSContext } from '../../src/context/SOSContext';
 import { useJourneyContext } from '../../src/context/JourneyContext';
-import { journeyService } from '../../src/context/AppProviders';
 import type { AppPermissionStatus } from '../../src/models/Permission';
 import { PermissionExplainerModal } from '../../src/components/permissions/PermissionExplainerModal';
+import { PinEntryModal } from '../../src/components/security/PinEntryModal';
+import { Section, ListRow } from '../../src/components/ui/Section';
+import { StatusBadge, type Severity } from '../../src/components/ui/StatusBadge';
 
-function statusLabel(status: AppPermissionStatus): string {
+function permissionSeverity(status: AppPermissionStatus): Severity {
+  if (status === 'granted') return 'safe';
+  if (status === 'denied') return 'warning';
+  return 'neutral';
+}
+
+function permissionLabel(status: AppPermissionStatus): string {
   if (status === 'granted') return 'Granted';
   if (status === 'denied') return 'Denied';
   return 'Not requested';
 }
 
-function statusColor(status: AppPermissionStatus): string {
-  if (status === 'granted') return COLORS.success;
-  if (status === 'denied') return COLORS.danger;
-  return COLORS.textMuted;
-}
-
-function StatusBadge({ status }: { status: AppPermissionStatus }) {
-  return (
-    <View style={[styles.badge, { backgroundColor: statusColor(status) + '1A' }]}>
-      <Text style={[styles.badgeText, { color: statusColor(status) }]}>
-        {statusLabel(status)}
-      </Text>
-    </View>
-  );
-}
-
 export default function PrivacyScreen() {
+  const theme = useTheme();
   const router = useRouter();
   const { user } = useAuthContext();
   const { activeSOS } = useSOSContext();
-  const { activeJourney } = useJourneyContext();
+  const { activeJourney, deleteLocationHistory } = useJourneyContext();
   const {
     locationStatus,
+    locationBackgroundStatus,
     notificationStatus,
     biometricAvailable,
     biometricLockEnabled,
@@ -58,12 +57,19 @@ export default function PrivacyScreen() {
     requestNotificationPermission,
     enableBiometricLock,
     disableBiometricLock,
+    duressCodeSet,
+    setDuressCode,
+    removeDuressCode,
   } = usePrivacy();
+  const { stage: exportStage, exportMyData, reset: resetExport } = useDataExport();
 
   const [showLocationExplainer, setShowLocationExplainer] = useState(false);
   const [showNotificationExplainer, setShowNotificationExplainer] = useState(false);
   const [togglingBiometric, setTogglingBiometric] = useState(false);
   const [deletingHistory, setDeletingHistory] = useState(false);
+  const [duressPinStage, setDuressPinStage] = useState<'idle' | 'new' | 'confirm'>('idle');
+  const [duressPendingCode, setDuressPendingCode] = useState<string | null>(null);
+  const [duressPinError, setDuressPinError] = useState<string | null>(null);
 
   const handleLocationAllow = async () => {
     setShowLocationExplainer(false);
@@ -93,6 +99,79 @@ export default function PrivacyScreen() {
 
   const openSystemSettings = () => Linking.openSettings();
 
+  const startSetDuressCode = () => {
+    setDuressPendingCode(null);
+    setDuressPinError(null);
+    setDuressPinStage('new');
+  };
+
+  const cancelDuressPinFlow = () => {
+    setDuressPinStage('idle');
+    setDuressPendingCode(null);
+    setDuressPinError(null);
+  };
+
+  const handleDuressPinSubmit = async (pin: string) => {
+    if (duressPinStage === 'new') {
+      setDuressPendingCode(pin);
+      setDuressPinError(null);
+      setDuressPinStage('confirm');
+      return;
+    }
+    // Confirm step
+    if (pin !== duressPendingCode) {
+      setDuressPinError("Codes didn't match — try again.");
+      setDuressPendingCode(null);
+      setDuressPinStage('new');
+      return;
+    }
+    await setDuressCode(pin);
+    cancelDuressPinFlow();
+    Alert.alert(
+      'Duress code set',
+      'If you ever enter this code instead of resolving an SOS normally, it will look the same on your screen — but the alert stays active and your contacts keep being able to follow you.',
+    );
+  };
+
+  const handleRemoveDuressCode = () => {
+    Alert.alert(
+      'Remove Duress Code',
+      'You will no longer have a silent way to fake-resolve an SOS under duress.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => { void removeDuressCode(); } },
+      ],
+    );
+  };
+
+  // Android-only: OEM battery managers (MIUI, OneUI, EMUI, and stock Android's
+  // own Doze/App Standby) frequently kill background location tracking even
+  // when every official API has been used correctly — this is the standard,
+  // OS-provided way to ask the user to exempt wayLoc from that. There's no
+  // library-level way to check current status first (only to request), so
+  // this always fires the system dialog rather than conditionally showing it.
+  const requestBatteryOptimizationExemption = () => {
+    const packageName = Constants.expoConfig?.android?.package;
+    if (!packageName) return;
+    IntentLauncher.startActivityAsync(
+      IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+      { data: `package:${packageName}` },
+    ).catch(() => {
+      Alert.alert(
+        'Could not open settings',
+        'Please disable battery optimization for wayLoc manually from your device Settings.',
+      );
+    });
+  };
+
+  const handleExportData = async () => {
+    const result = await exportMyData();
+    if (!result.success && result.error) {
+      Alert.alert('Export failed', result.error);
+    }
+    resetExport();
+  };
+
   const handleDeleteJourneyHistory = () => {
     if (activeJourney) {
       Alert.alert('Journey Active', 'End your current journey before deleting history.');
@@ -114,7 +193,7 @@ export default function PrivacyScreen() {
             if (!user?.id) return;
             setDeletingHistory(true);
             try {
-              const result = await journeyService.deleteJourneyHistory(user.id);
+              const result = await deleteLocationHistory();
               const msg =
                 result.errors.length === 0
                   ? `Location trails deleted for ${result.processed} journey${result.processed !== 1 ? 's' : ''}.`
@@ -131,236 +210,165 @@ export default function PrivacyScreen() {
     );
   };
 
+  const locationPress =
+    locationStatus === 'undetermined'
+      ? () => setShowLocationExplainer(true)
+      : locationStatus === 'denied'
+        ? openSystemSettings
+        : undefined;
+
+  const notificationPress =
+    notificationStatus === 'undetermined'
+      ? () => setShowNotificationExplainer(true)
+      : notificationStatus === 'denied'
+        ? openSystemSettings
+        : undefined;
+
+  const backgroundLocationPress = locationBackgroundStatus === 'denied' ? openSystemSettings : undefined;
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.headerRow}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
+      <View style={[styles.headerRow, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={[styles.backText, { color: theme.accent }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.screenTitle}>Privacy & Security</Text>
+        <Text style={[styles.screenTitle, { color: theme.textPrimary }]}>Privacy & Security</Text>
         <View style={styles.backButton} />
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-
-        {/* ── Permissions ── */}
-        <Text style={styles.sectionHeader}>Permissions</Text>
-
-        {/* Location */}
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>📍</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Location Access</Text>
-              <Text style={styles.cardDesc}>Used to track your journey and share your whereabouts with trusted contacts.</Text>
-              <StatusBadge status={locationStatus} />
-            </View>
-          </View>
-
-          {locationStatus === 'undetermined' && (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowLocationExplainer(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.actionButtonText}>Request Access</Text>
-            </TouchableOpacity>
-          )}
-          {locationStatus === 'denied' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonSecondary]}
-              onPress={openSystemSettings}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.actionButtonText, styles.actionButtonSecondaryText]}>
-                Open Settings
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Background Location — placeholder */}
-        <View style={[styles.card, styles.cardMuted]}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>🗺️</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Background Location</Text>
-              <Text style={styles.cardDesc}>Will be needed when the Journey feature is available. Not required yet.</Text>
-              <View style={[styles.badge, { backgroundColor: COLORS.border }]}>
-                <Text style={[styles.badgeText, { color: COLORS.textMuted }]}>
-                  Coming with Journey
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Notifications */}
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>🔔</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Notifications</Text>
-              <Text style={styles.cardDesc}>Safety alerts, check-in reminders, and emergency updates.</Text>
-              <StatusBadge status={notificationStatus} />
-            </View>
-          </View>
-
-          {notificationStatus === 'undetermined' && (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowNotificationExplainer(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.actionButtonText}>Request Access</Text>
-            </TouchableOpacity>
-          )}
-          {notificationStatus === 'denied' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionButtonSecondary]}
-              onPress={openSystemSettings}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.actionButtonText, styles.actionButtonSecondaryText]}>
-                Open Settings
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Your Data ── */}
-        <Text style={styles.sectionHeader}>Your Data</Text>
-
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>🔒</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Stored on your device</Text>
-              <Text style={styles.cardDesc}>
-                Your profile (name, phone), app preferences, and biometric settings are stored
-                in your device's secure enclave (SecureStore). They never leave your device.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>☁️</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Stored in the cloud</Text>
-              <Text style={styles.cardDesc}>
-                Journey records, GPS trails, check-in history, SOS events, trusted contacts,
-                and your notification token are stored in Firebase (EU region) to enable
-                real-time sharing with your trusted contacts during emergencies.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>📍</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Location data</Text>
-              <Text style={styles.cardDesc}>
-                GPS coordinates are only collected while a journey or SOS is active.
-                Background location is used during active journeys so your contacts
-                can see your progress even when the app is not in the foreground.
-                Location data is never sold or shared with third parties.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Retention ── */}
-        <Text style={styles.sectionHeader}>How long we keep data</Text>
-
-        <View style={styles.card}>
-          {[
-            { label: 'GPS trail — completed journeys', value: '30 days' },
-            { label: 'GPS trail — cancelled / missed journeys', value: '7 days' },
-            { label: 'SOS event records', value: '90 days' },
-            { label: 'Journey summaries (no GPS)', value: 'Until you delete them' },
-            { label: 'Trusted contacts', value: 'Until you remove them' },
-            { label: 'Account data', value: 'Until you delete your account' },
-          ].map(({ label, value }) => (
-            <View key={label} style={styles.retentionRow}>
-              <Text style={styles.retentionLabel}>{label}</Text>
-              <Text style={styles.retentionValue}>{value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── Data Actions ── */}
-        <Text style={styles.sectionHeader}>Manage your data</Text>
-
-        <View style={styles.card}>
-          <View style={styles.cardBody}>
-            <Text style={styles.cardTitle}>Delete journey location trails</Text>
-            <Text style={styles.cardDesc}>
-              Removes the detailed GPS trail from all past journeys. Journey summaries
-              (destination and dates) are kept. Cannot be undone.
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonSecondary, deletingHistory && styles.actionButtonDisabled]}
-            onPress={handleDeleteJourneyHistory}
-            disabled={deletingHistory}
-            activeOpacity={0.8}
-          >
-            {deletingHistory ? (
-              <ActivityIndicator size="small" color={COLORS.textSecondary} />
-            ) : (
-              <Text style={[styles.actionButtonText, styles.actionButtonSecondaryText]}>
-                Delete Location Trails
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.card, styles.dangerCard]}
-          onPress={() => router.push('/(app)/delete-account')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>🗑️</Text>
-            <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, styles.dangerText]}>Delete Account</Text>
-              <Text style={styles.cardDesc}>
-                Permanently removes your account and all associated data from HomeSafe.
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* ── Security ── */}
-        <Text style={styles.sectionHeader}>Security</Text>
-
-        <View style={styles.card}>
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>🔐</Text>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>Biometric Lock</Text>
-              <Text style={styles.cardDesc}>
-                {biometricAvailable
-                  ? 'Require fingerprint or Face ID each time HomeSafe opens.'
-                  : 'Not available — enroll fingerprints or Face ID in your device settings first.'}
-              </Text>
-            </View>
-            <Switch
-              value={biometricLockEnabled}
-              onValueChange={handleBiometricToggle}
-              disabled={!biometricAvailable || togglingBiometric}
-              trackColor={{ false: COLORS.border, true: COLORS.primary }}
-              thumbColor={COLORS.white}
+        <Section title="Permissions">
+          <ListRow
+            icon="location"
+            title="Location Access"
+            subtitle="Used to track your journey and share your whereabouts with trusted contacts."
+            accessory={<StatusBadge label={permissionLabel(locationStatus)} severity={permissionSeverity(locationStatus)} />}
+            onPress={locationPress}
+          />
+          <ListRow
+            icon="compass"
+            title='Background Location ("Always")'
+            subtitle="Lets your trusted contacts keep following your journey even while wayLoc isn't open. You'll be asked for this the first time you start a journey — not here."
+            accessory={<StatusBadge label={permissionLabel(locationBackgroundStatus)} severity={permissionSeverity(locationBackgroundStatus)} />}
+            onPress={backgroundLocationPress}
+          />
+          {Platform.OS === 'android' && (
+            <ListRow
+              icon="battery"
+              title="Battery Optimization"
+              subtitle="Some phones aggressively stop apps running in the background to save power, which can interrupt journey tracking."
+              value="Allow"
+              onPress={requestBatteryOptimizationExemption}
             />
-          </View>
-        </View>
+          )}
+          <ListRow
+            icon="notification"
+            title="Notifications"
+            subtitle="Safety alerts, check-in reminders, and emergency updates."
+            accessory={<StatusBadge label={permissionLabel(notificationStatus)} severity={permissionSeverity(notificationStatus)} />}
+            onPress={notificationPress}
+          />
+        </Section>
 
+        <Section title="Your Data">
+          <ListRow
+            icon="eye"
+            title="Who Can See My Data"
+            subtitle="See exactly what each family connection is currently allowed to see about you."
+            onPress={() => router.push('/(app)/data-visibility')}
+          />
+          <ListRow
+            icon="lock"
+            title="Stored on your device"
+            subtitle="Your profile (name, phone), app preferences, and biometric settings are stored in your device's secure enclave. They never leave your device."
+          />
+          <ListRow
+            icon="link"
+            title="Stored in the cloud"
+            subtitle="Journey records, GPS trails, check-in history, SOS events, trusted contacts, and your notification token are stored in Firebase (EU region) to enable real-time sharing during emergencies."
+          />
+          <ListRow
+            icon="location"
+            title="Location data"
+            subtitle="Only collected while a journey or SOS is active. Never sold or shared with third parties."
+          />
+        </Section>
+
+        <Section title="How long we keep data">
+          <ListRow title="GPS trail — completed journeys" value="30 days" />
+          <ListRow title="GPS trail — cancelled / missed journeys" value="7 days" />
+          <ListRow title="GPS trail — journey with an unresolved SOS" value="Kept until resolved" />
+          <ListRow title="SOS event records" value="90 days" />
+          <ListRow title="Journey summaries (no GPS)" value="Until you delete them" />
+          <ListRow title="Trusted contacts" value="Until you remove them" />
+          <ListRow title="Account data" value="Until you delete your account" />
+        </Section>
+
+        <Section title="Manage your data">
+          <ListRow
+            icon="link"
+            title="Download my data"
+            subtitle="A JSON file with everything wayLoc has stored for you. Nothing is uploaded — this only reads what's already there."
+            onPress={handleExportData}
+            accessory={exportStage === 'exporting' ? <ActivityIndicator size="small" color={theme.textSecondary} /> : undefined}
+          />
+          <ListRow
+            icon="trash"
+            title="Delete journey location trails"
+            subtitle="Removes the detailed GPS trail from all past journeys. Journey summaries are kept. Cannot be undone."
+            onPress={handleDeleteJourneyHistory}
+            accessory={deletingHistory ? <ActivityIndicator size="small" color={theme.textSecondary} /> : undefined}
+          />
+        </Section>
+
+        <Section>
+          <ListRow
+            icon="trash"
+            iconColor={theme.critical.fg}
+            title="Delete Account"
+            subtitle="Permanently removes your account and all associated data from wayLoc."
+            destructive
+            onPress={() => router.push('/(app)/delete-account')}
+          />
+        </Section>
+
+        <Section title="Legal">
+          <ListRow title="Privacy Policy" onPress={() => router.push('/(legal)/privacy-policy')} />
+          <ListRow title="Terms of Service" onPress={() => router.push('/(legal)/terms')} />
+        </Section>
+
+        <Section title="Security">
+          <ListRow
+            icon="lock"
+            title="Biometric Lock"
+            subtitle={
+              biometricAvailable
+                ? 'Require fingerprint or Face ID each time wayLoc opens.'
+                : 'Not available — enroll fingerprints or Face ID in your device settings first.'
+            }
+            accessory={
+              <Switch
+                value={biometricLockEnabled}
+                onValueChange={handleBiometricToggle}
+                disabled={!biometricAvailable || togglingBiometric}
+                trackColor={{ false: theme.border, true: theme.accent }}
+                thumbColor={theme.textOnColor}
+              />
+            }
+          />
+          <ListRow
+            icon="shield"
+            title="Duress Code"
+            subtitle='A separate code for resolving an SOS under coercion. Looks like a normal "I am safe" resolve, but the alert stays active.'
+            accessory={<StatusBadge label={duressCodeSet ? 'Set' : 'Not set'} severity={duressCodeSet ? 'safe' : 'neutral'} />}
+            onPress={startSetDuressCode}
+          />
+        </Section>
+        {duressCodeSet && (
+          <TouchableOpacity onPress={handleRemoveDuressCode} style={styles.removeLinkWrap}>
+            <Text style={[styles.removeLink, { color: theme.critical.fg }]}>Remove Duress Code</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <PermissionExplainerModal
@@ -376,6 +384,20 @@ export default function PrivacyScreen() {
         onAllow={handleNotificationAllow}
         onDismiss={() => setShowNotificationExplainer(false)}
       />
+
+      <PinEntryModal
+        visible={duressPinStage !== 'idle'}
+        title={duressPinStage === 'confirm' ? 'Confirm Duress Code' : 'Set Duress Code'}
+        description={
+          duressPinStage === 'confirm'
+            ? 'Enter the same code again to confirm.'
+            : 'Choose a 4–6 digit code you can enter under pressure without thinking. Make it different from any lock-screen PIN.'
+        }
+        confirmLabel={duressPinStage === 'confirm' ? 'Confirm' : 'Next'}
+        errorText={duressPinError}
+        onSubmit={handleDuressPinSubmit}
+        onCancel={cancelDuressPinFlow}
+      />
     </SafeAreaView>
   );
 }
@@ -383,143 +405,38 @@ export default function PrivacyScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
   },
   backButton: {
     width: 64,
   },
   backText: {
-    fontSize: 16,
-    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: '600',
   },
   screenTitle: {
-    fontSize: 17,
+    fontSize: TYPOGRAPHY.bodyStrong.fontSize,
     fontWeight: '700',
-    color: COLORS.textPrimary,
   },
   container: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
   },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardMuted: {
-    opacity: 0.65,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  cardIcon: {
-    fontSize: 24,
-    marginTop: 2,
-  },
-  cardBody: {
-    flex: 1,
-    gap: 4,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  cardDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  actionButton: {
-    marginTop: 14,
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
+  removeLinkWrap: {
     alignItems: 'center',
+    marginTop: -SPACING.sm,
+    marginBottom: SPACING.lg,
+    paddingVertical: SPACING.sm,
   },
-  actionButtonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-  },
-  actionButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionButtonSecondaryText: {
-    color: COLORS.textSecondary,
-  },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  retentionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
-    gap: 8,
-  },
-  retentionLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-  },
-  retentionValue: {
-    fontSize: 13,
+  removeLink: {
+    fontSize: TYPOGRAPHY.callout.fontSize,
     fontWeight: '600',
-    color: COLORS.textPrimary,
-    textAlign: 'right',
-  },
-  dangerCard: {
-    borderColor: COLORS.danger + '40',
-  },
-  dangerText: {
-    color: COLORS.danger,
-  },
-  chevron: {
-    fontSize: 20,
-    color: COLORS.textMuted,
-    alignSelf: 'center',
   },
 });

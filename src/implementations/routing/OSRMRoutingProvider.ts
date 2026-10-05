@@ -1,20 +1,57 @@
 import type { Coordinates } from '../../models/Journey';
-import type { RouteCoordinate, RouteResult } from '../../models/RouteResult';
-import type { RoutingProvider } from '../../providers/RoutingProvider';
+import type { RouteCoordinate, RouteResult, RouteStep } from '../../models/RouteResult';
+import type { RouteRequestOptions, RoutingProvider } from '../../providers/RoutingProvider';
 
 // OSRM GeoJSON geometry uses [lng, lat] pairs
 type OsrmGeometry = { coordinates: [number, number][] };
+
+type OsrmStep = {
+  distance: number;
+  duration: number;
+  name: string;
+  geometry?: OsrmGeometry;
+};
+
+type OsrmLeg = {
+  steps?: OsrmStep[];
+};
 
 type OsrmRoute = {
   distance: number;
   duration: number;
   geometry: OsrmGeometry;
+  legs?: OsrmLeg[];
 };
 
 type OsrmResponse = {
   code: string;
   routes: OsrmRoute[];
 };
+
+/**
+ * Flattens OSRM's legs → steps into our trimmed RouteStep list.
+ *
+ * Unnamed steps keep a null name rather than a placeholder: the timeline would
+ * rather show one fewer row than a line reading "Unnamed road", and the UI
+ * filters on exactly that.
+ */
+function toSteps(route: OsrmRoute): RouteStep[] {
+  const steps: RouteStep[] = [];
+  for (const leg of route.legs ?? []) {
+    for (const step of leg.steps ?? []) {
+      const first = step.geometry?.coordinates?.[0];
+      steps.push({
+        name: step.name?.trim() ? step.name.trim() : null,
+        distanceMeters: step.distance,
+        durationSeconds: step.duration,
+        start: first
+          ? { latitude: first[1], longitude: first[0] }
+          : { latitude: 0, longitude: 0 },
+      });
+    }
+  }
+  return steps;
+}
 
 /**
  * Calls the OSRM HTTP API to calculate a driving route.
@@ -33,10 +70,16 @@ export class OSRMRoutingProvider implements RoutingProvider {
     from: Coordinates,
     to: Coordinates,
     signal?: AbortSignal,
+    options: RouteRequestOptions = {},
   ): Promise<RouteResult> {
     // OSRM expects lng,lat order
     const path = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
-    const url = `${this.baseUrl}/route/v1/driving/${path}?overview=full&geometries=geojson`;
+    // `steps` roughly triples the response, so it is only requested when the
+    // caller actually renders a timeline — never on the live recalculation loop.
+    const stepsParam = options.includeSteps ? '&steps=true' : '';
+    const url =
+      `${this.baseUrl}/route/v1/driving/${path}` +
+      `?overview=full&geometries=geojson${stepsParam}`;
 
     const res = await fetch(url, { signal });
 
@@ -62,6 +105,7 @@ export class OSRMRoutingProvider implements RoutingProvider {
       coordinates,
       distanceMeters: route.distance,
       durationSeconds: route.duration,
+      steps: toSteps(route),
       calculatedAt: new Date(),
     };
   }

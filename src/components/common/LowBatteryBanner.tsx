@@ -1,56 +1,71 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
+import { SPACING, TYPOGRAPHY, type ThemeColors } from '../../config/theme';
 import { useBatteryStatus } from '../../hooks/useBatteryStatus';
 import { useLocationTrackingContext } from '../../context/LocationTrackingContext';
+import { Icon } from '../ui/Icon';
 
 export function LowBatteryBanner() {
-  const { batteryLevel, isLowBattery } = useBatteryStatus();
+  const theme = useTheme();
+  const styles = getStyles(theme);
+  const { batteryPercent, isLowBattery } = useBatteryStatus();
   const { isTracking } = useLocationTrackingContext();
-
-  const pct = Math.round(batteryLevel * 100);
 
   if (!isLowBattery && !__DEV__) return null;
 
   return (
     <View style={[styles.container, isLowBattery ? styles.warning : styles.dev]}>
       {isLowBattery && (
-        <Text style={styles.warningText}>
-          🔋 Low battery ({pct}%) — location updates reduced to save power.
-        </Text>
+        <View style={styles.warningRow}>
+          <Icon name="battery" size={14} color={theme.warning.fg} />
+          <Text style={styles.warningText}>
+            Low battery ({batteryPercent}%) — location updates reduced to save power.
+          </Text>
+        </View>
       )}
       {__DEV__ && (
         <Text style={styles.devText}>
-          {`[DEV] Battery ${pct}%${isLowBattery ? ' ⚠ LOW' : ''}  Tracking ${isTracking ? '✓' : '✗'}`}
+          {`[DEV] Battery ${batteryPercent}%${isLowBattery ? ' LOW' : ''}  Tracking ${isTracking ? '✓' : '✗'}`}
         </Text>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  warning: {
-    backgroundColor: COLORS.warningLight,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.warning + '40',
-  },
-  dev: {
-    backgroundColor: '#1a1a2e',
-  },
-  warningText: {
-    fontSize: 13,
-    color: COLORS.warning,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  devText: {
-    fontSize: 11,
-    color: '#7fdbff',
-    textAlign: 'center',
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.sm,
+    },
+    warning: {
+      backgroundColor: theme.warning.bg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.warning.fg,
+    },
+    // The dev strip is informational, not a warning — it must not borrow the
+    // amber that means "something needs your attention".
+    dev: {
+      backgroundColor: theme.surface,
+    },
+    warningRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: SPACING.xs + 2,
+    },
+    warningText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '600',
+      textAlign: 'center',
+      color: theme.warning.fg,
+    },
+    devText: {
+      fontSize: 11,
+      color: theme.textSecondary,
+      textAlign: 'center',
+    },
+  });
+}

@@ -232,6 +232,7 @@ test('getFamilyMembers hides status when member sets NEVER_SHARE', async () => {
     activeJourneyEta: new Date(Date.now() + 30 * 60 * 1000),
     activeSosId: null,
     batteryLevel: 0.5,
+    location: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -315,6 +316,7 @@ test('getFamilyMembers shows journey details when SHARE_ALWAYS with shareJourney
     activeJourneyEta: new Date(Date.now() + 60 * 60 * 1000),
     activeSosId: null,
     batteryLevel: 0.8,
+    location: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -323,6 +325,130 @@ test('getFamilyMembers shows journey details when SHARE_ALWAYS with shareJourney
   expect(bob?.status).toBe('TRAVELLING');
   expect(bob?.activeJourneyId).toBe('j-456');
   expect(bob?.activeJourneyDestination).toBe('Airport');
+});
+
+test('getFamilyMembers exposes live location only when shareLocation is true', async () => {
+  const { service, provider } = makeService();
+
+  const connId = computeConnectionId(USER_A.id, USER_B.id);
+  const shareLocationPerms = {
+    ...defaultFamilyPermissions(),
+    sharingMode: 'SHARE_ALWAYS' as const,
+    shareLocation: true,
+  };
+
+  provider._seedConnection({
+    id: connId,
+    user1Id: USER_A.id,
+    user2Id: USER_B.id,
+    user1DisplayName: USER_A.name,
+    user2DisplayName: USER_B.name,
+    user1Phone: USER_A.phone,
+    user2Phone: USER_B.phone,
+    relationship: 'Spouse',
+    status: 'ACTIVE',
+    initiatedBy: USER_A.id,
+    user1Permissions: defaultFamilyPermissions(),
+    user2Permissions: shareLocationPerms,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  await service.publishStatus(USER_B.id, {
+    activeJourneyId: 'j-456',
+    activeJourneyDestination: 'Airport',
+    activeJourneyEta: null,
+    activeSosId: null,
+    batteryLevel: 0.8,
+    location: { latitude: 51.5, longitude: -0.1 },
+  });
+
+  const members = await service.getFamilyMembers(USER_A.id);
+  const bob = members.find((m) => m.id === USER_B.id);
+
+  expect(bob?.location).toEqual({ latitude: 51.5, longitude: -0.1 });
+});
+
+test('getFamilyMembers hides location when shareLocation is false, even with other sharing on', async () => {
+  const { service, provider } = makeService();
+
+  const connId = computeConnectionId(USER_A.id, USER_B.id);
+  const noLocationPerms = {
+    ...defaultFamilyPermissions(),
+    sharingMode: 'SHARE_ALWAYS' as const,
+    shareLocation: false,
+  };
+
+  provider._seedConnection({
+    id: connId,
+    user1Id: USER_A.id,
+    user2Id: USER_B.id,
+    user1DisplayName: USER_A.name,
+    user2DisplayName: USER_B.name,
+    user1Phone: USER_A.phone,
+    user2Phone: USER_B.phone,
+    relationship: 'Spouse',
+    status: 'ACTIVE',
+    initiatedBy: USER_A.id,
+    user1Permissions: defaultFamilyPermissions(),
+    user2Permissions: noLocationPerms,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  await service.publishStatus(USER_B.id, {
+    activeJourneyId: 'j-456',
+    activeJourneyDestination: 'Airport',
+    activeJourneyEta: null,
+    activeSosId: null,
+    batteryLevel: 0.8,
+    location: { latitude: 51.5, longitude: -0.1 },
+  });
+
+  const members = await service.getFamilyMembers(USER_A.id);
+  const bob = members.find((m) => m.id === USER_B.id);
+
+  expect(bob?.location).toBeNull();
+  // Other shared fields are unaffected by the location toggle specifically.
+  expect(bob?.activeJourneyId).toBe('j-456');
+});
+
+test('getFamilyMembers hides location once the shared view is stale, unlike other fields', async () => {
+  const { service, provider } = makeService();
+
+  const connId = computeConnectionId(USER_A.id, USER_B.id);
+  provider._seedConnection({
+    id: connId,
+    user1Id: USER_A.id,
+    user2Id: USER_B.id,
+    user1DisplayName: USER_A.name,
+    user2DisplayName: USER_B.name,
+    user1Phone: USER_A.phone,
+    user2Phone: USER_B.phone,
+    relationship: 'Parent',
+    status: 'ACTIVE',
+    initiatedBy: USER_A.id,
+    user1Permissions: defaultFamilyPermissions(),
+    user2Permissions: { ...defaultFamilyPermissions(), sharingMode: 'SHARE_ALWAYS', shareLocation: true },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  provider._seedSharedStatus(connId, USER_B.id, {
+    status: 'HOME',
+    batteryLevel: 0.5,
+    lastSeen: new Date(Date.now() - 35 * 60 * 1000), // stale
+    activeJourneyId: null,
+    activeJourneyDestination: null,
+    activeJourneyEta: null,
+    location: { latitude: 51.5, longitude: -0.1 },
+  });
+
+  const members = await service.getFamilyMembers(USER_A.id);
+  const bob = members.find((m) => m.id === USER_B.id);
+
+  expect(bob?.status).toBe('OFFLINE');
+  expect(bob?.location).toBeNull();
 });
 
 // ─── 6. Privacy settings ─────────────────────────────────────────────────────
@@ -359,6 +485,7 @@ test('SHARE_DURING_JOURNEY mode hides status when no active journey', async () =
     activeJourneyEta: null,
     activeSosId: null,
     batteryLevel: 1.0,
+    location: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -380,6 +507,7 @@ test('publishStatus derives TRAVELLING when activeJourneyId is set', async () =>
     activeJourneyEta: new Date(Date.now() + 20 * 60_000),
     activeSosId: null,
     batteryLevel: 0.9,
+    location: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -396,6 +524,7 @@ test('publishStatus derives SOS_ACTIVE when activeSosId is set', async () => {
     activeJourneyEta: null,
     activeSosId: 'sos-1',
     batteryLevel: 0.3,
+    location: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -411,6 +540,7 @@ test('publishStatus derives HOME when no journey and no SOS', async () => {
     activeJourneyEta: null,
     activeSosId: null,
     batteryLevel: 1.0,
+    location: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -428,6 +558,7 @@ test('publishStatus derives ARRIVED when journey just completed', async () => {
       activeJourneyEta: null,
       activeSosId: null,
       batteryLevel: 0.7,
+      location: null,
     },
     true, // wasTravelling
     true, // journeyJustCompleted
@@ -466,6 +597,7 @@ test('getFamilyMembers treats member as OFFLINE when lastSeen > 30 minutes ago',
   provider._seedSharedStatus(connId, USER_B.id, {
     status: 'HOME',
     batteryLevel: 0.5,
+    location: null,
     lastSeen: new Date(Date.now() - 35 * 60 * 1000), // 35 minutes ago
     activeJourneyId: null,
     activeJourneyDestination: null,

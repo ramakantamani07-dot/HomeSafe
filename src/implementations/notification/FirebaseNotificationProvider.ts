@@ -9,6 +9,7 @@ import {
 import type { FirebaseApp } from 'firebase/app';
 
 import type { NotificationProvider } from '../../providers/NotificationProvider';
+import { lightTheme } from '../../config/theme';
 
 export class FirebaseNotificationProvider implements NotificationProvider {
   private readonly db: Firestore;
@@ -21,10 +22,13 @@ export class FirebaseNotificationProvider implements NotificationProvider {
     // Android requires a notification channel before permissions are meaningful.
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'HomeSafe Alerts',
+        name: 'wayLoc Alerts',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#E53E3E',
+        // The Android notification LED / accent colour. Not a React component,
+        // so it reads the light theme statically rather than through useTheme —
+        // the OS renders this chrome outside our tree and has no theme context.
+        lightColor: lightTheme.critical.fg,
       });
     }
 

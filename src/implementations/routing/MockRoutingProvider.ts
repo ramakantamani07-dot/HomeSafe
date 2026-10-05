@@ -1,19 +1,7 @@
 import type { Coordinates } from '../../models/Journey';
-import type { RouteCoordinate, RouteResult } from '../../models/RouteResult';
-import type { RoutingProvider } from '../../providers/RoutingProvider';
-
-function haversineMeters(a: Coordinates, b: Coordinates): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLon = toRad(b.longitude - a.longitude);
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLon = Math.sin(dLon / 2);
-  const x =
-    sinDLat * sinDLat +
-    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * sinDLon * sinDLon;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
+import { haversineMeters } from '../../models/Place';
+import type { RouteCoordinate, RouteResult, RouteStep } from '../../models/RouteResult';
+import type { RouteRequestOptions, RoutingProvider } from '../../providers/RoutingProvider';
 
 function lerp(a: Coordinates, b: Coordinates, t: number): RouteCoordinate {
   return {
@@ -38,6 +26,7 @@ export class MockRoutingProvider implements RoutingProvider {
     from: Coordinates,
     to: Coordinates,
     signal?: AbortSignal,
+    options: RouteRequestOptions = {},
   ): Promise<RouteResult> {
     // Simulate a short async delay (realistic for dev feedback)
     await new Promise<void>((resolve, reject) => {
@@ -65,11 +54,37 @@ export class MockRoutingProvider implements RoutingProvider {
       { latitude: to.latitude, longitude: to.longitude },
     ];
 
+    // Named after the fixture streets so the timeline reads plausibly in dev
+    // rather than as "Step 1 / Step 2".
+    const steps: RouteStep[] = options.includeSteps
+      ? [
+          {
+            name: 'Mill Lane',
+            distanceMeters: distanceMeters * 0.2,
+            durationSeconds: durationSeconds * 0.2,
+            start: coordinates[0],
+          },
+          {
+            name: 'Glebe Road',
+            distanceMeters: distanceMeters * 0.55,
+            durationSeconds: durationSeconds * 0.55,
+            start: coordinates[1],
+          },
+          {
+            name: 'Harlestone Road',
+            distanceMeters: distanceMeters * 0.25,
+            durationSeconds: durationSeconds * 0.25,
+            start: coordinates[3],
+          },
+        ]
+      : [];
+
     return {
       providerRouteId: null,
       coordinates,
       distanceMeters,
       durationSeconds,
+      steps,
       calculatedAt: new Date(),
     };
   }

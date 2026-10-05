@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ApplicationVerifier } from 'firebase/auth';
 
 import type { User } from '../models/User';
@@ -94,34 +94,61 @@ export function AuthStateProvider({
     };
   }, [authService]);
 
-  const value: AuthContextValue = {
-    user,
-    isLoading,
-    isDevMode,
-    sendOTP: (phone) => authService.sendOTP(phone),
-    verifyOTP: async (code) => {
-      const loggedInUser = await authService.verifyOTP(code);
-      await saveSecureSession(loggedInUser);
-      setUser(loggedInUser);
-    },
-    updateProfile: async (updates) => {
-      if (!user) {
-        throw new Error('Sign in before updating your profile.');
-      }
+  const sendOTP = useCallback<AuthContextValue['sendOTP']>(
+    (phone) => authService.sendOTP(phone),
+    [authService],
+  );
 
-      const updatedUser = await authService.updateUserProfile(user.id, updates);
-      await saveSecureSession(updatedUser);
-      setUser(updatedUser);
-    },
-    signOut: async () => {
-      await authService.signOut();
-      await clearSecureSession();
-      setUser(null);
-    },
-    configureRecaptchaVerifier: authProvider.setAppVerifier
-      ? (verifier) => authProvider.setAppVerifier!(verifier)
-      : null,
-  };
+  const verifyOTP = useCallback<AuthContextValue['verifyOTP']>(async (code) => {
+    const loggedInUser = await authService.verifyOTP(code);
+    await saveSecureSession(loggedInUser);
+    setUser(loggedInUser);
+  }, [authService]);
+
+  const updateProfile = useCallback<AuthContextValue['updateProfile']>(async (updates) => {
+    if (!user) throw new Error('Sign in before updating your profile.');
+    const updatedUser = await authService.updateUserProfile(user.id, updates);
+    await saveSecureSession(updatedUser);
+    setUser(updatedUser);
+  }, [user, authService]);
+
+  const signOut = useCallback<AuthContextValue['signOut']>(async () => {
+    await authService.signOut();
+    await clearSecureSession();
+    setUser(null);
+  }, [authService]);
+
+  const configureRecaptchaVerifier = useMemo<AuthContextValue['configureRecaptchaVerifier']>(
+    () =>
+      authProvider.setAppVerifier
+        ? (verifier) => authProvider.setAppVerifier!(verifier)
+        : null,
+    [authProvider],
+  );
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isLoading,
+      isDevMode,
+      sendOTP,
+      verifyOTP,
+      updateProfile,
+      signOut,
+      configureRecaptchaVerifier,
+    }),
+    [
+      user,
+      isLoading,
+      isDevMode,
+      sendOTP,
+      verifyOTP,
+      updateProfile,
+      signOut,
+      configureRecaptchaVerifier,
+    ],
+  );
+
 
   return (
     <AuthContext.Provider value={value}>

@@ -33,6 +33,9 @@ export function NetworkStateProvider({
     return unsubscribe;
   }, [networkProvider]);
 
+  // Deliberately not memoised: `state` is a single useState object, so its
+  // identity is already stable between actual connectivity changes. Wrapping
+  // it would add indirection without changing a single render.
   return (
     <NetworkContext.Provider value={state}>
       {children}

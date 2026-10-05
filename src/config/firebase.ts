@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from '@firebase/app';
 
 const {
   firebaseApiKey,

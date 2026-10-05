@@ -4,6 +4,7 @@ import type { LocationProvider, LocationTrackingOptions } from '../providers/Loc
 import type { JourneyProvider } from '../providers/JourneyProvider';
 import type { NetworkProvider } from '../providers/NetworkProvider';
 import type { Coordinates } from '../models/Journey';
+import type { TrackingMotion } from '../providers/LocationProvider';
 import type { LocationUpdate } from '../models/LocationUpdate';
 import type { OfflineSyncService } from './OfflineSyncService';
 import {
@@ -37,9 +38,24 @@ export class LocationTrackingService {
   // Batch buffer for journey-mode Firestore writes
   private batchBuffer: BatchItem[] = [];
   private batchFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Motion profile of the current journey — passed to the OS for GPS tuning. */
+  private motion: TrackingMotion = 'unknown';
 
   // Subscription count exposed for diagnostics
   private _subscriptionCount = 0;
+
+  // Tracks whether background mode was actually engaged (not just requested)
+  // when tracking started, so a later downgrade can be detected on resume.
+  private wasUsingBackground = false;
+
+  /**
+   * Fires when background ("Always") location permission is found to have
+   * been revoked mid-session, after background mode had actually engaged.
+   * Settable directly by the context that owns this service — there's no way
+   * to get a push-based OS event for this, so it's only ever detected
+   * reactively, on app-foreground resume (see handleAppStateChange).
+   */
+  onBackgroundPermissionRevoked: (() => void) | null = null;
 
   constructor(
     private readonly location: LocationProvider,
@@ -48,10 +64,24 @@ export class LocationTrackingService {
     private readonly network: NetworkProvider | null = null,
   ) {}
 
+  /**
+   * A single position fix, for callers that need an origin before any journey
+   * exists. Goes through the LocationProvider port like everything else here,
+   * so screens and hooks never touch expo-location directly.
+   *
+   * Rejects when foreground permission is not granted — the provider does not
+   * prompt, so this can be called freely without triggering an OS dialog at a
+   * moment the user has not been told why.
+   */
+  getCurrentLocation(): Promise<Coordinates> {
+    return this.location.getCurrentLocation();
+  }
+
   async startTracking(
     userId: string,
     journeyId: string | null,
     onCoordinateUpdate: TrackingCoordinateCallback,
+    motion: TrackingMotion = 'unknown',
   ): Promise<void> {
     // Prevent duplicate subscriptions: if already tracking for the same journey, no-op.
     if (this.activeJourneyId === journeyId && this.location.isTracking()) return;
@@ -61,6 +91,7 @@ export class LocationTrackingService {
     this.activeUserId = userId;
     this.activeJourneyId = journeyId;
     this.coordinateCallback = onCoordinateUpdate;
+    this.motion = motion;
     this._subscriptionCount++;
 
     const config = this.getEffectiveConfig();
@@ -68,6 +99,7 @@ export class LocationTrackingService {
       this.buildLocationOptions(config),
       this.handleLocationUpdate,
     );
+    this.wasUsingBackground = this.location.isUsingBackgroundMode();
 
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
   }
@@ -78,6 +110,7 @@ export class LocationTrackingService {
     await this.location.stopTracking();
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
+    this.wasUsingBackground = false;
 
     this.activeUserId = null;
     this.activeJourneyId = null;
@@ -118,6 +151,20 @@ export class LocationTrackingService {
     return this._subscriptionCount;
   }
 
+  /** Registers an OS-level arrival geofence. See LocationProvider.startGeofencing. */
+  async startGeofencing(
+    destination: Coordinates,
+    radiusMeters: number,
+    onArrival: () => void,
+  ): Promise<void> {
+    await this.location.startGeofencing(destination, radiusMeters, onArrival);
+  }
+
+  /** Removes any active arrival geofence. Safe to call when none is registered. */
+  async stopGeofencing(): Promise<void> {
+    await this.location.stopGeofencing();
+  }
+
   private getEffectiveConfig(): TrackingConfig {
     if (this.sosActive) return TRACKING_CONFIGS.SOS;
     const mode = this.activeJourneyId ? 'JOURNEY' : 'NORMAL';
@@ -130,6 +177,7 @@ export class LocationTrackingService {
       timeInterval: config.timeInterval,
       distanceInterval: config.distanceInterval,
       enableBackground: config.mode === 'JOURNEY' || config.mode === 'SOS',
+      motion: this.motion,
     };
   }
 
@@ -206,6 +254,24 @@ export class LocationTrackingService {
     if (nextState !== 'active') return;
     // Journey may be null in SOS-only mode — only require a userId.
     if (!this.activeUserId) return;
+
+    // Detect a mid-session downgrade: background mode was engaged when
+    // tracking started, but the OS-level "Always" grant has since been
+    // silently revoked (e.g. iOS's own background-usage privacy nudge).
+    // There's no push-based event for this — foreground resume is the
+    // natural, low-cost point to re-check.
+    if (this.wasUsingBackground && !this.location.isUsingBackgroundMode()) {
+      this.location
+        .hasBackgroundPermission()
+        .then((granted) => {
+          if (!granted) {
+            this.wasUsingBackground = false;
+            this.onBackgroundPermissionRevoked?.();
+          }
+        })
+        .catch(() => {});
+    }
+
     if (this.location.isTracking()) return;
 
     const config = this.getEffectiveConfig();

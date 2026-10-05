@@ -1,16 +1,18 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
 import { formatCoordinates } from '../../models/Journey';
 import type { MarkerRole } from '../../models/MapModels';
 import type { AppMapViewProps, MapProvider } from '../../providers/MapProvider';
 
-const ROLE_COLOR: Record<MarkerRole, string> = {
-  start: COLORS.primary,
-  current: COLORS.success,
-  destination: COLORS.danger,
-};
+function roleColors(theme: ReturnType<typeof useTheme>): Record<MarkerRole, string> {
+  return {
+    start: theme.accent,
+    current: theme.safe.fg,
+    destination: theme.critical.fg,
+  };
+}
 
 const ROLE_LABEL: Record<MarkerRole, string> = {
   start: 'Start',
@@ -19,6 +21,10 @@ const ROLE_LABEL: Record<MarkerRole, string> = {
 };
 
 function MockMapView({ region, markers, polyline, style }: AppMapViewProps) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+  const ROLE_COLOR = roleColors(theme);
+
   return (
     <View style={[styles.container, style]}>
       {/* Header */}
@@ -69,12 +75,13 @@ export class MockMapProvider implements MapProvider {
   MapView = MockMapView;
 }
 
-const styles = StyleSheet.create({
+function getStyles(theme: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
   container: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     overflow: 'hidden',
   },
   header: {
@@ -83,17 +90,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: theme.accentMuted,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.border,
   },
   headerTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: theme.accent,
   },
   devBadge: {
-    backgroundColor: COLORS.warning,
+    backgroundColor: theme.warning.fg,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -101,7 +108,7 @@ const styles = StyleSheet.create({
   devBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.white,
+    color: theme.textOnColor,
     letterSpacing: 0.5,
   },
   body: {
@@ -110,7 +117,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: theme.textTertiary,
     fontStyle: 'italic',
   },
   markerRow: {
@@ -131,36 +138,37 @@ const styles = StyleSheet.create({
   markerRole: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 1,
   },
   markerTitle: {
     fontSize: 13,
-    color: COLORS.textPrimary,
+    color: theme.textPrimary,
     fontWeight: '600',
     marginBottom: 1,
   },
   markerCoords: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: theme.textTertiary,
     fontWeight: '400',
   },
   footer: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    borderTopColor: theme.border,
+    backgroundColor: theme.background,
   },
   footerText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   footerMuted: {
-    color: COLORS.textMuted,
+    color: theme.textTertiary,
     fontStyle: 'italic',
   },
-});
+  });
+}

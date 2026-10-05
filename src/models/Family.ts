@@ -1,3 +1,5 @@
+import type { Coordinates } from './Journey';
+
 export type FamilyStatusType =
   | 'HOME'
   | 'TRAVELLING'
@@ -66,7 +68,7 @@ export function defaultFamilyPermissions(): FamilyPermissions {
 export type FamilyConnectionStatus = 'PENDING' | 'ACTIVE' | 'DECLINED' | 'CANCELLED';
 
 /**
- * A peer-to-peer safety connection between two HomeSafe users.
+ * A peer-to-peer safety connection between two wayLoc users.
  * connectionId is always min(uid1, uid2) + '_' + max(uid1, uid2) so it is
  * deterministic and there is exactly one document per pair.
  */
@@ -111,6 +113,8 @@ export interface FamilyStatusSnapshot {
   activeJourneyId: string | null;
   activeJourneyDestination: string | null;
   activeJourneyEta: Date | null;
+  /** Live coarse position, gated by FamilyPermissions.shareLocation at publish time. */
+  location: Coordinates | null;
   updatedAt: Date;
 }
 
@@ -134,6 +138,7 @@ export interface FamilyMember {
   activeJourneyId: string | null;
   activeJourneyDestination: string | null;
   activeJourneyEta: Date | null;
+  location: Coordinates | null;
 }
 
 export const INVITATION_EXPIRY_DAYS = 7;
@@ -165,6 +170,7 @@ export interface SharedFamilyView {
   activeJourneyId: string | null;
   activeJourneyDestination: string | null;
   activeJourneyEta: Date | null;
+  location: Coordinates | null;
 }
 
 /**
@@ -186,6 +192,7 @@ export function deriveSharedView(
       activeJourneyId: null,
       activeJourneyDestination: null,
       activeJourneyEta: null,
+      location: null,
     };
   }
   return {
@@ -195,5 +202,6 @@ export function deriveSharedView(
     activeJourneyId: permissions.shareJourneyDetails ? raw.activeJourneyId : null,
     activeJourneyDestination: permissions.shareJourneyDetails ? raw.activeJourneyDestination : null,
     activeJourneyEta: permissions.shareJourneyDetails ? raw.activeJourneyEta : null,
+    location: permissions.shareLocation ? raw.location : null,
   };
 }

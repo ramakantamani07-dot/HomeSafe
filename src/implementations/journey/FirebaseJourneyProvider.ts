@@ -21,12 +21,58 @@ import type { JourneyProvider, TerminalJourneyStatus } from '../../providers/Jou
 import { TERMINAL_JOURNEY_STATUSES } from '../../providers/JourneyProvider';
 import type { Journey, JourneyStatus, Coordinates, StartJourneyInput } from '../../models/Journey';
 import type { LocationUpdate } from '../../models/LocationUpdate';
+import type { AlertRules } from '../../models/AlertRules';
+import { DEFAULT_ALERT_RULES } from '../../models/AlertRules';
+import type { Place, TravelMode } from '../../models/Place';
+import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../../models/Place';
+
+/**
+ * Flattened so the whole destination round-trips through one Firestore map
+ * without nested-undefined problems — Firestore rejects explicit undefined,
+ * and `postcode`/`placeId` are legitimately absent for pin-dropped places.
+ */
+type StoredPlace = {
+  name: string;
+  formattedAddress: string;
+  postcode: string | null;
+  latitude: number;
+  longitude: number;
+  placeId: string | null;
+};
+
+function toStoredPlace(place: Place): StoredPlace {
+  return {
+    name: place.name,
+    formattedAddress: place.formattedAddress,
+    postcode: place.postcode,
+    latitude: place.coordinates.latitude,
+    longitude: place.coordinates.longitude,
+    placeId: place.placeId,
+  };
+}
+
+function fromStoredPlace(stored: StoredPlace | undefined): Place | null {
+  if (!stored) return null;
+  return {
+    name: stored.name,
+    formattedAddress: stored.formattedAddress,
+    postcode: stored.postcode ?? null,
+    coordinates: { latitude: stored.latitude, longitude: stored.longitude },
+    placeId: stored.placeId ?? null,
+  };
+}
 
 type StoredJourney = {
   userId: string;
   destinationLabel: string;
   startLocation: Coordinates;
   destinationCoordinates?: Coordinates;
+  /** Absent on journeys created before saved places existed. */
+  destination?: StoredPlace;
+  savedPlaceId?: string;
+  travelMode?: TravelMode;
+  alertRules?: AlertRules;
+  arrivalRadiusMeters?: number;
   /** Set by tracking updates — absent on initial creation. */
   currentLocation?: Coordinates;
   lastLocationAt?: Timestamp;
@@ -56,6 +102,13 @@ function fromFirestore(id: string, data: StoredJourney): Journey {
     destinationLabel: data.destinationLabel,
     startLocation: data.startLocation,
     destinationCoordinates: data.destinationCoordinates ?? null,
+    destination: fromStoredPlace(data.destination),
+    savedPlaceId: data.savedPlaceId ?? null,
+    // Journeys written before these fields existed read back with the same
+    // defaults a new journey would get, so no screen has to null-check them.
+    travelMode: data.travelMode ?? 'walk',
+    alertRules: data.alertRules ?? DEFAULT_ALERT_RULES,
+    arrivalRadiusMeters: data.arrivalRadiusMeters ?? DEFAULT_ARRIVAL_RADIUS_METERS,
     currentLocation: data.currentLocation ?? null,
     status: data.status,
     startedAt: data.startedAt.toDate(),
@@ -90,6 +143,11 @@ export class FirebaseJourneyProvider implements JourneyProvider {
       destinationLabel: input.destinationLabel,
       startLocation: input.startLocation,
       ...(input.destinationCoordinates ? { destinationCoordinates: input.destinationCoordinates } : {}),
+      ...(input.destination ? { destination: toStoredPlace(input.destination) } : {}),
+      ...(input.savedPlaceId ? { savedPlaceId: input.savedPlaceId } : {}),
+      travelMode: input.travelMode,
+      alertRules: input.alertRules,
+      arrivalRadiusMeters: input.arrivalRadiusMeters,
       status: 'ACTIVE',
       startedAt,
       endedAt: null,
@@ -214,5 +272,19 @@ export class FirebaseJourneyProvider implements JourneyProvider {
       await batch.commit();
       hasMore = snap.docs.length === 200;
     }
+  }
+
+  async createShareLink(userId: string, journeyId: string, displayName: string): Promise<string> {
+    // Firestore's own auto-generated document ID is already a random,
+    // unguessable ~20-character string — exactly what a share token needs,
+    // with no new dependency (no expo-crypto, no hand-rolled UUID).
+    const ref = doc(collection(this.db, 'journeyShares'));
+    await setDoc(ref, {
+      userId,
+      journeyId,
+      displayName,
+      createdAt: Timestamp.now(),
+    });
+    return ref.id;
   }
 }

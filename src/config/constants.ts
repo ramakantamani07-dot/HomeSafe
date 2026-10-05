@@ -1,29 +1,11 @@
-export const COLORS = {
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  primaryLight: '#DBEAFE',
-  danger: '#DC2626',
-  dangerDark: '#B91C1C',
-  dangerLight: '#FEE2E2',
-  success: '#16A34A',
-  successLight: '#DCFCE7',
-  warning: '#D97706',
-  warningLight: '#FEF3C7',
-  background: '#F9FAFB',
-  surface: '#FFFFFF',
-  border: '#E5E7EB',
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  white: '#FFFFFF',
-  black: '#000000',
-} as const;
-
-export const FONTS = {
-  regular: 'System',
-  medium: 'System',
-  bold: 'System',
-} as const;
+/**
+ * Non-visual app constants.
+ *
+ * Colours, fonts, spacing and radii deliberately do NOT live here — they
+ * belong to the design system in `src/config/theme/`. A second palette in
+ * this file is how the app ended up with two sources of colour truth once
+ * already; don't reintroduce one.
+ */
 
 export const TIMING = {
   otpExpirySeconds: 600,
@@ -31,6 +13,14 @@ export const TIMING = {
 } as const;
 
 export const SECURE_STORE_KEYS = {
-  session: 'homesafe.auth-session',
-  privacyPreferences: 'homesafe.privacy-preferences',
+  session: 'wayloc.auth-session',
+  privacyPreferences: 'wayloc.privacy-preferences',
+  duressCode: 'wayloc.duress-code',
 } as const;
+
+/**
+ * Public guardian tracking page — lives in the separate wayloc-web project
+ * (Next.js, deployed on Vercel), not this app. See
+ * wayloc-web/src/app/track/[token]/page.tsx.
+ */
+export const JOURNEY_TRACKING_WEB_BASE_URL = 'https://wayloc-web-psi.vercel.app';

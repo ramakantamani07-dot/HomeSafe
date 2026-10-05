@@ -10,15 +10,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { contactInitials, MAX_CONTACTS, type Contact } from '../../src/models/Contact';
 import { useContacts } from '../../src/hooks/useContacts';
 import {
   ContactFormModal,
   type ContactFormData,
 } from '../../src/components/contacts/ContactFormModal';
+import { Icon } from '../../src/components/ui/Icon';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import type { ThemeColors } from '../../src/config/theme';
 
 export default function ContactsScreen() {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { contacts, isLoading, addContact, updateContact, deleteContact } = useContacts();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -85,14 +91,14 @@ export default function ContactsScreen() {
           onPress={() => openEdit(item)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.actionIcon}>✏️</Text>
+          <Icon name="edit" size={19} color={theme.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleDelete(item)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.actionIcon}>🗑️</Text>
+          <Icon name="trash" size={19} color={theme.critical.fg} />
         </TouchableOpacity>
       </View>
     </View>
@@ -123,18 +129,17 @@ export default function ContactsScreen() {
       {/* List / empty state / loader */}
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={theme.accent} />
         </View>
       ) : contacts.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>👥</Text>
-          <Text style={styles.emptyTitle}>No trusted contacts yet</Text>
-          <Text style={styles.emptyDesc}>
-            Add people you trust. They'll be ready to help when you need it.
-          </Text>
-          <TouchableOpacity style={styles.emptyButton} onPress={openAdd} activeOpacity={0.8}>
-            <Text style={styles.emptyButtonText}>Add your first contact</Text>
-          </TouchableOpacity>
+        <View style={styles.center}>
+          <EmptyState
+            icon="people"
+            title="No trusted contacts yet"
+            description="Add people you trust. They'll be ready to help when you need it."
+            actionLabel="Add your first contact"
+            onAction={openAdd}
+          />
         </View>
       ) : (
         <FlatList
@@ -163,165 +168,124 @@ export default function ContactsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  addButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  addButtonDisabled: {
-    backgroundColor: COLORS.border,
-  },
-  addButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  addButtonTextDisabled: {
-    color: COLORS.textMuted,
-  },
-  list: {
-    padding: 16,
-    gap: 12,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  cardInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  contactName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  contactPhone: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  relationshipBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
-  },
-  relationshipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-    letterSpacing: 0.3,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 4,
-    flexShrink: 0,
-  },
-  actionButton: {
-    padding: 6,
-  },
-  actionIcon: {
-    fontSize: 18,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 12,
-  },
-  emptyIcon: {
-    fontSize: 56,
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  emptyDesc: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  emptyButton: {
-    marginTop: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  emptyButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  maxNote: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    paddingVertical: 12,
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: SPACING.xl,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    title: {
+      fontSize: TYPOGRAPHY.heading.fontSize + 2,
+      fontWeight: '800',
+      color: theme.textPrimary,
+      letterSpacing: -0.3,
+    },
+    subtitle: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+      marginTop: 2,
+    },
+    addButton: {
+      backgroundColor: theme.accent,
+      borderRadius: RADIUS.pill,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.sm,
+    },
+    addButtonDisabled: {
+      backgroundColor: theme.border,
+    },
+    addButtonText: {
+      color: theme.textOnColor,
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '700',
+    },
+    addButtonTextDisabled: {
+      color: theme.textTertiary,
+    },
+    list: {
+      padding: SPACING.lg,
+      gap: SPACING.md,
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md + 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    avatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    avatarText: {
+      color: theme.textOnColor,
+      fontSize: 17,
+      fontWeight: '700',
+    },
+    cardInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    contactName: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: '700',
+      color: theme.textPrimary,
+    },
+    contactPhone: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      color: theme.textSecondary,
+    },
+    relationshipBadge: {
+      alignSelf: 'flex-start',
+      marginTop: 4,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 2,
+      borderRadius: 10,
+      backgroundColor: theme.accentMuted,
+    },
+    relationshipText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: theme.accent,
+      letterSpacing: 0.3,
+    },
+    cardActions: {
+      flexDirection: 'row',
+      gap: SPACING.xs,
+      flexShrink: 0,
+    },
+    actionButton: {
+      padding: SPACING.xs + 2,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    maxNote: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textTertiary,
+      textAlign: 'center',
+      paddingVertical: SPACING.md,
+    },
+  });
+}

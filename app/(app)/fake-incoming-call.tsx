@@ -1,6 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+/** Mirrors the native incoming-call screen — see FIXED_PALETTES.fakeCall. */
+const FAKE_CALL = FIXED_PALETTES.fakeCall;
+
+import { FIXED_PALETTES } from '../../src/config/theme';
 import { useRouter } from 'expo-router';
 
 import { useFakeCall } from '../../src/hooks/useFakeCall';
@@ -133,8 +138,8 @@ export default function FakeIncomingCallScreen() {
   );
 }
 
-const DARK_BG = '#1C1C1E';
-const DARK_SURFACE = '#2C2C2E';
+const DARK_BG = FAKE_CALL.background;
+const DARK_SURFACE = FAKE_CALL.surface;
 
 const styles = StyleSheet.create({
   fullScreen: { flex: 1, backgroundColor: DARK_BG },
@@ -157,7 +162,7 @@ const styles = StyleSheet.create({
   countdownSeconds: {
     fontSize: 96,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: FAKE_CALL.text,
     fontVariant: ['tabular-nums'],
     lineHeight: 100,
   },
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   callerInfoCountdown: { alignItems: 'center', gap: 4, marginBottom: 48 },
-  callerNameCountdown: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  callerNameCountdown: { fontSize: 26, fontWeight: '700', color: FAKE_CALL.text },
   callerLabelCountdown: {
     fontSize: 15,
     color: 'rgba(255,255,255,0.55)',
@@ -182,7 +187,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  cancelCountdownText: { fontSize: 17, color: '#FFFFFF', fontWeight: '600' },
+  cancelCountdownText: { fontSize: 17, color: FAKE_CALL.text, fontWeight: '600' },
 
   // ── Incoming ──
   callerSection: {
@@ -196,15 +201,15 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#3A3A3C',
+    backgroundColor: FAKE_CALL.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  callerAvatarText: { fontSize: 44, color: '#FFFFFF', fontWeight: '700' },
-  callerName: { fontSize: 34, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
+  callerAvatarText: { fontSize: 44, color: FAKE_CALL.text, fontWeight: '700' },
+  callerName: { fontSize: 34, fontWeight: '800', color: FAKE_CALL.text, textAlign: 'center' },
   callerLabel: {
     fontSize: 18,
     color: 'rgba(255,255,255,0.6)',
@@ -232,8 +237,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  declineBtn: { backgroundColor: '#FF3B30' },
-  acceptBtn: { backgroundColor: '#34C759' },
+  declineBtn: { backgroundColor: FAKE_CALL.decline },
+  acceptBtn: { backgroundColor: FAKE_CALL.accept },
   callBtnIcon: { fontSize: 28 },
   actionLabel: { fontSize: 13, color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
 });

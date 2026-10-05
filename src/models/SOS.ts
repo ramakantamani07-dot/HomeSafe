@@ -12,4 +12,10 @@ export interface SOSEvent {
   triggeredAt: Date;
   resolvedAt: Date | null;
   createdAt: Date;
+  /**
+   * Set when the user "resolved" the alert with their duress code instead of
+   * a real resolve. Status stays ACTIVE and tracking keeps running — this
+   * flag exists only so the record itself shows what actually happened.
+   */
+  duressTriggered: boolean;
 }

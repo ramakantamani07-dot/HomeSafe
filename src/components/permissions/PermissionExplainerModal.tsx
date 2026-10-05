@@ -1,32 +1,37 @@
 import React from 'react';
-import {
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '../../config/constants';
+import { useTheme } from '../../context/ThemeContext';
+import { SPACING, TYPOGRAPHY } from '../../config/theme';
+import { BottomSheet } from '../ui/BottomSheet';
+import { Button } from '../ui/Button';
+import { Icon, type IconName } from '../ui/Icon';
 
-type PermissionType = 'location' | 'notifications';
+type PermissionType = 'location' | 'locationBackground' | 'notifications';
 
 const CONTENT: Record<
   PermissionType,
-  { icon: string; title: string; description: string; allowLabel: string }
+  { icon: IconName; title: string; description: string; allowLabel: string }
 > = {
   location: {
-    icon: '📍',
+    icon: 'location',
     title: 'Allow Location Access',
     description:
-      'HomeSafe uses your location when you start a journey to help your trusted contacts know you are safe.\n\nYour location is never shared in the background without your knowledge.',
+      'wayLoc uses your location when you start a journey to help your trusted contacts know you are safe.\n\nYour location is never shared in the background without your knowledge.',
     allowLabel: 'Allow Location Access',
   },
+  locationBackground: {
+    icon: 'compass',
+    title: 'Keep Sharing While Your Screen Is Off',
+    description:
+      "Next, iOS/Android will ask about background location. Choose \"Always Allow\" so your trusted contacts can keep following your journey even when wayLoc isn't on screen or your phone is locked.\n\nIf you choose \"While Using\" instead, tracking pauses the moment you leave the app — that's the one situation this feature exists for.",
+    allowLabel: 'Continue',
+  },
   notifications: {
-    icon: '🔔',
+    icon: 'notification',
     title: 'Enable Notifications',
     description:
-      'HomeSafe sends safety alerts and check-in reminders so your trusted contacts can reach you when it matters.\n\nNotifications are only sent when important for your safety.',
+      'wayLoc sends safety alerts and check-in reminders so your trusted contacts can reach you when it matters.\n\nNotifications are only sent when important for your safety.',
     allowLabel: 'Enable Notifications',
   },
 };
@@ -48,110 +53,51 @@ export function PermissionExplainerModal({
   onAllow,
   onDismiss,
 }: PermissionExplainerModalProps) {
+  const theme = useTheme();
   const { icon, title, description, allowLabel } = CONTENT[type];
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onDismiss}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-
-          <Text style={styles.icon}>{icon}</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.description}>{description}</Text>
-
-          <TouchableOpacity
-            style={styles.allowButton}
-            onPress={onAllow}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.allowButtonText}>{allowLabel}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.dismissButton}
-            onPress={onDismiss}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.dismissButtonText}>Not now</Text>
-          </TouchableOpacity>
-
-          <View style={styles.bottomPad} />
+    <BottomSheet visible={visible} onDismiss={onDismiss}>
+      <View style={styles.content}>
+        <View style={[styles.iconCircle, { backgroundColor: theme.accentMuted }]}>
+          <Icon name={icon} size={30} color={theme.accent} />
         </View>
+        <Text style={[styles.title, { color: theme.textPrimary }]}>{title}</Text>
+        <Text style={[styles.description, { color: theme.textSecondary }]}>{description}</Text>
+
+        <Button label={allowLabel} onPress={onAllow} style={styles.allowButton} />
+        <Button label="Not now" onPress={onDismiss} variant="ghost" />
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 28,
+  content: {
     alignItems: 'center',
   },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.border,
-    marginTop: 12,
-    marginBottom: 24,
-  },
-  icon: {
-    fontSize: 56,
-    marginBottom: 16,
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.lg,
   },
   title: {
-    fontSize: 22,
+    fontSize: TYPOGRAPHY.heading.fontSize,
     fontWeight: '800',
-    color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: 14,
+    marginBottom: SPACING.md,
     letterSpacing: -0.3,
   },
   description: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.body.fontSize,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
+    lineHeight: TYPOGRAPHY.body.lineHeight,
+    marginBottom: SPACING.xl,
   },
   allowButton: {
-    width: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  allowButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  dismissButton: {
-    width: '100%',
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  dismissButtonText: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  bottomPad: {
-    height: 16,
+    marginBottom: SPACING.sm,
   },
 });

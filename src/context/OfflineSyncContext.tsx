@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { OfflineSyncService } from '../services/OfflineSyncService';
 import { useNetwork } from './NetworkContext';
@@ -110,8 +104,13 @@ export function OfflineSyncStateProvider({
     return () => { active = false; };
   }, [isInternetReachable, offlineSyncService]);
 
+  const value = useMemo(
+    () => ({ pendingCount, failedCount, isSyncing }),
+    [pendingCount, failedCount, isSyncing],
+  );
+
   return (
-    <OfflineSyncContext.Provider value={{ pendingCount, failedCount, isSyncing }}>
+    <OfflineSyncContext.Provider value={value}>
       {children}
     </OfflineSyncContext.Provider>
   );

@@ -21,6 +21,12 @@ export interface SOSProvider {
   ): Promise<SOSEvent>;
   /** Marks an existing SOS event as RESOLVED. */
   resolveSOS(userId: string, sosId: string): Promise<SOSEvent>;
+  /**
+   * Flags an SOS event as a duress ("fake") resolve. Deliberately does NOT
+   * change `status` or `resolvedAt` — the alert stays ACTIVE and tracking
+   * keeps running; only a `duressTriggered` marker is written.
+   */
+  markDuress(userId: string, sosId: string): Promise<SOSEvent>;
   /** Returns the current active SOS for the user, or null if none. */
   getActiveSOS(userId: string): Promise<SOSEvent | null>;
 }

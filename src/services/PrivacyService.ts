@@ -9,15 +9,12 @@ export class PrivacyService {
   ) {}
 
   async getPermissionsState(): Promise<PermissionsState> {
-    const [location, notifications] = await Promise.all([
+    const [location, locationBackground, notifications] = await Promise.all([
       this.permissions.getLocationStatus(),
+      this.permissions.getLocationBackgroundStatus(),
       this.permissions.getNotificationStatus(),
     ]);
-    return {
-      location,
-      locationBackground: 'undetermined', // placeholder — requested with journey feature
-      notifications,
-    };
+    return { location, locationBackground, notifications };
   }
 
   async requestLocation(): Promise<AppPermissionStatus> {

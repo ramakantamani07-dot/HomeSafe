@@ -2,7 +2,11 @@ export type AppPermissionStatus = 'undetermined' | 'granted' | 'denied';
 
 export interface PermissionsState {
   location: AppPermissionStatus;
-  /** Placeholder — will be requested when the journey feature is implemented. */
+  /**
+   * "Always" location status. Read-only status check — the actual request
+   * happens just-in-time at journey start (ExpoLocationProvider.startTracking),
+   * not from a settings screen, per Apple's just-in-time permission guidance.
+   */
   locationBackground: AppPermissionStatus;
   notifications: AppPermissionStatus;
 }

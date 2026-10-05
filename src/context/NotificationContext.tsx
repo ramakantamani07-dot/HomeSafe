@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { NotificationService } from '../services/NotificationService';
 import { useAuthContext } from './AuthContext';
@@ -56,8 +56,10 @@ export function NotificationStateProvider({
     };
   }, [user?.id, notificationService]);
 
+  const value = useMemo(() => ({ deviceToken, isRegistering }), [deviceToken, isRegistering]);
+
   return (
-    <NotificationContext.Provider value={{ deviceToken, isRegistering }}>
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );

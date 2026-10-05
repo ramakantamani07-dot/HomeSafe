@@ -1,14 +1,20 @@
 import React from 'react';
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import type { FamilyMember } from '../../models/Family';
-import { COLORS } from '../../config/constants';
+import type { FamilyMember, FamilyStatusType } from '../../models/Family';
+import { useTheme } from '../../context/ThemeContext';
+import type { ThemeColors } from '../../config/theme';
+import { RADIUS, SPACING, TYPOGRAPHY, identityColor } from '../../config/theme';
+import { Icon } from '../ui/Icon';
 import { FamilyStatusBadge } from './FamilyStatusBadge';
+
+// Only the statuses we actually have art for — deliberately no placeholder
+// for the rest (At Work, At Home, Shopping, Offline, Arrived) rather than
+// stretching one generic image across statuses it doesn't depict.
+const STATUS_ILLUSTRATIONS: Partial<Record<FamilyStatusType, number>> = {
+  TRAVELLING: require('../../../assets/family/route.png'),
+  AT_SCHOOL: require('../../../assets/family/school.png'),
+};
 
 function formatEta(eta: Date | null): string | null {
   if (!eta) return null;
@@ -47,28 +53,34 @@ interface FamilyMemberCardProps {
 }
 
 export function FamilyMemberCard({ member, onPress }: FamilyMemberCardProps) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+  const needsAttention = member.status === 'SOS_ACTIVE';
+
   const eta = member.activeJourneyEta ? formatEta(member.activeJourneyEta) : null;
   const batteryPct =
     member.batteryLevel != null ? Math.round(member.batteryLevel * 100) : null;
 
   const batteryColor =
     batteryPct != null && batteryPct < 20
-      ? COLORS.danger
+      ? theme.critical.fg
       : batteryPct != null && batteryPct < 40
-        ? COLORS.warning
-        : COLORS.success;
+        ? theme.warning.fg
+        : theme.textSecondary;
+
+  const illustration = STATUS_ILLUSTRATIONS[member.status];
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, needsAttention && styles.cardAttention]}
       onPress={onPress}
       activeOpacity={onPress ? 0.75 : 1}
       accessibilityRole="button"
-      accessibilityLabel={`${member.displayName}, ${member.relationship}`}
+      accessibilityLabel={`${member.displayName}, ${member.relationship}${needsAttention ? ', needs attention' : ''}`}
     >
       {/* Avatar + name row */}
       <View style={styles.headerRow}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: identityColor(theme, member.id) }]}>
           <Text style={styles.avatarText}>{initials(member.displayName)}</Text>
         </View>
 
@@ -77,26 +89,33 @@ export function FamilyMemberCard({ member, onPress }: FamilyMemberCardProps) {
           <Text style={styles.relationship}>{member.relationship}</Text>
         </View>
 
-        {/* Battery badge */}
-        {batteryPct != null && (
-          <View style={[styles.batteryBadge, { borderColor: batteryColor }]}>
-            <Text style={[styles.batteryText, { color: batteryColor }]}>
-              {batteryPct}%
-            </Text>
+        {/* Battery — only shown if low, per the redesign's "only what matters" principle */}
+        {batteryPct != null && batteryPct < 40 && (
+          <View style={styles.batteryRow}>
+            <Icon name="battery" size={14} color={batteryColor} />
+            <Text style={[styles.batteryText, { color: batteryColor }]}>{batteryPct}%</Text>
           </View>
         )}
       </View>
 
       {/* Status row */}
       <View style={styles.statusRow}>
-        <FamilyStatusBadge status={member.status} />
-        <Text style={styles.lastSeen}>{formatLastSeen(member.lastSeen)}</Text>
+        <View style={styles.statusLeft}>
+          <FamilyStatusBadge status={member.status} />
+          <Text style={styles.lastSeen}>{formatLastSeen(member.lastSeen)}</Text>
+        </View>
+        <View style={styles.statusRight}>
+          {illustration && (
+            <Image source={illustration} style={styles.illustration} resizeMode="contain" />
+          )}
+          {onPress && <Icon name="chevronRight" size={16} color={theme.textTertiary} />}
+        </View>
       </View>
 
       {/* Active journey strip */}
       {member.activeJourneyId && member.activeJourneyDestination && (
         <View style={styles.journeyStrip}>
-          <Text style={styles.journeyIcon}>🧭</Text>
+          <Icon name="compass" size={14} color={theme.accent} />
           <View style={styles.journeyInfo}>
             <Text style={styles.journeyDest} numberOfLines={1}>
               {member.activeJourneyDestination}
@@ -109,84 +128,104 @@ export function FamilyMemberCard({ member, onPress }: FamilyMemberCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 12,
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  nameBlock: {
-    flex: 1,
-    gap: 2,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  relationship: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  batteryBadge: {
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  batteryText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastSeen: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  journeyStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  journeyIcon: { fontSize: 14 },
-  journeyInfo: { flex: 1, gap: 2 },
-  journeyDest: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  journeyEta: {
-    fontSize: 11,
-    color: COLORS.primary,
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+      gap: SPACING.sm,
+    },
+    // Left accent bar + tint, not a full red card — attention should read as
+    // distinct without being alarming for what may just be an active alert
+    // that's already being handled. See the redesign audit §14.
+    cardAttention: {
+      borderColor: theme.critical.fg,
+      borderLeftWidth: 4,
+      backgroundColor: theme.critical.bg,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+    },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: theme.textOnColor,
+    },
+    nameBlock: {
+      flex: 1,
+      gap: 2,
+    },
+    name: {
+      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+      fontWeight: TYPOGRAPHY.bodyStrong.fontWeight,
+      color: theme.textPrimary,
+    },
+    relationship: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textSecondary,
+    },
+    batteryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    batteryText: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      fontWeight: '700',
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    statusLeft: {
+      gap: SPACING.xs,
+      alignItems: 'flex-start',
+    },
+    statusRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.xs,
+    },
+    illustration: {
+      width: 56,
+      height: 40,
+    },
+    lastSeen: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.textTertiary,
+    },
+    journeyStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.accentMuted,
+      borderRadius: RADIUS.sm,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    journeyInfo: { flex: 1, gap: 2 },
+    journeyDest: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '600',
+      color: theme.accent,
+    },
+    journeyEta: {
+      fontSize: TYPOGRAPHY.caption.fontSize,
+      color: theme.accent,
+    },
+  });
+}

@@ -6,8 +6,8 @@ type StoredUser = Omit<User, 'createdAt'> & {
   createdAt: string;
 };
 
-const userKey = (userId: string) => `homesafe.user.${userId}`;
-const preferencesKey = (userId: string) => `homesafe.user-preferences.${userId}`;
+const userKey = (userId: string) => `wayloc.user.${userId}`;
+const preferencesKey = (userId: string) => `wayloc.user-preferences.${userId}`;
 
 function serializeUser(user: User): StoredUser {
   return {

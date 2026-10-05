@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useAuth } from '../../src/hooks/useAuth';
+import { Button } from '../../src/components/ui/Button';
 
 export default function ProfileScreen() {
+  const theme = useTheme();
   const { user, signOut, updateProfile } = useAuth();
   const [name, setName] = useState(user?.name ?? '');
   const [saving, setSaving] = useState(false);
@@ -42,59 +45,67 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.title}>Profile</Text>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.title, { color: theme.textPrimary }]}>Profile</Text>
 
           {/* Avatar */}
           <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
+            <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
+              <Text style={[styles.avatarText, { color: theme.textOnColor }]}>
                 {name?.[0]?.toUpperCase() ?? '?'}
               </Text>
             </View>
             <TouchableOpacity>
-              <Text style={styles.changePhoto}>Change photo (Phase 1-B)</Text>
+              <Text style={[styles.changePhoto, { color: theme.accent }]}>
+                Change photo (Phase 1-B)
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Fields */}
           <View style={styles.field}>
-            <Text style={styles.label}>Full name</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Full name</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                { backgroundColor: theme.surface, borderColor: theme.border, color: theme.textPrimary },
+              ]}
               value={name}
               onChangeText={setName}
               placeholder="Your name"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={theme.textTertiary}
               returnKeyType="done"
             />
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Phone number</Text>
-            <View style={styles.readonlyInput}>
-              <Text style={styles.readonlyText}>{user?.phone ?? '—'}</Text>
-              <Text style={styles.readonlyHint}>Verified via OTP</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>Phone number</Text>
+            <View
+              style={[
+                styles.readonlyInput,
+                { backgroundColor: theme.background, borderColor: theme.border },
+              ]}
+            >
+              <Text style={[styles.readonlyText, { color: theme.textPrimary }]}>
+                {user?.phone ?? '—'}
+              </Text>
+              <Text style={[styles.readonlyHint, { color: theme.safe.fg }]}>Verified via OTP</Text>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          <Button
+            label={saving ? 'Saving…' : 'Save changes'}
             onPress={handleSave}
-            disabled={saving}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save changes'}</Text>
-          </TouchableOpacity>
+            loading={saving}
+            style={styles.saveButton}
+          />
 
-          <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-            <Text style={styles.signOutText}>Sign out</Text>
-          </TouchableOpacity>
+          <Button label="Sign out" onPress={signOut} variant="secondary" />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -102,102 +113,66 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1 },
   flex: { flex: 1 },
-  container: { padding: 20, paddingBottom: 40 },
+  container: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
   title: {
-    fontSize: 26,
+    fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 28,
+    marginBottom: SPACING.xxl,
     letterSpacing: -0.3,
   },
   avatarSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: SPACING.xxl,
   },
   avatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: SPACING.md,
   },
   avatarText: {
-    color: COLORS.white,
     fontSize: 36,
     fontWeight: '700',
   },
   changePhoto: {
-    fontSize: 14,
-    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: '600',
   },
-  field: { marginBottom: 20 },
+  field: { marginBottom: SPACING.xl },
   label: {
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.caption.fontSize,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   input: {
-    backgroundColor: COLORS.surface,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md + 2,
     fontSize: 16,
-    color: COLORS.textPrimary,
   },
   readonlyInput: {
-    backgroundColor: COLORS.background,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md + 2,
   },
   readonlyText: {
     fontSize: 16,
-    color: COLORS.textPrimary,
     fontWeight: '500',
   },
   readonlyHint: {
-    fontSize: 12,
-    color: COLORS.success,
+    fontSize: TYPOGRAPHY.caption.fontSize,
     marginTop: 2,
   },
   saveButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  saveButtonDisabled: {
-    backgroundColor: COLORS.textMuted,
-  },
-  saveButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  signOutButton: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-  },
-  signOutText: {
-    fontSize: 15,
-    color: COLORS.danger,
-    fontWeight: '600',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
   },
 });

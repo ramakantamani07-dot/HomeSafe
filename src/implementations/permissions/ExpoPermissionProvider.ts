@@ -27,6 +27,11 @@ export class ExpoPermissionProvider implements PermissionProvider {
     return mapLocationStatus(status);
   }
 
+  async getLocationBackgroundStatus(): Promise<AppPermissionStatus> {
+    const { status } = await Location.getBackgroundPermissionsAsync();
+    return mapLocationStatus(status);
+  }
+
   async getNotificationStatus(): Promise<AppPermissionStatus> {
     const { status } = await Notifications.getPermissionsAsync();
     return mapNotificationStatus(status);

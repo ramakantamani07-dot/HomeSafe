@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { OfflineQueueProvider, QueuedOperation } from '../../providers/OfflineQueueProvider';
 
-const QUEUE_KEY = 'homesafe.offline-queue';
+const QUEUE_KEY = 'wayloc.offline-queue';
 
 /**
  * Hard cap on total queue size.

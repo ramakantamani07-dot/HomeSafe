@@ -36,6 +36,11 @@ export class MockJourneyProvider implements JourneyProvider {
       destinationCoordinates: input.destinationCoordinates
         ? { ...input.destinationCoordinates }
         : null,
+      destination: input.destination ? { ...input.destination } : null,
+      savedPlaceId: input.savedPlaceId,
+      travelMode: input.travelMode,
+      alertRules: { ...input.alertRules },
+      arrivalRadiusMeters: input.arrivalRadiusMeters,
       currentLocation: null,
       status: 'ACTIVE',
       startedAt: now,
@@ -141,5 +146,10 @@ export class MockJourneyProvider implements JourneyProvider {
     const existing = store.get(journeyId);
     if (!existing) return;
     store.set(journeyId, { ...existing, currentLocation: null });
+  }
+
+  async createShareLink(_userId: string, _journeyId: string, _displayName: string): Promise<string> {
+    await delay(200);
+    return `mock-share-${newId()}`;
   }
 }

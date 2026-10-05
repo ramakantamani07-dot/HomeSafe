@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,11 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme } from '../../src/context/ThemeContext';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useFamily } from '../../src/hooks/useFamily';
 import { FamilyMemberCard } from '../../src/components/family/FamilyMemberCard';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import { Button } from '../../src/components/ui/Button';
+
+const heroImage = require('../../assets/family/bg.png');
+import { Icon } from '../../src/components/ui/Icon';
 
 export default function FamilyScreen() {
+  const theme = useTheme();
   const router = useRouter();
   const {
     members,
@@ -76,17 +84,26 @@ export default function FamilyScreen() {
 
   const pendingSent = sentInvitations.filter((i) => i.status === 'PENDING');
 
+  // Members needing attention surface first — everyone else follows in
+  // whatever order the service returned. See the redesign audit §14.
+  const sortedMembers = [...members].sort((a, b) => {
+    const aAttention = a.status === 'SOS_ACTIVE' ? 0 : 1;
+    const bAttention = b.status === 'SOS_ACTIVE' ? 0 : 1;
+    return aAttention - bAttention;
+  });
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Family</Text>
+      <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
+        <Text style={[styles.title, { color: theme.textPrimary }]}>Family</Text>
         <TouchableOpacity
-          style={styles.inviteButton}
+          style={[styles.inviteButton, { backgroundColor: theme.accent }]}
           onPress={() => router.push('/family-invite')}
+          accessibilityRole="button"
           accessibilityLabel="Invite a family member"
         >
-          <Text style={styles.inviteButtonText}>+ Invite</Text>
+          <Icon name="add" size={20} color={theme.textOnColor} />
         </TouchableOpacity>
       </View>
 
@@ -94,51 +111,60 @@ export default function FamilyScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={refresh}
-            tintColor={COLORS.primary}
-          />
+          <RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={theme.accent} />
         }
       >
+        <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
+          <View
+            style={[
+              styles.heroScrim,
+              { backgroundColor: theme.isDark ? 'rgba(8,12,28,0.68)' : 'rgba(255,255,255,0.4)' },
+            ]}
+          />
+          <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>
+            A safer journey together
+          </Text>
+          <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+            Keep your family connected and informed, wherever life takes you.
+          </Text>
+        </ImageBackground>
+
         {/* Error */}
         {error && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorCard, { backgroundColor: theme.critical.bg }]}>
+            <Text style={[styles.errorText, { color: theme.critical.fg }]}>{error}</Text>
           </View>
         )}
 
         {/* Pending invitations received */}
         {pendingInvitations.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionHeader}>
+            <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
               Pending Invitations ({pendingInvitations.length})
             </Text>
             {pendingInvitations.map((inv) => (
-              <View key={inv.id} style={styles.inviteCard}>
+              <View
+                key={inv.id}
+                style={[styles.inviteCard, { backgroundColor: theme.surface, borderColor: theme.accent }]}
+              >
                 <View style={styles.inviteInfo}>
-                  <Text style={styles.inviteName}>{inv.fromDisplayName}</Text>
-                  <Text style={styles.invitePhone}>{inv.fromPhone}</Text>
-                  <Text style={styles.inviteRelationship}>{inv.relationship}</Text>
+                  <Text style={[styles.inviteName, { color: theme.textPrimary }]}>{inv.fromDisplayName}</Text>
+                  <Text style={[styles.invitePhone, { color: theme.textSecondary }]}>{inv.fromPhone}</Text>
+                  <Text style={[styles.inviteRelationship, { color: theme.textTertiary }]}>{inv.relationship}</Text>
                 </View>
                 <View style={styles.inviteActions}>
-                  <TouchableOpacity
-                    style={styles.acceptButton}
+                  <Button
+                    label="Accept"
                     onPress={() => handleAccept(inv.id, inv.fromDisplayName)}
-                    disabled={accepting === inv.id}
-                  >
-                    {accepting === inv.id ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Text style={styles.acceptButtonText}>Accept</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.declineButton}
+                    loading={accepting === inv.id}
+                    style={styles.inviteActionHalf}
+                  />
+                  <Button
+                    label="Decline"
                     onPress={() => handleDecline(inv.id)}
-                  >
-                    <Text style={styles.declineButtonText}>Decline</Text>
-                  </TouchableOpacity>
+                    variant="secondary"
+                    style={styles.inviteActionHalf}
+                  />
                 </View>
               </View>
             ))}
@@ -147,12 +173,12 @@ export default function FamilyScreen() {
 
         {/* Family members */}
         <View style={styles.section}>
-          {members.length > 0 ? (
+          {sortedMembers.length > 0 ? (
             <>
-              <Text style={styles.sectionHeader}>
-                Family Members ({members.length})
+              <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
+                Family Members ({sortedMembers.length})
               </Text>
-              {members.map((member) => (
+              {sortedMembers.map((member) => (
                 <FamilyMemberCard
                   key={member.id}
                   member={member}
@@ -167,51 +193,57 @@ export default function FamilyScreen() {
             </>
           ) : (
             !isLoading && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>👨‍👩‍👧‍👦</Text>
-                <Text style={styles.emptyTitle}>No family members yet</Text>
-                <Text style={styles.emptyDesc}>
-                  Invite family members to see their live safety status during journeys.
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyInviteButton}
-                  onPress={() => router.push('/family-invite')}
-                >
-                  <Text style={styles.emptyInviteButtonText}>Invite Someone</Text>
-                </TouchableOpacity>
-              </View>
+              <EmptyState
+                icon="people"
+                title="No family members yet"
+                description="Invite family members to see their live safety status during journeys."
+                actionLabel="Invite Someone"
+                onAction={() => router.push('/family-invite')}
+              />
             )
+          )}
+          {sortedMembers.length > 0 && (
+            <Button
+              label="Add a family member"
+              icon="add"
+              onPress={() => router.push('/family-invite')}
+              variant="secondary"
+              style={styles.addMemberButton}
+            />
           )}
         </View>
 
         {/* Sent invitations */}
         {pendingSent.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionHeader}>
+            <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
               Sent Invitations ({pendingSent.length})
             </Text>
             {pendingSent.map((inv) => (
-              <View key={inv.id} style={styles.sentCard}>
+              <View
+                key={inv.id}
+                style={[styles.sentCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              >
                 <View style={styles.sentInfo}>
-                  <Text style={styles.sentPhone}>{inv.toPhone}</Text>
-                  <Text style={styles.sentRelationship}>{inv.relationship}</Text>
-                  <Text style={styles.sentExpiry}>
+                  <Text style={[styles.sentPhone, { color: theme.textPrimary }]}>{inv.toPhone}</Text>
+                  <Text style={[styles.sentRelationship, { color: theme.textSecondary }]}>{inv.relationship}</Text>
+                  <Text style={[styles.sentExpiry, { color: theme.textTertiary }]}>
                     Expires {inv.expiresAt.toLocaleDateString()}
                   </Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.cancelSentButton}
+                  style={[styles.cancelSentButton, { borderColor: theme.border }]}
                   onPress={() => handleCancelSent(inv.id, inv.toPhone)}
                 >
-                  <Text style={styles.cancelSentText}>Cancel</Text>
+                  <Text style={[styles.cancelSentText, { color: theme.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             ))}
           </View>
         )}
 
-        {isLoading && members.length === 0 && (
-          <ActivityIndicator style={styles.loader} color={COLORS.primary} />
+        {isLoading && sortedMembers.length === 0 && (
+          <ActivityIndicator style={styles.loader} color={theme.accent} />
         )}
       </ScrollView>
     </SafeAreaView>
@@ -221,186 +253,138 @@ export default function FamilyScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
+    fontSize: TYPOGRAPHY.heading.fontSize,
+    fontWeight: TYPOGRAPHY.heading.fontWeight,
   },
   inviteButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inviteButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
+  hero: {
+    height: 190,
+    borderRadius: RADIUS.xl,
+    marginBottom: SPACING.lg,
+    padding: SPACING.xl,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  heroImage: {
+    borderRadius: RADIUS.xl,
+  },
+  heroScrim: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroTitle: {
+    fontSize: TYPOGRAPHY.heading.fontSize + 2,
+    fontWeight: '800',
+    marginBottom: SPACING.xs,
+    maxWidth: '70%',
+  },
+  heroSubtitle: {
+    fontSize: TYPOGRAPHY.callout.fontSize,
+    lineHeight: TYPOGRAPHY.callout.lineHeight,
+    maxWidth: '65%',
   },
   container: {
-    padding: 16,
-    paddingBottom: 48,
-    gap: 4,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
+    gap: SPACING.xs,
   },
   section: {
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   sectionHeader: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption.fontSize,
     fontWeight: '700',
-    color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    marginBottom: 10,
-    marginTop: 8,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   errorCard: {
-    backgroundColor: COLORS.dangerLight,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
   errorText: {
-    fontSize: 13,
-    color: COLORS.danger,
+    fontSize: TYPOGRAPHY.callout.fontSize,
   },
   inviteCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     borderWidth: 1.5,
-    borderColor: COLORS.primary + '50',
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    gap: SPACING.md,
   },
   inviteInfo: {
     gap: 2,
   },
   inviteName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    fontSize: TYPOGRAPHY.bodyStrong.fontSize,
+    fontWeight: TYPOGRAPHY.bodyStrong.fontWeight,
   },
   invitePhone: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.callout.fontSize,
   },
   inviteRelationship: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+    fontSize: TYPOGRAPHY.caption.fontSize,
   },
   inviteActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: SPACING.sm,
   },
-  acceptButton: {
+  inviteActionHalf: {
     flex: 1,
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
   },
-  acceptButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  declineButton: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  declineButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+  addMemberButton: {
+    marginTop: SPACING.md,
   },
   sentCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 12,
-    marginBottom: 8,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.md,
   },
   sentInfo: {
     flex: 1,
     gap: 2,
   },
   sentPhone: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.callout.fontSize,
     fontWeight: '600',
-    color: COLORS.textPrimary,
   },
   sentRelationship: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.caption.fontSize,
   },
   sentExpiry: {
-    fontSize: 11,
-    color: COLORS.textMuted,
+    fontSize: TYPOGRAPHY.caption.fontSize,
   },
   cancelSentButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   cancelSentText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 10,
-  },
-  emptyIcon: { fontSize: 52 },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 280,
-  },
-  emptyInviteButton: {
-    marginTop: 8,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  emptyInviteButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: TYPOGRAPHY.callout.fontSize,
   },
   loader: {
-    marginTop: 40,
+    marginTop: SPACING.xxxl,
   },
 });

@@ -1,12 +1,33 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { RouteResult } from '../models/RouteResult';
+import type { Coordinates } from '../models/Journey';
+import type { TravelMode } from '../models/Place';
+import type { RouteRequestOptions } from '../providers/RoutingProvider';
 import type { RoutingService } from '../services/RoutingService';
 import type { JourneyService } from '../services/JourneyService';
 import { useJourney } from '../hooks/useJourney';
 import { useActiveJourneyLocation } from '../hooks/useActiveJourneyLocation';
 
 export interface RoutingContextValue {
+  /**
+   * A one-off route calculation for a journey that does not exist yet (screen
+   * 04's preview, Home's per-place ETA chips).
+   *
+   * Exposed here rather than letting screens reach the routing singleton
+   * directly: this context already owns routing, and a hook importing a
+   * service from the composition root bypasses the whole port layer.
+   * Deliberately separate from the live-journey calculation — a preview must
+   * not abort, or be aborted by, the active journey's recalculation loop, and
+   * must not reset the cooldown that throttles it.
+   */
+  previewRoute(
+    from: Coordinates,
+    to: Coordinates,
+    mode: TravelMode,
+    signal?: AbortSignal,
+    options?: RouteRequestOptions,
+  ): Promise<RouteResult>;
   route: RouteResult | null;
   isLoading: boolean;
   /** Non-null when the most recent route calculation failed. Journey continues. */
@@ -22,6 +43,7 @@ export interface RoutingContextValue {
 }
 
 const RoutingContext = createContext<RoutingContextValue>({
+  previewRoute: () => Promise.reject(new Error('RoutingContext not mounted.')),
   route: null,
   isLoading: false,
   error: null,
@@ -59,6 +81,12 @@ export function RoutingStateProvider({
   const journeyId = activeJourney?.id ?? null;
   const destLat = activeJourney?.destinationCoordinates?.latitude ?? null;
   const destLng = activeJourney?.destinationCoordinates?.longitude ?? null;
+  const travelMode = activeJourney?.travelMode ?? 'walk';
+
+  // Read by the off-route effect, which must not re-subscribe just because
+  // the mode changed (it can't change mid-journey anyway).
+  const travelModeRef = useRef(travelMode);
+  travelModeRef.current = travelMode;
 
   // ── Effect 1: calculate route when the journey starts or destination changes ──
   useEffect(() => {
@@ -80,7 +108,7 @@ export function RoutingStateProvider({
     setError(null);
 
     void routingService
-      .calculateRoute(start, dest)
+      .calculateRoute(start, dest, travelMode)
       .then((result) => {
         if (!active) return;
         setRoute(result);
@@ -105,7 +133,7 @@ export function RoutingStateProvider({
       routingService.cancelPendingRequest();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journeyId, destLat, destLng, routingService, journeyService]);
+  }, [journeyId, destLat, destLng, travelMode, routingService, journeyService]);
 
   // ── Effect 2: recalculate when the user goes off-route or the route is stale ──
   useEffect(() => {
@@ -124,7 +152,7 @@ export function RoutingStateProvider({
     isRecalculating.current = true;
 
     void routingService
-      .calculateRoute(currentLocation, dest)
+      .calculateRoute(currentLocation, dest, travelModeRef.current)
       .then((result) => {
         setRoute(result);
       })
@@ -148,10 +176,37 @@ export function RoutingStateProvider({
     ? routingService.formatDuration(route.durationSeconds)
     : '—';
 
+  const previewRoute = useCallback<RoutingContextValue['previewRoute']>(
+    (from, to, mode, signal, options) =>
+      routingService.previewRoute(from, to, mode, signal, options),
+    [routingService],
+  );
+
+  const value = useMemo<RoutingContextValue>(
+    () => ({
+      route,
+      isLoading,
+      error,
+      eta,
+      formattedEta,
+      formattedDistance,
+      formattedDuration,
+      previewRoute,
+    }),
+    [
+      route,
+      isLoading,
+      error,
+      eta,
+      formattedEta,
+      formattedDistance,
+      formattedDuration,
+      previewRoute,
+    ],
+  );
+
   return (
-    <RoutingContext.Provider
-      value={{ route, isLoading, error, eta, formattedEta, formattedDistance, formattedDuration }}
-    >
+    <RoutingContext.Provider value={value}>
       {children}
     </RoutingContext.Provider>
   );

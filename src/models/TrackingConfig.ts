@@ -4,6 +4,13 @@ export type MovementState = 'MOVING' | 'STATIONARY';
 export const LOW_BATTERY_THRESHOLD = 0.15;
 export const STATIONARY_SPEED_THRESHOLD_MPS = 0.5;
 
+/**
+ * Radius of the arrival geofence around a journey's destination. Wide enough
+ * to absorb typical consumer GPS error (10-50m is common, more near tall
+ * buildings) without requiring the user to walk to the exact pinned point.
+ */
+export const ARRIVAL_GEOFENCE_RADIUS_METERS = 150;
+
 export interface TrackingConfig {
   mode: TrackingMode;
   accuracy: 'high' | 'balanced' | 'low';

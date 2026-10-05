@@ -24,6 +24,7 @@ import type {
   FamilyStatusSnapshot,
   SharedFamilyView,
 } from '../../models/Family';
+import type { Coordinates } from '../../models/Journey';
 import {
   computeConnectionId,
   defaultFamilyPermissions,
@@ -67,6 +68,7 @@ type StoredStatus = {
   activeJourneyId: string | null;
   activeJourneyDestination: string | null;
   activeJourneyEta: Timestamp | null;
+  location: Coordinates | null;
   updatedAt: Timestamp;
 };
 
@@ -78,6 +80,7 @@ type StoredSharedStatus = {
   activeJourneyId: string | null;
   activeJourneyDestination: string | null;
   activeJourneyEta: Timestamp | null;
+  location: Coordinates | null;
 };
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -124,6 +127,7 @@ function statusFromFirestore(data: StoredStatus): FamilyStatusSnapshot {
     activeJourneyId: data.activeJourneyId,
     activeJourneyDestination: data.activeJourneyDestination,
     activeJourneyEta: data.activeJourneyEta ? data.activeJourneyEta.toDate() : null,
+    location: data.location ?? null,
     updatedAt: data.updatedAt.toDate(),
   };
 }
@@ -136,6 +140,7 @@ function sharedViewFromFirestore(data: StoredSharedStatus): SharedFamilyView {
     activeJourneyId: data.activeJourneyId,
     activeJourneyDestination: data.activeJourneyDestination,
     activeJourneyEta: data.activeJourneyEta ? data.activeJourneyEta.toDate() : null,
+    location: data.location ?? null,
   };
 }
 
@@ -292,6 +297,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       activeJourneyEta: snapshot.activeJourneyEta
         ? Timestamp.fromDate(snapshot.activeJourneyEta)
         : null,
+      location: snapshot.location,
       updatedAt: Timestamp.fromDate(snapshot.updatedAt),
     };
     await setDoc(familyStatusDoc(this.db, userId), data);
@@ -315,6 +321,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       activeJourneyId: view.activeJourneyId,
       activeJourneyDestination: view.activeJourneyDestination,
       activeJourneyEta: view.activeJourneyEta ? Timestamp.fromDate(view.activeJourneyEta) : null,
+      location: view.location,
     };
     await setDoc(sharedStatusDoc(this.db, connectionId, publisherUserId), data);
   }

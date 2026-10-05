@@ -99,6 +99,10 @@ class SpyJourneyProvider implements JourneyProvider {
   async deleteJourneyLocationHistory(_userId: string, _journeyId: string): Promise<void> {
     // Not exercised by offline-queue tests
   }
+
+  async createShareLink(_userId: string, _journeyId: string, _displayName: string): Promise<string> {
+    throw new Error('not used in these tests');
+  }
 }
 
 class SpySOSProvider implements SOSProvider {
@@ -124,6 +128,12 @@ class SpySOSProvider implements SOSProvider {
   }
 
   async getActiveSOS(_userId: string): Promise<SOSEvent | null> { return null; }
+
+  async markDuress(userId: string, sosId: string): Promise<SOSEvent> {
+    if (this.shouldFail) throw new Error('network error');
+    this.calls.push({ method: 'markDuress', args: [userId, sosId] });
+    return { id: sosId, userId, journeyId: null, location: null, status: 'ACTIVE', triggeredAt: new Date(), resolvedAt: null, createdAt: new Date(), duressTriggered: true } as SOSEvent;
+  }
 }
 
 class SpyCheckInProvider implements CheckInProvider {

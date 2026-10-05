@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   FamilyConnection,
@@ -17,6 +11,7 @@ import { useAuthContext } from './AuthContext';
 import { useJourneyContext } from './JourneyContext';
 import { useSOSContext } from './SOSContext';
 import { useBatteryContext } from './BatteryContext';
+import { useLocationTrackingContext } from './LocationTrackingContext';
 
 interface FamilyContextValue {
   members: FamilyMember[];
@@ -59,6 +54,7 @@ export function FamilyStateProvider({
   const { activeJourney } = useJourneyContext();
   const { activeSOS } = useSOSContext();
   const { batteryLevel } = useBatteryContext();
+  const { currentLocation } = useLocationTrackingContext();
 
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<FamilyInvitation[]>([]);
@@ -70,7 +66,7 @@ export function FamilyStateProvider({
   const prevJourneyIdRef = useRef<string | null>(null);
   const wasTravellingRef = useRef(false);
 
-  const load = async (userId: string, phone: string) => {
+  const load = useCallback(async (userId: string, phone: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -87,7 +83,7 @@ export function FamilyStateProvider({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [familyService]);
 
   // Load on sign-in / sign-out
   useEffect(() => {
@@ -119,74 +115,115 @@ export function FamilyStateProvider({
         activeJourneyEta: activeJourney?.initialEta ?? null,
         activeSosId: activeSOS?.id ?? null,
         batteryLevel,
+        location: currentLocation,
       }, wasTravelling, journeyJustCompleted)
       .catch(() => {});
+    // Re-publishes on every currentLocation change too — that stream is
+    // already throttled by TrackingConfig (10-60s depending on mode), so this
+    // doesn't add any new write frequency beyond what location tracking
+    // already produces.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeJourney?.id, activeSOS?.id, batteryLevel, user?.id]);
+  }, [activeJourney?.id, activeSOS?.id, batteryLevel, currentLocation, user?.id]);
 
-  const value: FamilyContextValue = {
-    members,
-    pendingInvitations,
-    sentInvitations,
-    isLoading,
-    error,
+  const userId = user?.id ?? null;
+  const userName = user?.name ?? '';
+  const userPhone = user?.phone ?? '';
 
-    inviteMember: async (toPhone, relationship) => {
-      if (!user?.id) throw new Error('You must be signed in.');
-      await familyService.inviteMember(
-        user.id,
-        user.name,
-        user.phone,
-        toPhone,
-        relationship,
-      );
-      // Refresh sent invitations
-      const sent = await familyService.getSentInvitations(user.id);
-      setSentInvitations(sent);
+  const inviteMember = useCallback<FamilyContextValue['inviteMember']>(
+    async (toPhone, relationship) => {
+      if (!userId) throw new Error('You must be signed in.');
+      await familyService.inviteMember(userId, userName, userPhone, toPhone, relationship);
+      setSentInvitations(await familyService.getSentInvitations(userId));
     },
+    [userId, userName, userPhone, familyService],
+  );
 
-    acceptInvitation: async (invitationId) => {
-      if (!user?.id) throw new Error('You must be signed in.');
+  const acceptInvitation = useCallback<FamilyContextValue['acceptInvitation']>(
+    async (invitationId) => {
+      if (!userId) throw new Error('You must be signed in.');
       const connection = await familyService.acceptInvitation(
         invitationId,
-        user.id,
-        user.name,
-        user.phone,
+        userId,
+        userName,
+        userPhone,
       );
-      // Refresh both members and pending list
-      await load(user.id, user.phone);
+      // Refreshes both members and the pending list.
+      await load(userId, userPhone);
       return connection;
     },
+    [userId, userName, userPhone, familyService, load],
+  );
 
-    declineInvitation: async (invitationId) => {
+  const declineInvitation = useCallback<FamilyContextValue['declineInvitation']>(
+    async (invitationId) => {
       await familyService.declineInvitation(invitationId);
       setPendingInvitations((prev) => prev.filter((i) => i.id !== invitationId));
     },
+    [familyService],
+  );
 
-    cancelInvitation: async (invitationId) => {
+  const cancelInvitation = useCallback<FamilyContextValue['cancelInvitation']>(
+    async (invitationId) => {
       await familyService.cancelInvitation(invitationId);
       setSentInvitations((prev) => prev.filter((i) => i.id !== invitationId));
     },
+    [familyService],
+  );
 
-    removeMember: async (connectionId) => {
-      if (!user?.id) throw new Error('You must be signed in.');
-      await familyService.removeMember(connectionId, user.id);
+  const removeMember = useCallback<FamilyContextValue['removeMember']>(
+    async (connectionId) => {
+      if (!userId) throw new Error('You must be signed in.');
+      await familyService.removeMember(connectionId, userId);
       setMembers((prev) => prev.filter((m) => m.connectionId !== connectionId));
     },
+    [userId, familyService],
+  );
 
-    updatePermissions: async (connectionId, permissions) => {
-      if (!user?.id) throw new Error('You must be signed in.');
-      await familyService.updatePermissions(connectionId, user.id, permissions);
-      // Refresh to get latest
-      const updated = await familyService.getFamilyMembers(user.id);
-      setMembers(updated);
+  const updatePermissions = useCallback<FamilyContextValue['updatePermissions']>(
+    async (connectionId, permissions) => {
+      if (!userId) throw new Error('You must be signed in.');
+      await familyService.updatePermissions(connectionId, userId, permissions);
+      setMembers(await familyService.getFamilyMembers(userId));
     },
+    [userId, familyService],
+  );
 
-    refresh: async () => {
-      if (!user?.id) return;
-      await load(user.id, user.phone);
-    },
-  };
+  const refresh = useCallback<FamilyContextValue['refresh']>(async () => {
+    if (!userId) return;
+    await load(userId, userPhone);
+  }, [userId, userPhone, load]);
+
+  const value = useMemo<FamilyContextValue>(
+    () => ({
+      members,
+      pendingInvitations,
+      sentInvitations,
+      isLoading,
+      error,
+      inviteMember,
+      acceptInvitation,
+      declineInvitation,
+      cancelInvitation,
+      removeMember,
+      updatePermissions,
+      refresh,
+    }),
+    [
+      members,
+      pendingInvitations,
+      sentInvitations,
+      isLoading,
+      error,
+      inviteMember,
+      acceptInvitation,
+      declineInvitation,
+      cancelInvitation,
+      removeMember,
+      updatePermissions,
+      refresh,
+    ],
+  );
+
 
   return (
     <FamilyContext.Provider value={value}>

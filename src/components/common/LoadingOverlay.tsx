@@ -1,16 +1,18 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { COLORS } from '../../config/constants';
+
+import { useTheme } from '../../context/ThemeContext';
 
 interface LoadingOverlayProps {
   visible: boolean;
 }
 
 export function LoadingOverlay({ visible }: LoadingOverlayProps) {
+  const theme = useTheme();
   if (!visible) return null;
   return (
-    <View style={styles.overlay}>
-      <ActivityIndicator size="large" color={COLORS.primary} />
+    <View style={[styles.overlay, { backgroundColor: `${theme.background}D9` }]}>
+      <ActivityIndicator size="large" color={theme.accent} />
     </View>
   );
 }
@@ -18,7 +20,6 @@ export function LoadingOverlay({ visible }: LoadingOverlayProps) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,

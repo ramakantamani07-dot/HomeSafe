@@ -3,136 +3,165 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { COLORS } from '../../src/config/constants';
+import { useTheme, useThemeMode, type ThemeMode } from '../../src/context/ThemeContext';
+import { ELEVATION, RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { useAuth } from '../../src/hooks/useAuth';
+import { Section, ListRow } from '../../src/components/ui/Section';
+import type { ThemeColors } from '../../src/config/theme';
 
-interface SettingRowProps {
-  icon: string;
-  title: string;
-  subtitle: string;
-  onPress?: () => void;
-}
+const MODE_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
 
-function SettingRow({ icon, title, subtitle, onPress }: SettingRowProps) {
+function AppearancePicker() {
+  const theme = useTheme();
+  const { mode, setMode } = useThemeMode();
+  const styles = getPickerStyles(theme);
+
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
-      <Text style={styles.rowIcon}>{icon}</Text>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
-      </View>
-      {onPress && <Text style={styles.chevron}>›</Text>}
-    </TouchableOpacity>
+    <View style={styles.row}>
+      {MODE_OPTIONS.map((opt) => {
+        const selected = mode === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.value}
+            style={[styles.segment, selected && styles.segmentSelected]}
+            onPress={() => setMode(opt.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${opt.label} appearance`}
+          >
+            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
 
+function getPickerStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      gap: SPACING.xs,
+      padding: SPACING.xs,
+      margin: SPACING.md,
+      marginTop: 0,
+      backgroundColor: theme.background,
+      borderRadius: RADIUS.md,
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: SPACING.sm + 2,
+      borderRadius: RADIUS.sm + 2,
+      alignItems: 'center',
+    },
+    segmentSelected: {
+      backgroundColor: theme.surface,
+      ...ELEVATION.xs,
+    },
+    segmentText: {
+      fontSize: TYPOGRAPHY.callout.fontSize,
+      fontWeight: '600',
+      color: theme.textSecondary,
+    },
+    segmentTextSelected: {
+      color: theme.textPrimary,
+    },
+  });
+}
+
 export default function SettingsScreen() {
+  const theme = useTheme();
   const { user, signOut } = useAuth();
   const router = useRouter();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Settings</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.title, { color: theme.textPrimary }]}>Settings</Text>
 
-        <Text style={styles.section}>Account</Text>
-        <View style={styles.card}>
-          <SettingRow
-            icon="📱"
+        <Section title="Appearance">
+          <AppearancePicker />
+        </Section>
+
+        <Section title="Account">
+          <ListRow
+            icon="call"
             title="Verified phone"
             subtitle={user?.phone ?? 'Signed in with phone OTP'}
           />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="👤"
+          <ListRow
+            icon="person"
             title="Profile"
             subtitle={user?.name ? user.name : 'Name not added yet'}
+            onPress={() => router.push('/(app)/profile')}
           />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="🚪"
+          <ListRow
+            icon="arrowBack"
             title="Sign out"
             subtitle="Clear the local session on this device"
             onPress={signOut}
+            destructive
           />
-        </View>
+        </Section>
 
-        <Text style={styles.section}>Privacy</Text>
-        <View style={styles.card}>
-          <SettingRow
-            icon="🛡️"
+        <Section title="Safety">
+          {/* Emergency contacts and saved places used to live in the tab bar;
+              the designs' four-tab layout has no room for them, so this is
+              now the only way in. */}
+          <ListRow
+            icon="people"
+            title="Emergency contacts"
+            subtitle="Who gets called and alerted"
+            onPress={() => router.push('/(app)/contacts')}
+          />
+          <ListRow
+            icon="location"
+            title="Saved places"
+            subtitle="Home, Work and anywhere else you go often"
+            onPress={() => router.push('/(app)/saved-places')}
+          />
+          <ListRow
+            icon="call"
+            title="Fake call"
+            subtitle="Set the caller name and delay"
+            onPress={() => router.push('/(app)/fake-call-settings')}
+          />
+        </Section>
+
+        <Section title="Privacy">
+          <ListRow
+            icon="shield"
             title="Privacy & Security"
             subtitle="Permissions, biometric lock, and data settings"
             onPress={() => router.push('/(app)/privacy')}
           />
-        </View>
+        </Section>
 
-        <Text style={styles.section}>Storage</Text>
-        <View style={styles.card}>
-          <SettingRow
-            icon="🔒"
+        <Section title="Storage">
+          <ListRow
+            icon="lock"
             title="Local secure storage"
             subtitle="Session and profile preferences are stored on this device"
           />
-        </View>
+        </Section>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  container: { padding: 20, paddingBottom: 40 },
+  safe: { flex: 1 },
+  container: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
   title: {
-    fontSize: 26,
+    fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 24,
+    marginBottom: SPACING.xl,
     letterSpacing: -0.3,
-  },
-  section: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  rowIcon: { fontSize: 22, width: 28, textAlign: 'center' },
-  rowText: { flex: 1 },
-  rowTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  rowSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  chevron: {
-    fontSize: 18,
-    color: COLORS.textMuted,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginLeft: 56,
   },
 });
