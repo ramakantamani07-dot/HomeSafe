@@ -9,9 +9,11 @@ import { FIXED_PALETTES } from '../../src/config/theme';
 import { useRouter } from 'expo-router';
 
 import { useFakeCall } from '../../src/hooks/useFakeCall';
+import { useGoBack } from '../../src/hooks/useGoBack';
 
 export default function FakeIncomingCallScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { phase, settings, countdownSeconds, cancelCountdown, acceptCall, declineCall } =
     useFakeCall();
 
@@ -25,8 +27,8 @@ export default function FakeIncomingCallScreen() {
       hasMounted.current = true;
       return;
     }
-    if (phase === 'idle') router.back();
-  }, [phase, router]);
+    if (phase === 'idle') goBack();
+  }, [phase, goBack]);
 
   // Track whether the user explicitly accepted so the unmount cleanup does not
   // cancel a call that is now owned by the active-call screen.
@@ -51,12 +53,12 @@ export default function FakeIncomingCallScreen() {
 
   const handleDecline = () => {
     declineCall();
-    router.back();
+    goBack();
   };
 
   const handleCancelCountdown = () => {
     cancelCountdown();
-    router.back();
+    goBack();
   };
 
   // ── Countdown state ───────────────────────────────────────────────────────

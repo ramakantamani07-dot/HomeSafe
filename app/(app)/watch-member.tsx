@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, identityColor, type ThemeColors } from '../../src/config/theme';
 import { useLiveFamily, useWatchPresence } from '../../src/hooks/useFamily';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { useInterval } from '../../src/hooks/useInterval';
 import { regionForPoints, type MapMarker } from '../../src/models/MapModels';
 import { formatDistance, formatEta } from '../../src/models/RouteResult';
@@ -34,7 +35,7 @@ const LIVE_TICK_MS = 5_000;
 export default function WatchMemberScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const router = useRouter();
+  const goBack = useGoBack();
   const insets = useSafeAreaInsets();
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
   const { members, askIfOk } = useLiveFamily();
@@ -104,7 +105,7 @@ export default function WatchMemberScreen() {
       />
 
       <View style={[styles.topBar, { top: insets.top + SPACING.sm }]} pointerEvents="box-none">
-        <GlassPill onPress={() => router.back()} accessibilityLabel="Back" style={styles.back}>
+        <GlassPill onPress={() => goBack()} accessibilityLabel="Back" style={styles.back}>
           <Icon name="chevronLeft" size={22} color={theme.textPrimary} />
         </GlassPill>
         <GlassPill>

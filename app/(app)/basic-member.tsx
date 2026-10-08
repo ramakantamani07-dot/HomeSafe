@@ -11,6 +11,7 @@ import {
   useMemberConsent,
   useMemberFinds,
 } from '../../src/hooks/useBasicPhoneMembers';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { describeConsentStatus } from '../../src/models/BasicPhoneMember';
 import { allowsLocationLookup, isTerminal, type ConsentStatus } from '../../src/models/Consent';
 import { LOCATE_LIMIT_PER_HOUR } from '../../src/models/LocateAudit';
@@ -37,6 +38,7 @@ export default function BasicMemberScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const goBack = useGoBack();
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
 
   const member = useBasicPhoneMember(memberId);
@@ -50,7 +52,7 @@ export default function BasicMemberScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.container}>
-          <ScreenHeader title="Not found" onBack={() => router.back()} />
+          <ScreenHeader title="Not found" onBack={() => goBack()} />
           <Text style={styles.body}>This person is no longer in your circle.</Text>
         </View>
       </SafeAreaView>
@@ -90,7 +92,7 @@ export default function BasicMemberScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
-        <ScreenHeader title={name} onBack={() => router.back()} />
+        <ScreenHeader title={name} onBack={() => goBack()} />
 
         <View style={styles.card}>
           <View style={styles.avatar}>

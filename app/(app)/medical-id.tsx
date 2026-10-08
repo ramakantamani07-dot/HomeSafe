@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useSafetyPreferences } from '../../src/context/SafetyPreferencesContext';
 import { MEDICAL_NOTES_MAX_LENGTH } from '../../src/models/SafetyPreferences';
@@ -25,7 +25,7 @@ import { Button } from '../../src/components/ui/Button';
 export default function MedicalIdScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const router = useRouter();
+  const goBack = useGoBack();
 
   const { preferences, setPreferences } = useSafetyPreferences();
   const [notes, setNotes] = useState(preferences.medicalNotes);
@@ -39,7 +39,7 @@ export default function MedicalIdScreen() {
 
   const save = async () => {
     await setPreferences({ ...preferences, medicalNotes: notes.trim() });
-    router.back();
+    goBack();
   };
 
   return (

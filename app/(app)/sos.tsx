@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { FIXED_PALETTES, FONTS, RADIUS, SPACING } from '../../src/config/theme';
 import { useSOS } from '../../src/hooks/useSOS';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { localEmergencyNumber } from '../../src/config/markets';
 import { SOS_CANCEL_WINDOW_SECONDS, type SOSTier } from '../../src/models/SOS';
 import { useFamily } from '../../src/hooks/useFamily';
@@ -48,6 +49,7 @@ type SendMode = 'call-and-alert' | 'alert-only';
 
 export default function SOSScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { triggerSOS, resolveSOS } = useSOS();
   const { members } = useFamily();
   // Set when the user reached here by completing the three-second hold on the
@@ -180,7 +182,7 @@ export default function SOSScreen() {
   // re-register on every tick of the cancel countdown.
   const handleCancel = useCallback(async () => {
     if (!sentAt) {
-      router.back();
+      goBack();
       return;
     }
     setCancelling(true);

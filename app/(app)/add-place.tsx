@@ -17,6 +17,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useJourneyDraft } from '../../src/context/JourneyDraftContext';
 import { usePlaces } from '../../src/hooks/usePlaces';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { usePlaceSearch } from '../../src/hooks/usePlaceSearch';
 import { useActiveJourneyLocation } from '../../src/hooks/useActiveJourneyLocation';
 import { useFamily } from '../../src/hooks/useFamily';
@@ -43,6 +44,7 @@ export default function AddPlaceScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const goBack = useGoBack();
 
   const { savedPlaces, setPlaceAddress, savePlace } = usePlaces();
   const { placesService } = usePlaces();
@@ -164,7 +166,7 @@ export default function AddPlaceScreen() {
       setPendingAddressPlaceId(null);
       // Screen 02 highlights the row that was just completed.
       setHighlightedPlaceId(saved.id);
-      router.back();
+      goBack();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not save that place. Please try again.');
     } finally {
@@ -174,7 +176,7 @@ export default function AddPlaceScreen() {
 
   const handleBack = () => {
     setPendingAddressPlaceId(null);
-    router.back();
+    goBack();
   };
 
   // "Add address for School" only reads right the first time; editing one

@@ -10,6 +10,7 @@ import {
   useBasicPhoneMembers,
   useMemberFinds,
 } from '../../src/hooks/useBasicPhoneMembers';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { useInterval } from '../../src/hooks/useInterval';
 import { countsTowardLimit, nextLookupAllowedAt } from '../../src/models/LocateAudit';
 import { regionForArea, type MapArea } from '../../src/models/MapModels';
@@ -38,6 +39,7 @@ export default function FindResultScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const goBack = useGoBack();
   const insets = useSafeAreaInsets();
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
 
@@ -89,7 +91,7 @@ export default function FindResultScreen() {
 
       <GlassPill
         style={[styles.back, { top: insets.top + SPACING.sm }]}
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         accessibilityLabel="Back"
       >
         <Icon name="chevronLeft" size={22} color={theme.textPrimary} />

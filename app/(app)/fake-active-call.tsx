@@ -6,9 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const FAKE_CALL = FIXED_PALETTES.fakeCall;
 
 import { FIXED_PALETTES } from '../../src/config/theme';
-import { useRouter } from 'expo-router';
 
 import { useFakeCall } from '../../src/hooks/useFakeCall';
+import { useGoBack } from '../../src/hooks/useGoBack';
 
 function formatMMSS(totalSeconds: number): string {
   const m = Math.floor(Math.max(totalSeconds, 0) / 60);
@@ -17,7 +17,7 @@ function formatMMSS(totalSeconds: number): string {
 }
 
 export default function FakeActiveCallScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { phase, settings, callDurationSeconds, endCall } = useFakeCall();
 
   // Navigate back if phase becomes non-active after mount.
@@ -28,8 +28,8 @@ export default function FakeActiveCallScreen() {
       hasMounted.current = true;
       return;
     }
-    if (phase !== 'active') router.back();
-  }, [phase, router]);
+    if (phase !== 'active') goBack();
+  }, [phase, goBack]);
 
   // Guard so we don't call endCall() twice when the user presses the End Call
   // button (explicit) AND the unmount cleanup also fires.
@@ -48,7 +48,7 @@ export default function FakeActiveCallScreen() {
   const handleEnd = () => {
     hasEndedRef.current = true;
     endCall();
-    router.back();
+    goBack();
   };
 
   return (

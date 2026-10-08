@@ -9,20 +9,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
 import { FIXED_PALETTES, RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
 import { CALLER_LABELS, DELAY_OPTIONS } from '../../src/models/FakeCall';
 import type { CallerLabel, DelaySeconds } from '../../src/models/FakeCall';
 import { useFakeCall } from '../../src/hooks/useFakeCall';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { Button } from '../../src/components/ui/Button';
 import type { ThemeColors } from '../../src/config/theme';
 
 export default function FakeCallSettingsScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const router = useRouter();
+  const goBack = useGoBack();
   const { settings, updateSettings } = useFakeCall();
 
   const [callerName, setCallerName] = useState(settings.callerName);
@@ -46,7 +46,7 @@ export default function FakeCallSettingsScreen() {
     setSaving(true);
     try {
       await updateSettings({ callerName: trimmed, callerLabel, delaySeconds });
-      router.back();
+      goBack();
     } finally {
       setSaving(false);
     }
@@ -56,7 +56,7 @@ export default function FakeCallSettingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerSide}>
+        <TouchableOpacity onPress={() => goBack()} style={styles.headerSide}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Fake Call Settings</Text>

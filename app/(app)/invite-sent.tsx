@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { INVITATION_EXPIRY_DAYS, type InviteeStatus } from '../../src/models/Family';
 import { Button } from '../../src/components/ui/Button';
@@ -22,6 +23,7 @@ export default function InviteSentScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{
     name?: string;
     phone: string;
@@ -84,7 +86,7 @@ export default function InviteSentScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Button label="Done" variant="primary" onPress={() => router.back()} />
+        <Button label="Done" variant="primary" onPress={() => goBack()} />
         <TouchableOpacity onPress={() => router.replace('/family-invite')} accessibilityRole="button">
           <Text style={styles.again}>Invite someone else</Text>
         </TouchableOpacity>

@@ -7,6 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useJourneyDraft } from '../../src/context/JourneyDraftContext';
 import { usePlaces } from '../../src/hooks/usePlaces';
+import { useGoBack } from '../../src/hooks/useGoBack';
 import { useActiveJourneyLocation } from '../../src/hooks/useActiveJourneyLocation';
 import { AppMapView } from '../../src/components/map/AppMapView';
 import { Button } from '../../src/components/ui/Button';
@@ -39,6 +40,7 @@ export default function MapPickerScreen() {
   const styles = getStyles(theme);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useGoBack();
 
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { placesService } = usePlaces();
@@ -75,7 +77,7 @@ export default function MapPickerScreen() {
       // saved place. Going back (rather than replacing the route) keeps the
       // screen that opened the picker exactly where it was.
       setPendingPin(centre);
-      router.back();
+      goBack();
       return;
     }
 
@@ -110,7 +112,7 @@ export default function MapPickerScreen() {
 
       <View style={[styles.header, { top: insets.top + SPACING.sm }]} pointerEvents="box-none">
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.backChip}
           accessibilityRole="button"
           accessibilityLabel="Back"

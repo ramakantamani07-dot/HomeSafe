@@ -1,479 +1,260 @@
 import React, { useState } from 'react';
-import {
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
-import type { ThemeColors } from '../../src/config/theme';
-import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
-import { useFamily } from '../../src/hooks/useFamily';
-import { FamilyStatusBadge } from '../../src/components/family/FamilyStatusBadge';
-import { Icon } from '../../src/components/ui/Icon';
-import { Button } from '../../src/components/ui/Button';
+import { FONTS, RADIUS, SPACING, identityColor, type ThemeColors } from '../../src/config/theme';
+import { useLiveFamily } from '../../src/hooks/useFamily';
+import { useGoBack } from '../../src/hooks/useGoBack';
+import { useInterval } from '../../src/hooks/useInterval';
+import { SHARING_MODE_LABELS, type FamilyPermissions, type SharingMode } from '../../src/models/Family';
+import { formatEta } from '../../src/models/RouteResult';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Section, ListRow } from '../../src/components/ui/Section';
-import {
-  SHARING_MODE_LABELS,
-  type FamilyPermissions,
-  type SharingMode,
-} from '../../src/models/Family';
+import { Button } from '../../src/components/ui/Button';
+import { Icon, type IconName } from '../../src/components/ui/Icon';
+import { describeAge, describeMemberStatus } from '../../src/components/circle/memberStatus';
+import { callNumber, textNumber } from '../../src/utils/deviceLinks';
 
-const SHARING_MODES: SharingMode[] = [
-  'SHARE_ALWAYS',
-  'SHARE_DURING_JOURNEY',
-  'NEVER_SHARE',
+const SHARING_MODES: SharingMode[] = ['SHARE_ALWAYS', 'SHARE_DURING_JOURNEY', 'NEVER_SHARE'];
+
+const PERMISSION_TOGGLES: [keyof FamilyPermissions, string][] = [
+  ['shareLocation', 'Location'],
+  ['shareJourneyDetails', 'Journey details'],
+  ['shareBattery', 'Battery level'],
+  ['shareStatus', 'Status'],
 ];
 
-function formatLastSeen(date: Date | null): string {
-  if (!date) return 'Unknown';
-  const now = new Date();
-  const diffMin = Math.floor((now.getTime() - date.getTime()) / 60_000);
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin} minutes ago`;
-  const hours = Math.floor(diffMin / 60);
-  if (hours < 24) return `${hours} hours ago`;
-  return `${Math.floor(hours / 24)} days ago`;
-}
+/** "Updated 2 min ago" re-reads the clock while the screen is open. */
+const CLOCK_TICK_MS = 30_000;
 
-function formatEta(eta: Date | null): string | null {
-  if (!eta) return null;
-  const diffMs = eta.getTime() - Date.now();
-  if (diffMs <= 0) return 'Arriving now';
-  const diffMin = Math.round(diffMs / 60_000);
-  if (diffMin < 60) return `${diffMin} min`;
-  const h = Math.floor(diffMin / 60);
-  const m = diffMin % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (!parts[0]) return '?';
-  if (parts.length === 1) return (parts[0][0] ?? '?').toUpperCase();
-  return ((parts[0][0] ?? '') + (parts[parts.length - 1][0] ?? '')).toUpperCase();
-}
-
+/**
+ * One app member (Option 15 style; no board of its own — it follows S2b and
+ * S2c). Live while open. Someone on a journey gets **Watch live**, which shows
+ * the journey properly; this screen no longer duplicates it.
+ *
+ * Below the person: what *you* share with them, the one thing here you
+ * control. What they share with you is theirs to set.
+ */
 export default function FamilyMemberScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const goBack = useGoBack();
   const { connectionId } = useLocalSearchParams<{ connectionId: string }>();
-  const { members, removeMember, updatePermissions } = useFamily();
-
+  const { members, removeMember, updatePermissions } = useLiveFamily();
   const member = members.find((m) => m.connectionId === connectionId);
 
+  const [now, setNow] = useState(() => new Date());
+  useInterval(() => setNow(new Date()), CLOCK_TICK_MS);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [isSavingPerms, setIsSavingPerms] = useState(false);
-  const [localPerms, setLocalPerms] = useState<FamilyPermissions | null>(
-    member?.myPermissions ?? null,
-  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [draft, setDraft] = useState<FamilyPermissions | null>(null);
 
   if (!member) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Member not found.</Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backLink}>← Back to Family</Text>
-          </TouchableOpacity>
+        <View style={styles.container}>
+          <ScreenHeader title="Not found" onBack={goBack} />
+          <Text style={styles.muted}>This person is no longer in your family.</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const perms = localPerms ?? member.myPermissions;
-  const batteryPct =
-    member.batteryLevel != null ? Math.round(member.batteryLevel * 100) : null;
-  const batteryColor =
-    batteryPct != null && batteryPct < 20
-      ? theme.critical.fg
-      : batteryPct != null && batteryPct < 40
-        ? theme.warning.fg
-        : theme.textSecondary;
-  const eta = formatEta(member.activeJourneyEta);
+  const name = member.displayName;
+  const first = name.split(' ')[0];
+  const perms = draft ?? member.myPermissions;
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(member.myPermissions);
+  const travelling = member.status === 'TRAVELLING' || member.status === 'SOS_ACTIVE';
+  const age = describeAge(member.updatedAt, now);
+  const battery = member.batteryLevel != null ? Math.round(member.batteryLevel * 100) : null;
 
-  const handleRemove = () => {
-    Alert.alert(
-      'Remove Family Member',
-      `Remove ${member.displayName} from your family? They will no longer see your status.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setIsRemoving(true);
-            try {
-              await removeMember(connectionId);
-              router.back();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove.');
-              setIsRemoving(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  const setPerm = <K extends keyof FamilyPermissions>(key: K, value: FamilyPermissions[K]) =>
+    setDraft({ ...perms, [key]: value });
 
-  const handleSavePermissions = async () => {
-    if (!localPerms) return;
-    setIsSavingPerms(true);
+  const save = async () => {
+    if (!draft) return;
+    setIsSaving(true);
     try {
-      await updatePermissions(connectionId, localPerms);
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save.');
+      await updatePermissions(member.connectionId, draft);
+      setDraft(null);
+    } catch {
+      Alert.alert("Couldn't save", 'Your sharing settings did not change. Try again.');
     } finally {
-      setIsSavingPerms(false);
+      setIsSaving(false);
     }
   };
 
-  const updatePerm = <K extends keyof FamilyPermissions>(key: K, value: FamilyPermissions[K]) => {
-    setLocalPerms((prev) => (prev ? { ...prev, [key]: value } : null));
-  };
-
-  const permsDirty =
-    localPerms !== null &&
-    JSON.stringify(localPerms) !== JSON.stringify(member.myPermissions);
+  const remove = () =>
+    Alert.alert(`Remove ${name}?`, `You'll stop seeing each other's journeys and status.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setIsRemoving(true);
+          try {
+            await removeMember(member.connectionId);
+            goBack();
+          } catch {
+            Alert.alert("Couldn't remove", 'Check your connection and try again.');
+            setIsRemoving(false);
+          }
+        },
+      },
+    ]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>{member.displayName}</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScrollView contentContainerStyle={styles.container}>
+        <ScreenHeader title={name} onBack={goBack} />
 
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Identity */}
-        <View style={styles.identityCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials(member.displayName)}</Text>
+        <View style={styles.card}>
+          <View style={styles.personRow}>
+            <View style={[styles.avatar, { backgroundColor: identityColor(theme, member.id) }]}>
+              <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.name}>
+                {name}
+                {member.relationship ? <Text style={styles.muted}> · {member.relationship.toLowerCase()}</Text> : null}
+              </Text>
+              <Text style={styles.muted}>{member.phoneNumber}</Text>
+            </View>
           </View>
-          <Text style={styles.memberName}>{member.displayName}</Text>
-          <Text style={styles.memberPhone}>{member.phoneNumber}</Text>
-          <Text style={styles.memberRelationship}>{member.relationship}</Text>
+          <View style={styles.actions}>
+            <Action icon="call" label="Call" tone="safe" onPress={() => callNumber(member.phoneNumber)} styles={styles} theme={theme} />
+            <Action icon="message" label="Message" tone="accent" onPress={() => textNumber(member.phoneNumber)} styles={styles} theme={theme} />
+          </View>
         </View>
 
-        {/* Live status */}
-        <View style={styles.statusHeaderRow}>
-          <FamilyStatusBadge status={member.status} />
-          <Text style={styles.lastSeen}>Last seen: {formatLastSeen(member.lastSeen)}</Text>
-        </View>
-
-        <Section>
-          {batteryPct != null && (
-            <ListRow
-              icon="battery"
-              iconColor={batteryColor}
-              title="Battery"
-              value={`${batteryPct}%`}
+        <View style={styles.card}>
+          <Text style={[styles.status, member.status === 'SOS_ACTIVE' && styles.statusSos]}>
+            {describeMemberStatus(member)}
+          </Text>
+          <Text style={styles.muted}>
+            {[
+              age && member.status !== 'OFFLINE' ? `Updated ${age}` : null,
+              battery !== null ? `battery ${battery}%` : null,
+              travelling && member.activeJourneyEta ? `arrives ${formatEta(member.activeJourneyEta)}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || `${first} isn't sharing their status with you`}
+          </Text>
+          {travelling ? (
+            <Button
+              label="Watch live"
+              variant="primary"
+              onPress={() => router.push({ pathname: '/watch-member', params: { memberId: member.id } })}
             />
-          )}
-          {member.location && (
-            <ListRow
-              icon="location"
-              title="Location"
-              // Coordinates mean nothing to read; the map is what answers "where".
-              value="Open in Maps"
+          ) : member.location ? (
+            <TouchableOpacity
+              style={styles.mapLink}
               onPress={() => {
                 const { latitude, longitude } = member.location!;
-                Linking.openURL(`https://maps.google.com/?q=${latitude},${longitude}`);
+                Linking.openURL(`https://maps.google.com/?q=${latitude},${longitude}`).catch(() => {});
               }}
-            />
-          )}
-        </Section>
-
-        {/* Active journey */}
-        {member.activeJourneyId && member.activeJourneyDestination && (
-          <>
-            <Text style={styles.sectionHeader}>Active Journey</Text>
-            <View style={[styles.card, { backgroundColor: theme.accentMuted, borderColor: theme.accent }]}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Destination</Text>
-                <Text style={styles.infoValue} numberOfLines={2}>
-                  {member.activeJourneyDestination}
-                </Text>
-              </View>
-              {eta && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>ETA</Text>
-                  <Text style={[styles.infoValue, { color: theme.accent }]}>{eta}</Text>
-                </View>
-              )}
-              <View style={styles.roViewNote}>
-                <Text style={styles.roViewNoteText}>
-                  View only — you cannot edit another member's journey.
-                </Text>
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* My sharing settings (what I share with them) */}
-        <Text style={styles.sectionHeader}>What I Share with {member.displayName}</Text>
-        <View style={styles.card}>
-          <Text style={styles.permLabel}>Sharing Mode</Text>
-          {SHARING_MODES.map((mode) => (
-            <TouchableOpacity
-              key={mode}
-              style={styles.modeRow}
-              onPress={() => updatePerm('sharingMode', mode)}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: perms.sharingMode === mode }}
+              accessibilityRole="link"
             >
-              <View style={[styles.radio, perms.sharingMode === mode && styles.radioSelected]}>
-                {perms.sharingMode === mode && <Icon name="check" size={12} color={theme.textOnColor} />}
-              </View>
-              <Text style={styles.modeLabel}>{SHARING_MODE_LABELS[mode]}</Text>
+              <Icon name="location" size={16} color={theme.accent} />
+              <Text style={styles.mapLinkText}>See where on the map</Text>
             </TouchableOpacity>
-          ))}
-
-          {/* Granular toggles — only meaningful when not NEVER_SHARE */}
-          {perms.sharingMode !== 'NEVER_SHARE' && (
-            <>
-              <View style={styles.divider} />
-              {(
-                [
-                  ['shareLocation', 'Share location'],
-                  ['shareJourneyDetails', 'Share journey details'],
-                  ['shareBattery', 'Share battery level'],
-                  ['shareStatus', 'Share status'],
-                ] as [keyof FamilyPermissions, string][]
-              ).map(([key, label]) => (
-                <View key={key} style={styles.toggleRow}>
-                  <Text style={styles.toggleLabel}>{label}</Text>
-                  <Switch
-                    value={perms[key] as boolean}
-                    onValueChange={(v) => updatePerm(key, v)}
-                    trackColor={{ true: theme.accent, false: theme.border }}
-                    thumbColor={theme.textOnColor}
-                  />
-                </View>
-              ))}
-            </>
-          )}
-
-          {permsDirty && (
-            <Button
-              label={isSavingPerms ? 'Saving…' : 'Save Sharing Settings'}
-              onPress={handleSavePermissions}
-              loading={isSavingPerms}
-              style={styles.saveButton}
-            />
-          )}
+          ) : null}
         </View>
 
-        {/* Remove member */}
-        <Button
-          label={isRemoving ? 'Removing…' : `Remove ${member.displayName}`}
-          onPress={handleRemove}
-          loading={isRemoving}
-          variant="destructive"
-          style={styles.removeButton}
-        />
+        <Section title={`What you share with ${first}`}>
+          {SHARING_MODES.map((mode) => (
+            <ListRow
+              key={mode}
+              title={SHARING_MODE_LABELS[mode]}
+              onPress={() => setPerm('sharingMode', mode)}
+              accessory={
+                perms.sharingMode === mode ? <Icon name="check" size={18} color={theme.accent} /> : <View />
+              }
+            />
+          ))}
+        </Section>
+
+        {perms.sharingMode !== 'NEVER_SHARE' && (
+          <Section title="Including">
+            {PERMISSION_TOGGLES.map(([key, label]) => (
+              <ListRow
+                key={key}
+                title={label}
+                accessory={
+                  <Switch
+                    value={perms[key] as boolean}
+                    onValueChange={(v) => setPerm(key, v)}
+                    trackColor={{ true: theme.accent, false: theme.border }}
+                    thumbColor={theme.textOnColor}
+                    accessibilityLabel={`Share ${label.toLowerCase()} with ${first}`}
+                  />
+                }
+              />
+            ))}
+          </Section>
+        )}
+
+        {dirty && <Button label="Save sharing settings" variant="primary" onPress={save} loading={isSaving} />}
+
+        <Button label={`Remove ${first}`} variant="destructive" onPress={remove} loading={isRemoving} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function Action({
+  icon,
+  label,
+  tone,
+  onPress,
+  styles,
+  theme,
+}: {
+  icon: IconName;
+  label: string;
+  tone: 'safe' | 'accent';
+  onPress(): void;
+  styles: ReturnType<typeof getStyles>;
+  theme: ThemeColors;
+}) {
+  const fg = tone === 'safe' ? theme.safe.fg : theme.accent;
+  const bg = tone === 'safe' ? theme.safe.bg : theme.accentMuted;
+  return (
+    <TouchableOpacity style={[styles.action, { backgroundColor: bg }]} onPress={onPress} accessibilityRole="button">
+      <Icon name={icon} size={18} color={fg} />
+      <Text style={[styles.actionText, { color: fg }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 function getStyles(theme: ThemeColors) {
   return StyleSheet.create({
-    safe: {
+    safe: { flex: 1, backgroundColor: theme.background },
+    flex: { flex: 1 },
+    container: { padding: SPACING.lg, gap: SPACING.md, paddingBottom: SPACING.xxxl },
+    card: { padding: SPACING.lg, borderRadius: RADIUS.lg, backgroundColor: theme.surface, gap: SPACING.md },
+    personRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+    avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontSize: 20, fontFamily: FONTS.heading, color: theme.textOnColor },
+    name: { fontSize: 18, fontFamily: FONTS.bodySemibold, color: theme.textPrimary },
+    muted: { fontSize: 14, fontFamily: FONTS.body, color: theme.textSecondary },
+    actions: { flexDirection: 'row', gap: SPACING.sm },
+    action: {
       flex: 1,
-      backgroundColor: theme.background,
-    },
-    headerRow: {
+      minHeight: 44,
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      backgroundColor: theme.surface,
-    },
-    backButton: { width: 64 },
-    backText: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.accent,
-      fontWeight: '600',
-    },
-    screenTitle: {
-      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
-      fontWeight: '700',
-      color: theme.textPrimary,
-    },
-    container: {
-      padding: SPACING.lg,
-      paddingBottom: SPACING.xxxl,
-      gap: SPACING.md,
-    },
-    sectionHeader: {
-      fontSize: TYPOGRAPHY.caption.fontSize,
-      fontWeight: '700',
-      color: theme.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-    },
-    identityCard: {
-      backgroundColor: theme.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: theme.border,
-      padding: SPACING.xl,
-      alignItems: 'center',
-      gap: 6,
-    },
-    avatar: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: theme.accentMuted,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: SPACING.xs,
+      gap: SPACING.xs,
+      borderRadius: RADIUS.pill,
     },
-    avatarText: {
-      fontSize: 24,
-      fontWeight: '800',
-      color: theme.accent,
-    },
-    memberName: {
-      fontSize: TYPOGRAPHY.heading.fontSize,
-      fontWeight: '800',
-      color: theme.textPrimary,
-    },
-    memberPhone: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textSecondary,
-    },
-    memberRelationship: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.textTertiary,
-    },
-    statusHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    lastSeen: {
-      fontSize: TYPOGRAPHY.caption.fontSize,
-      color: theme.textTertiary,
-    },
-    card: {
-      backgroundColor: theme.surface,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: theme.border,
-      padding: SPACING.md,
-      gap: SPACING.sm,
-    },
-    infoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: SPACING.sm,
-    },
-    infoLabel: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.textSecondary,
-      flex: 1,
-    },
-    infoValue: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      fontWeight: '600',
-      color: theme.textPrimary,
-      flex: 2,
-      textAlign: 'right',
-    },
-    roViewNote: {
-      backgroundColor: theme.background,
-      borderRadius: RADIUS.sm,
-      padding: SPACING.sm,
-    },
-    roViewNoteText: {
-      fontSize: TYPOGRAPHY.caption.fontSize,
-      color: theme.textTertiary,
-      textAlign: 'center',
-    },
-    permLabel: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      fontWeight: '600',
-      color: theme.textSecondary,
-      marginBottom: SPACING.xs,
-    },
-    modeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: SPACING.sm,
-      paddingVertical: SPACING.xs,
-    },
-    radio: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      borderWidth: 2,
-      borderColor: theme.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    radioSelected: {
-      borderColor: theme.accent,
-      backgroundColor: theme.accent,
-    },
-    modeLabel: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textPrimary,
-    },
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: theme.border,
-      marginVertical: SPACING.sm,
-    },
-    toggleRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: SPACING.xs,
-    },
-    toggleLabel: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textPrimary,
-    },
-    saveButton: {
-      marginTop: SPACING.sm,
-    },
-    removeButton: {
-      marginTop: SPACING.md,
-    },
-    notFound: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: SPACING.md,
-    },
-    notFoundText: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textSecondary,
-    },
-    backLink: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.accent,
-      fontWeight: '600',
-    },
+    actionText: { fontSize: 15, fontFamily: FONTS.bodySemibold },
+    status: { fontSize: 18, fontFamily: FONTS.headingXBold, color: theme.textPrimary },
+    statusSos: { color: theme.critical.fg },
+    mapLink: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, minHeight: 44 },
+    mapLinkText: { fontSize: 15, fontFamily: FONTS.bodySemibold, color: theme.accent },
   });
 }
