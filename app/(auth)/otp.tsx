@@ -30,7 +30,7 @@ const OTP_LENGTH = 6;
 // Same clean scene as phone.tsx — kept as the backdrop for the whole
 // sign-in flow, not just the first screen, so it reads as one continuous
 // moment rather than a photo on step one and a plain screen on step two.
-const bgScene = require('../../assets/bg3.png');
+const bgScene = require('../../assets/bg3.jpg');
 
 export default function OTPScreen() {
   const theme = useTheme();

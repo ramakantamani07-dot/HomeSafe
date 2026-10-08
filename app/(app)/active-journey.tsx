@@ -16,6 +16,7 @@ import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/c
 import { useJourney } from '../../src/hooks/useJourney';
 import { useSafetyCheck } from '../../src/hooks/useSafetyCheck';
 import { useFamily } from '../../src/hooks/useFamily';
+import { useInterval } from '../../src/hooks/useInterval';
 import { describeWatchers, presentWatchers } from '../../src/models/Family';
 import { useBatteryStatus } from '../../src/hooks/useBatteryStatus';
 import { useActiveJourneyLocation } from '../../src/hooks/useActiveJourneyLocation';
@@ -71,6 +72,9 @@ function freshnessFor(
  * arriving, tapping "I've arrived", or an explicit "End journey" with a
  * confirmation.
  */
+/** How often the freshness label re-reads the clock while on screen. */
+const FRESHNESS_TICK_MS = 15_000;
+
 export default function ActiveJourneyScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -100,11 +104,10 @@ export default function ActiveJourneyScreen() {
   // "Last updated N min ago" has to advance on its own — a frozen freshness
   // label is indistinguishable from a fresh one, which is exactly the lie
   // this indicator exists to prevent.
+  // useInterval, not a raw timer: it pauses while the app is backgrounded,
+  // where nobody can see the label and the tick would only wake the phone.
   const [, forceTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => forceTick((n) => n + 1), 15_000);
-    return () => clearInterval(id);
-  }, []);
+  useInterval(() => forceTick((n) => n + 1), FRESHNESS_TICK_MS);
 
   const guardians = useMemo(() => joinGuardianNames(members), [members]);
 

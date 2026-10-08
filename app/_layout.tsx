@@ -7,16 +7,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
-import {
-  useFonts,
-  BricolageGrotesque_700Bold,
-  BricolageGrotesque_800ExtraBold,
-} from '@expo-google-fonts/bricolage-grotesque';
-import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-  InstrumentSans_600SemiBold,
-} from '@expo-google-fonts/instrument-sans';
+// One file per weight, never the package index: the index requires every
+// weight and italic (~1.4 MB), and Metro bundles all of them whether used or
+// not. These five are exactly FONTS in src/config/theme/typography.ts.
+import { useFonts } from 'expo-font';
+import { BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque/700Bold';
+import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque/800ExtraBold';
+import { InstrumentSans_400Regular } from '@expo-google-fonts/instrument-sans/400Regular';
+import { InstrumentSans_500Medium } from '@expo-google-fonts/instrument-sans/500Medium';
+import { InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans/600SemiBold';
 
 import { AppProviders, deviceIntegrityProvider } from '../src/context/AppProviders';
 import { useAuth } from '../src/hooks/useAuth';

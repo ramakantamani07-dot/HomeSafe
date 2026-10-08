@@ -50,6 +50,44 @@ suite cannot see. Each was fixed at its cause, not at the screen:
 | iOS "Ask a parent to approve" on Call | Demo placeholder number handed to the dialler under Screen Time limits | `isUnreachableNumber` explains instead; emergency numbers never affected |
 | "1 others" | Plural | Fixed |
 
+### App size and memory audit (8 Oct 2026)
+
+**Size.** Measured with `expo export --platform ios` before and after:
+
+| | Before | After |
+|---|---|---|
+| Assets shipped with the JS | 8.6 MB | **1.6 MB** (−82%) |
+| JS bundle | 6.56 MB | 6.22 MB |
+
+| Cause | Fix |
+|---|---|
+| `import { Ionicons } from '@expo/vector-icons'` — the package index pulls in all 19 icon fonts (~4 MB) | `import Ionicons from '@expo/vector-icons/Ionicons'` |
+| `useFonts` and weights imported from the font packages' index — every weight and italic shipped | `useFonts` from `expo-font`; one import per weight, exactly the five in `FONTS` |
+| Sign-in background a 2.3 MB PNG with no transparency | `bg3.jpg`, 499 KB |
+| Sign-in logo drawn at 132 pt from a 1234 px source (973 KB) | `logo-signin.png`, 400 px (3× the display size), 158 KB |
+
+The installed debug app is ~98 MB, but most of that is the dev client and a
+33 MB debug library that a release build does not contain; release size can
+only be measured from an archive build.
+
+**Memory.** Swept every timer, listener and subscription:
+
+- All event listeners (AppState, notifications, BackHandler, NetInfo) are
+  removed on unmount; every Firestore listener added in Phases 5b–6 is
+  returned from its effect.
+- Every timer in screens and contexts is cleared on unmount, and every
+  service timer (uneasy boost, location batch flush, fake call, routing
+  timeout) on stop.
+- Buffers are bounded: the location batch flushes at its configured size; the
+  offline queue caps at 500, keeping high-priority items.
+- **Fixed:** On the way's freshness tick was a raw `setInterval` and kept
+  waking the phone in the background — now `useInterval`, which pauses there.
+- **Fixed:** the SOS cancel countdown dialled and navigated from *inside a
+  state updater*, which React may run more than once; the hand-over now
+  happens once, in an effect, guarded by a ref.
+- Not fixed, mock-only: the mock basic-phone auto-reply timer is not
+  cancelled if the app closes within six seconds of adding someone.
+
 ### What is left
 
 **Not yet proven against a real backend.** Everything below works against

@@ -153,24 +153,30 @@ export default function SOSScreen() {
   useEffect(() => {
     if (!sentAt || cancelling) return;
 
+    // The countdown only counts. React may run a state updater more than once
+    // (it does on purpose in development), so dialling or navigating from
+    // inside one could open the dialler twice — in an emergency.
     const id = setInterval(() => {
-      setCancelSeconds((remaining) => {
-        if (remaining > 1) return remaining - 1;
-        clearInterval(id);
-        if (mode === 'call-and-alert') {
-          // Placing the call is the user's action, not something the app does
-          // silently — Linking opens the dialer with the number prefilled.
-          Linking.openURL(
-            Platform.OS === 'ios' ? `tel://${emergencyNumber}` : `tel:${emergencyNumber}`,
-          ).catch(() => {});
-        }
-        router.replace('/(app)/emergency-mode');
-        return 0;
-      });
+      setCancelSeconds((remaining) => Math.max(0, remaining - 1));
     }, 1_000);
 
     return () => clearInterval(id);
-  }, [sentAt, cancelling, mode, router, emergencyNumber]);
+  }, [sentAt, cancelling]);
+
+  // The hand-over, once, when the window reaches zero.
+  const handedOverRef = useRef(false);
+  useEffect(() => {
+    if (!sentAt || cancelling || cancelSeconds > 0 || handedOverRef.current) return;
+    handedOverRef.current = true;
+    if (mode === 'call-and-alert') {
+      // Placing the call is the user's action, not something the app does
+      // silently — Linking opens the dialer with the number prefilled.
+      Linking.openURL(
+        Platform.OS === 'ios' ? `tel://${emergencyNumber}` : `tel:${emergencyNumber}`,
+      ).catch(() => {});
+    }
+    router.replace('/(app)/emergency-mode');
+  }, [sentAt, cancelling, cancelSeconds, mode, router, emergencyNumber]);
 
   /**
    * Cancel. Before sending this is just "close"; after sending it resolves the

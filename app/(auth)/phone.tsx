@@ -33,10 +33,10 @@ import type { ThemeColors } from '../../src/config/theme';
 // version exists so far; used in both themes for now with the scrim/card
 // colors adapting instead — swap in a clean night equivalent here if one
 // gets added later.
-const bgScene = require('../../assets/bg3.png');
+const bgScene = require('../../assets/bg3.jpg');
 // The brand mark itself, transparent, so it sits on the photo rather than in
 // a plate on top of it. Same source the app icon is generated from.
-const brandLogo = require('../../assets/logo-source.png');
+const brandLogo = require('../../assets/logo-signin.png');
 
 /** Big enough to read the wordmark inside the artwork, small enough to leave
  *  the sign-in card the focus of the screen. */

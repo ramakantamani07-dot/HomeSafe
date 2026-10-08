@@ -1,5 +1,7 @@
 import React from 'react';
-import { Ionicons } from '@expo/vector-icons';
+// The family's own module, not the package index: the index pulls in all
+// nineteen icon fonts (~4 MB) and this app uses only Ionicons.
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useTheme } from '../../context/ThemeContext';
 
