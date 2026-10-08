@@ -103,4 +103,15 @@ export interface FamilyProvider {
     connectionId: string,
     publisherUserId: string,
   ): Promise<SharedFamilyView | null>;
+
+  /**
+   * The same view, live. For screens a guardian is actively watching only —
+   * a listener per family member, held open in the background, would be a
+   * steady drain for a list nobody is looking at.
+   */
+  subscribeSharedStatus(
+    connectionId: string,
+    publisherUserId: string,
+    onChange: (view: SharedFamilyView | null) => void,
+  ): () => void;
 }

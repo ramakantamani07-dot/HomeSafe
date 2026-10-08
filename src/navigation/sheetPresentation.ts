@@ -65,3 +65,17 @@ export const PRESENTED_SHEET_OPTIONS: NativeStackNavigationOptions = {
   sheetExpandsWhenScrolledToEdge: true,
   headerShown: false,
 };
+
+/**
+ * A sheet opened *from* another sheet — Family from Settings.
+ *
+ * Same sheet, opening at full height. At half, a second sheet stacked on the
+ * first showed only its top: the OS lays the content out at full height and
+ * clips the rest, so Family's "Add someone" sat below the visible edge until
+ * the sheet was dragged up. A destination someone chose to open should show
+ * what it is for. It can still be dragged down to half.
+ */
+export const STACKED_SHEET_OPTIONS: NativeStackNavigationOptions = {
+  ...PRESENTED_SHEET_OPTIONS,
+  sheetInitialDetentIndex: SHEET_DETENT.full,
+};

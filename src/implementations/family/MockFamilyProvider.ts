@@ -11,13 +11,27 @@ import {
   computeConnectionId,
   defaultFamilyPermissions,
   INVITATION_EXPIRY_DAYS,
+  measureJourneyProgress,
 } from '../../models/Family';
+import type { Coordinates } from '../../models/Journey';
+
+/** Emma's demo walk home: a few streets, about 2 km. */
+const DEMO_ROUTE: Coordinates[] = [
+  { latitude: 51.5101, longitude: -0.1340 },
+  { latitude: 51.5101, longitude: -0.1300 },
+  { latitude: 51.5080, longitude: -0.1300 },
+  { latitude: 51.5080, longitude: -0.1255 },
+  { latitude: 51.5050, longitude: -0.1255 },
+  { latitude: 51.5050, longitude: -0.1200 },
+  { latitude: 51.5020, longitude: -0.1200 },
+];
 
 export class MockFamilyProvider implements FamilyProvider {
   private invitations: FamilyInvitation[] = [];
   private connections: FamilyConnection[] = [];
   private ownStatuses: Map<string, FamilyStatusSnapshot> = new Map();
   private sharedStatuses: Map<string, SharedFamilyView> = new Map();
+  private sharedListeners: Map<string, Set<(view: SharedFamilyView | null) => void>> = new Map();
   private nextId = 1;
 
   constructor() {
@@ -77,14 +91,21 @@ export class MockFamilyProvider implements FamilyProvider {
       // an ETA clock time when these are present, so the demo seed needs to
       // actually populate them rather than leaving TRAVELLING as a bare label.
       const isTravelling = demo.status === 'TRAVELLING';
+      // A walk home with Emma part-way along it, so Family's progress bar and
+      // Watch live have a real route to measure rather than a made-up fraction.
+      const location = isTravelling ? DEMO_ROUTE[3] : null;
       this.sharedStatuses.set(this.sharedKey(connectionId, demo.id), {
         status: demo.status,
-        batteryLevel: 0.8,
+        batteryLevel: 0.64,
         lastSeen: new Date(),
         activeJourneyId: isTravelling ? `demo-journey-${demo.id}` : null,
         activeJourneyDestination: isTravelling ? 'Home' : null,
-        activeJourneyEta: isTravelling ? new Date(Date.now() + 20 * 60 * 1000) : null,
-        location: null,
+        activeJourneyEta: isTravelling ? new Date(Date.now() + 19 * 60 * 1000) : null,
+        location,
+        journeyProgress: isTravelling ? measureJourneyProgress(DEMO_ROUTE, location) : null,
+        routePath: isTravelling ? DEMO_ROUTE : null,
+        lastCheckInAt: isTravelling ? new Date(Date.now() - 2 * 60 * 1000) : null,
+        nextCheckInAt: isTravelling ? new Date(Date.now() + 8 * 60 * 1000) : null,
       });
     }
   }
@@ -215,7 +236,22 @@ export class MockFamilyProvider implements FamilyProvider {
     publisherUserId: string,
     view: SharedFamilyView,
   ): Promise<void> {
-    this.sharedStatuses.set(this.sharedKey(connectionId, publisherUserId), view);
+    const key = this.sharedKey(connectionId, publisherUserId);
+    this.sharedStatuses.set(key, view);
+    this.sharedListeners.get(key)?.forEach((l) => l(view));
+  }
+
+  subscribeSharedStatus(
+    connectionId: string,
+    publisherUserId: string,
+    onChange: (view: SharedFamilyView | null) => void,
+  ): () => void {
+    const key = this.sharedKey(connectionId, publisherUserId);
+    const listeners = this.sharedListeners.get(key) ?? new Set();
+    listeners.add(onChange);
+    this.sharedListeners.set(key, listeners);
+    onChange(this.sharedStatuses.get(key) ?? null);
+    return () => listeners.delete(onChange);
   }
 
   async getSharedStatus(
@@ -250,6 +286,8 @@ export class MockFamilyProvider implements FamilyProvider {
 
   /** Seeds the already-filtered view a publisher has shared into one connection. */
   _seedSharedStatus(connectionId: string, publisherUserId: string, view: SharedFamilyView): void {
-    this.sharedStatuses.set(this.sharedKey(connectionId, publisherUserId), view);
+    const key = this.sharedKey(connectionId, publisherUserId);
+    this.sharedStatuses.set(key, view);
+    this.sharedListeners.get(key)?.forEach((l) => l(view));
   }
 }

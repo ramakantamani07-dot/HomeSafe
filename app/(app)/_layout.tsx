@@ -2,7 +2,7 @@ import React from 'react';
 import { Stack } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
-import { PRESENTED_SHEET_OPTIONS } from '../../src/navigation/sheetPresentation';
+import { PRESENTED_SHEET_OPTIONS, STACKED_SHEET_OPTIONS } from '../../src/navigation/sheetPresentation';
 import { SafetyCheckOverlay } from '../../src/components/journey/SafetyCheckOverlay';
 
 /**
@@ -39,7 +39,7 @@ export default function AppLayout() {
         */}
         <Stack.Screen name="settings" options={PRESENTED_SHEET_OPTIONS} />
         <Stack.Screen name="journeys" options={PRESENTED_SHEET_OPTIONS} />
-        <Stack.Screen name="family" options={PRESENTED_SHEET_OPTIONS} />
+        <Stack.Screen name="family" options={STACKED_SHEET_OPTIONS} />
 
         {/* Journey flow — full screens, pushed. */}
         <Stack.Screen name="where-to" />
@@ -77,6 +77,7 @@ export default function AppLayout() {
         <Stack.Screen name="delete-account" />
         <Stack.Screen name="family-invite" />
         <Stack.Screen name="family-member" />
+        <Stack.Screen name="watch-member" />
         {/* Basic-phone members (network location, Phase 6.4). */}
         <Stack.Screen name="add-someone" />
         <Stack.Screen name="basic-member" />

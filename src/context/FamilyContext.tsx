@@ -12,6 +12,8 @@ import { useJourneyContext } from './JourneyContext';
 import { useSOSContext } from './SOSContext';
 import { useBatteryContext } from './BatteryContext';
 import { useLocationTrackingContext } from './LocationTrackingContext';
+import { useRoutingContext } from './RoutingContext';
+import { useCheckInContext } from './CheckInContext';
 
 interface FamilyContextValue {
   members: FamilyMember[];
@@ -26,6 +28,11 @@ interface FamilyContextValue {
   removeMember(connectionId: string): Promise<void>;
   updatePermissions(connectionId: string, permissions: FamilyPermissions): Promise<void>;
   refresh(): Promise<void>;
+  /**
+   * Keeps members' status live until the returned function is called.
+   * Counted, so two family screens open at once share one set of listeners.
+   */
+  startLiveUpdates(): () => void;
 }
 
 const FamilyContext = createContext<FamilyContextValue>({
@@ -41,6 +48,7 @@ const FamilyContext = createContext<FamilyContextValue>({
   removeMember: async () => {},
   updatePermissions: async () => {},
   refresh: async () => {},
+  startLiveUpdates: () => () => {},
 });
 
 export function FamilyStateProvider({
@@ -55,6 +63,11 @@ export function FamilyStateProvider({
   const { activeSOS } = useSOSContext();
   const { batteryLevel } = useBatteryContext();
   const { currentLocation } = useLocationTrackingContext();
+  const { route } = useRoutingContext();
+  const { currentCheckIn } = useCheckInContext();
+  const routePath = route?.coordinates ?? null;
+  const lastCheckInAt = currentCheckIn?.respondedAt ?? null;
+  const nextCheckInAt = activeJourney?.nextCheckInAt ?? null;
 
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<FamilyInvitation[]>([]);
@@ -116,6 +129,9 @@ export function FamilyStateProvider({
         activeSosId: activeSOS?.id ?? null,
         batteryLevel,
         location: currentLocation,
+        routePath,
+        lastCheckInAt,
+        nextCheckInAt,
       }, wasTravelling, journeyJustCompleted)
       .catch(() => {});
     // Re-publishes on every currentLocation change too — that stream is
@@ -123,7 +139,44 @@ export function FamilyStateProvider({
     // doesn't add any new write frequency beyond what location tracking
     // already produces.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeJourney?.id, activeSOS?.id, batteryLevel, currentLocation, user?.id]);
+    // Also on a new route and on a check-in being answered or rescheduled —
+    // events, not ticks: a guardian should see "I'm OK" when it is said, not
+    // at the next location fix.
+  }, [
+    activeJourney?.id,
+    activeSOS?.id,
+    batteryLevel,
+    currentLocation,
+    user?.id,
+    routePath,
+    lastCheckInAt?.getTime(),
+    nextCheckInAt?.getTime(),
+  ]);
+
+  // ─── Live status, only while a family screen is open ─────────────────────────
+  //
+  // One listener per member is cheap while someone is looking and a pointless
+  // drain while nobody is, so listeners exist only between a screen's mount
+  // and unmount. Keyed on who the members are, not on the member objects:
+  // each live update replaces a member object, and resubscribing on that
+  // would tear down the listener that just delivered it.
+  const [liveViewers, setLiveViewers] = useState(0);
+  const startLiveUpdates = useCallback(() => {
+    setLiveViewers((n) => n + 1);
+    return () => setLiveViewers((n) => n - 1);
+  }, []);
+
+  const membersRef = useRef(members);
+  membersRef.current = members;
+  const memberKey = members.map((m) => `${m.id}:${m.connectionId}`).join('|');
+  const isLive = liveViewers > 0;
+
+  useEffect(() => {
+    if (!isLive || !memberKey) return;
+    return familyService.watchMemberStatuses(membersRef.current, (memberId, status) =>
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, ...status } : m))),
+    );
+  }, [isLive, memberKey, familyService]);
 
   const userId = user?.id ?? null;
   const userName = user?.name ?? '';
@@ -207,6 +260,7 @@ export function FamilyStateProvider({
       removeMember,
       updatePermissions,
       refresh,
+      startLiveUpdates,
     }),
     [
       members,
@@ -221,6 +275,7 @@ export function FamilyStateProvider({
       removeMember,
       updatePermissions,
       refresh,
+      startLiveUpdates,
     ],
   );
 

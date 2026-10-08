@@ -25,7 +25,7 @@ compound.
 | 3 · Journey | **Done bar one item** | "Open places on the way" — see D4 below |
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
-| 5b · Family redesign | **Planned 8 Oct** — decisions F1–F4 settled, not started | See Phase 5b below |
+| 5b · Family redesign | **Steps 1–3 done; 4 partly** | Watch live presence (4), Ask "OK?" (5), Invite someone + Invite sent (6) |
 | 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
@@ -978,6 +978,27 @@ claim the app cannot back.
 - **F4 · Watch-live presence.** Should the person being watched see *who* is
   watching, or only *that* someone is? The board says "Emma can see that
   you're watching". **Decided:** who, by name — it is her location.
+
+### Progress — 8 Oct 2026
+
+- **Step 1 done.** Shared status carries `journeyProgress`, a route simplified
+  to 40 points, `lastCheckInAt` and `nextCheckInAt`, all behind
+  `shareJourneyDetails`; route and progress also need `shareLocation`, because
+  together they are a position. Progress is measured on the traveller's phone
+  from their own route. Republished on a new route or a check-in answer, not on
+  a timer.
+- **Step 2 done.** `useLiveFamily` holds `sharedStatus` listeners open only
+  while Family or Watch live is mounted, counted so two screens share one set.
+- **Step 3 done.** `family.tsx` rebuilt on the S2b layout, with invitations
+  received and sent kept as compact rows.
+- **Step 4 partly done.** `watch-member.tsx` shows route, position, live
+  freshness, progress, ETA, distance left, battery and check-in times. The
+  watcher record and "can see you're watching" are not built, so the screen
+  does not say it.
+- **Found and fixed on the way:** the publisher reported `HOME` for anyone not
+  on a journey, and the badge drew it in green — "at home" and "fine", from
+  nothing. New status `IDLE` ("Not on a journey") is the default; legacy `HOME`
+  documents now read the same and are no longer green.
 
 ### Work, in order
 

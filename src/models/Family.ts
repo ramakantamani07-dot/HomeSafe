@@ -1,6 +1,14 @@
 import type { Coordinates } from './Journey';
+import { haversineMeters } from './Place';
 
 export type FamilyStatusType =
+  /**
+   * Not on a journey — all the publisher actually knows. Replaces `HOME` as
+   * the default (Phase 5b): nothing checked the person was at home, and "At
+   * home" in a safety app reads as "fine".
+   */
+  | 'IDLE'
+  /** Legacy default; still readable on documents written before `IDLE`. */
   | 'HOME'
   | 'TRAVELLING'
   | 'ARRIVED'
@@ -24,6 +32,7 @@ export const SHARING_MODE_LABELS: Record<SharingMode, string> = {
 };
 
 export const FAMILY_STATUS_LABELS: Record<FamilyStatusType, string> = {
+  IDLE: 'Not on a journey',
   HOME: 'Home',
   TRAVELLING: 'Travelling',
   ARRIVED: 'Arrived',
@@ -115,7 +124,25 @@ export interface FamilyStatusSnapshot {
   activeJourneyEta: Date | null;
   /** Live coarse position, gated by FamilyPermissions.shareLocation at publish time. */
   location: Coordinates | null;
+  /** How far along the route they are. Null off a journey or without a route. */
+  journeyProgress: JourneyProgress | null;
+  /** The route, simplified to at most `MAX_SHARED_PATH_POINTS`. */
+  routePath: Coordinates[] | null;
+  /** When they last answered a check-in ("I'm OK"). Null if never, or unknown. */
+  lastCheckInAt: Date | null;
+  /** When the next check-in is due. Null when check-ins are off. */
+  nextCheckInAt: Date | null;
   updatedAt: Date;
+}
+
+/**
+ * Progress along a journey's route, computed on the traveller's own phone from
+ * their own route — the only place both the route and a fresh position exist.
+ */
+export interface JourneyProgress {
+  /** 0–1, along the route rather than as the crow flies. */
+  fraction: number;
+  metersRemaining: number;
 }
 
 /** A family connection resolved into a display-ready member object. */
@@ -139,6 +166,12 @@ export interface FamilyMember {
   activeJourneyDestination: string | null;
   activeJourneyEta: Date | null;
   location: Coordinates | null;
+  journeyProgress: JourneyProgress | null;
+  routePath: Coordinates[] | null;
+  lastCheckInAt: Date | null;
+  nextCheckInAt: Date | null;
+  /** When their shared status was last written — "updated 10 s ago". */
+  updatedAt: Date | null;
 }
 
 export const INVITATION_EXPIRY_DAYS = 7;
@@ -171,6 +204,10 @@ export interface SharedFamilyView {
   activeJourneyDestination: string | null;
   activeJourneyEta: Date | null;
   location: Coordinates | null;
+  journeyProgress: JourneyProgress | null;
+  routePath: Coordinates[] | null;
+  lastCheckInAt: Date | null;
+  nextCheckInAt: Date | null;
 }
 
 /**
@@ -193,8 +230,16 @@ export function deriveSharedView(
       activeJourneyDestination: null,
       activeJourneyEta: null,
       location: null,
+      journeyProgress: null,
+      routePath: null,
+      lastCheckInAt: null,
+      nextCheckInAt: null,
     };
   }
+  // Everything about the journey itself — how far along, which way, when they
+  // last said they were OK — travels with the journey-details permission. The
+  // route also needs location sharing: a route plus progress is a position.
+  const journey = permissions.shareJourneyDetails;
   return {
     status: raw.status,
     batteryLevel: permissions.shareBattery ? raw.batteryLevel : null,
@@ -203,5 +248,68 @@ export function deriveSharedView(
     activeJourneyDestination: permissions.shareJourneyDetails ? raw.activeJourneyDestination : null,
     activeJourneyEta: permissions.shareJourneyDetails ? raw.activeJourneyEta : null,
     location: permissions.shareLocation ? raw.location : null,
+    journeyProgress: journey && permissions.shareLocation ? raw.journeyProgress : null,
+    routePath: journey && permissions.shareLocation ? raw.routePath : null,
+    lastCheckInAt: journey ? raw.lastCheckInAt : null,
+    nextCheckInAt: journey ? raw.nextCheckInAt : null,
+  };
+}
+
+/** The most route points a shared status carries. Enough to draw; small to write. */
+export const MAX_SHARED_PATH_POINTS = 40;
+
+/**
+ * A route thinned to at most `max` points, keeping both ends.
+ *
+ * Shared status is rewritten on every location update, so a full OSRM
+ * geometry — often hundreds of points — would multiply every write for a line
+ * that only has to be recognisable on a phone-sized map.
+ */
+export function simplifyPath(
+  path: readonly Coordinates[],
+  max: number = MAX_SHARED_PATH_POINTS,
+): Coordinates[] {
+  if (path.length <= max) return path.map(({ latitude, longitude }) => ({ latitude, longitude }));
+  const step = (path.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => {
+    const { latitude, longitude } = path[Math.round(i * step)];
+    return { latitude, longitude };
+  });
+}
+
+/**
+ * How far along `path` someone at `position` is.
+ *
+ * Measured to the nearest route point, then along the route — not straight
+ * line to the destination, which would read a long loop as nearly there.
+ * Approximate by a point's spacing, which is all a progress bar needs. Null
+ * when there is nothing honest to say: no position, or a route with no length.
+ */
+export function measureJourneyProgress(
+  path: readonly Coordinates[],
+  position: Coordinates | null,
+): JourneyProgress | null {
+  if (!position || path.length < 2) return null;
+
+  const cumulative = [0];
+  for (let i = 1; i < path.length; i++) {
+    cumulative.push(cumulative[i - 1] + haversineMeters(path[i - 1], path[i]));
+  }
+  const total = cumulative[cumulative.length - 1];
+  if (total <= 0) return null;
+
+  let nearest = 0;
+  let nearestDistance = Infinity;
+  path.forEach((point, i) => {
+    const d = haversineMeters(point, position);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearest = i;
+    }
+  });
+
+  return {
+    fraction: cumulative[nearest] / total,
+    metersRemaining: Math.round(total - cumulative[nearest]),
   };
 }

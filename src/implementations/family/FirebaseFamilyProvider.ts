@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDoc,
+  onSnapshot,
   getDocs,
   addDoc,
   setDoc,
@@ -22,6 +23,7 @@ import type {
   FamilyInvitation,
   FamilyPermissions,
   FamilyStatusSnapshot,
+  JourneyProgress,
   SharedFamilyView,
 } from '../../models/Family';
 import type { Coordinates } from '../../models/Journey';
@@ -69,6 +71,10 @@ type StoredStatus = {
   activeJourneyDestination: string | null;
   activeJourneyEta: Timestamp | null;
   location: Coordinates | null;
+  journeyProgress?: JourneyProgress | null;
+  routePath?: Coordinates[] | null;
+  lastCheckInAt?: Timestamp | null;
+  nextCheckInAt?: Timestamp | null;
   updatedAt: Timestamp;
 };
 
@@ -81,7 +87,36 @@ type StoredSharedStatus = {
   activeJourneyDestination: string | null;
   activeJourneyEta: Timestamp | null;
   location: Coordinates | null;
+  // Optional: documents written before these fields existed lack them.
+  journeyProgress?: JourneyProgress | null;
+  routePath?: Coordinates[] | null;
+  lastCheckInAt?: Timestamp | null;
+  nextCheckInAt?: Timestamp | null;
 };
+
+/** The journey fields shared status gained in Phase 5b, both directions. */
+function journeyFieldsFromFirestore(data: StoredSharedStatus | StoredStatus) {
+  return {
+    journeyProgress: data.journeyProgress ?? null,
+    routePath: data.routePath ?? null,
+    lastCheckInAt: data.lastCheckInAt ? data.lastCheckInAt.toDate() : null,
+    nextCheckInAt: data.nextCheckInAt ? data.nextCheckInAt.toDate() : null,
+  };
+}
+
+function journeyFieldsToFirestore(view: {
+  journeyProgress: JourneyProgress | null;
+  routePath: Coordinates[] | null;
+  lastCheckInAt: Date | null;
+  nextCheckInAt: Date | null;
+}) {
+  return {
+    journeyProgress: view.journeyProgress,
+    routePath: view.routePath,
+    lastCheckInAt: view.lastCheckInAt ? Timestamp.fromDate(view.lastCheckInAt) : null,
+    nextCheckInAt: view.nextCheckInAt ? Timestamp.fromDate(view.nextCheckInAt) : null,
+  };
+}
 
 // ─── Converters ───────────────────────────────────────────────────────────────
 
@@ -128,6 +163,7 @@ function statusFromFirestore(data: StoredStatus): FamilyStatusSnapshot {
     activeJourneyDestination: data.activeJourneyDestination,
     activeJourneyEta: data.activeJourneyEta ? data.activeJourneyEta.toDate() : null,
     location: data.location ?? null,
+    ...journeyFieldsFromFirestore(data),
     updatedAt: data.updatedAt.toDate(),
   };
 }
@@ -141,6 +177,7 @@ function sharedViewFromFirestore(data: StoredSharedStatus): SharedFamilyView {
     activeJourneyDestination: data.activeJourneyDestination,
     activeJourneyEta: data.activeJourneyEta ? data.activeJourneyEta.toDate() : null,
     location: data.location ?? null,
+    ...journeyFieldsFromFirestore(data),
   };
 }
 
@@ -298,6 +335,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
         ? Timestamp.fromDate(snapshot.activeJourneyEta)
         : null,
       location: snapshot.location,
+      ...journeyFieldsToFirestore(snapshot),
       updatedAt: Timestamp.fromDate(snapshot.updatedAt),
     };
     await setDoc(familyStatusDoc(this.db, userId), data);
@@ -322,6 +360,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       activeJourneyDestination: view.activeJourneyDestination,
       activeJourneyEta: view.activeJourneyEta ? Timestamp.fromDate(view.activeJourneyEta) : null,
       location: view.location,
+      ...journeyFieldsToFirestore(view),
     };
     await setDoc(sharedStatusDoc(this.db, connectionId, publisherUserId), data);
   }
@@ -333,5 +372,18 @@ export class FirebaseFamilyProvider implements FamilyProvider {
     const snap = await getDoc(sharedStatusDoc(this.db, connectionId, publisherUserId));
     if (!snap.exists()) return null;
     return sharedViewFromFirestore(snap.data() as StoredSharedStatus);
+  }
+
+  subscribeSharedStatus(
+    connectionId: string,
+    publisherUserId: string,
+    onChange: (view: SharedFamilyView | null) => void,
+  ): () => void {
+    return onSnapshot(
+      sharedStatusDoc(this.db, connectionId, publisherUserId),
+      (snap) => onChange(snap.exists() ? sharedViewFromFirestore(snap.data() as StoredSharedStatus) : null),
+      // Keep the last good view: a dropped listener is not a member going offline.
+      () => {},
+    );
   }
 }

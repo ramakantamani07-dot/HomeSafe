@@ -8,7 +8,12 @@ import type {
   FamilyStatusType,
   SharedFamilyView,
 } from '../models/Family';
-import { computeConnectionId, deriveSharedView } from '../models/Family';
+import {
+  computeConnectionId,
+  deriveSharedView,
+  measureJourneyProgress,
+  simplifyPath,
+} from '../models/Family';
 import type { Coordinates } from '../models/Journey';
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
@@ -21,6 +26,56 @@ export interface PublishStatusInput {
   activeSosId: string | null;
   batteryLevel: number | null;
   location: Coordinates | null;
+  /** The live route's full geometry, when a journey has one. */
+  routePath: readonly Coordinates[] | null;
+  lastCheckInAt: Date | null;
+  nextCheckInAt: Date | null;
+}
+
+/** The live part of a FamilyMember — everything that comes from their shared view. */
+export type MemberStatusFields = Omit<
+  FamilyMember,
+  | 'id'
+  | 'connectionId'
+  | 'displayName'
+  | 'phoneNumber'
+  | 'relationship'
+  | 'connectionStatus'
+  | 'theirPermissions'
+  | 'myPermissions'
+>;
+
+/**
+ * A member's status as a viewer may show it.
+ *
+ * The view was already filtered by the member's own permissions at publish
+ * time, so the only questions here are whether anything was shared at all and
+ * whether it is too old to stand behind. A stale view keeps its timestamps —
+ * "last seen 40 min ago" is true — but drops position and progress, which
+ * would no longer be.
+ */
+export function memberStatusFromView(
+  view: SharedFamilyView | null,
+  now: Date,
+): MemberStatusFields {
+  const wasShared = view !== null && view.status !== null;
+  const isStale =
+    wasShared && view!.lastSeen !== null && now.getTime() - view!.lastSeen.getTime() > OFFLINE_THRESHOLD_MS;
+
+  return {
+    status: !wasShared || isStale ? 'OFFLINE' : view!.status!,
+    batteryLevel: wasShared ? view!.batteryLevel : null,
+    lastSeen: wasShared ? view!.lastSeen : null,
+    activeJourneyId: wasShared ? view!.activeJourneyId : null,
+    activeJourneyDestination: wasShared ? view!.activeJourneyDestination : null,
+    activeJourneyEta: wasShared ? view!.activeJourneyEta : null,
+    location: wasShared && !isStale ? view!.location : null,
+    journeyProgress: wasShared && !isStale ? view!.journeyProgress : null,
+    routePath: wasShared && !isStale ? view!.routePath : null,
+    lastCheckInAt: wasShared ? view!.lastCheckInAt : null,
+    nextCheckInAt: wasShared ? view!.nextCheckInAt : null,
+    updatedAt: wasShared ? view!.lastSeen : null,
+  };
 }
 
 function deriveStatus(
@@ -31,7 +86,8 @@ function deriveStatus(
   if (input.activeSosId) return 'SOS_ACTIVE';
   if (input.activeJourneyId) return 'TRAVELLING';
   if (journeyJustCompleted && previouslyTravelling) return 'ARRIVED';
-  return 'HOME';
+  // Not "HOME": nothing here knows where they are, only that no journey is on.
+  return 'IDLE';
 }
 
 export class FamilyService {
@@ -174,15 +230,6 @@ export class FamilyService {
           // Permission denied or network error — treat as offline
         }
 
-        const wasShared = view !== null && view.status !== null;
-        const now = new Date();
-        const isStale =
-          wasShared &&
-          view!.lastSeen !== null &&
-          now.getTime() - view!.lastSeen.getTime() > OFFLINE_THRESHOLD_MS;
-
-        const derivedStatus: FamilyStatusType = !wasShared || isStale ? 'OFFLINE' : view!.status!;
-
         return {
           id: memberId,
           connectionId: conn.id,
@@ -192,18 +239,29 @@ export class FamilyService {
           connectionStatus: conn.status,
           theirPermissions,
           myPermissions,
-          status: derivedStatus,
-          batteryLevel: wasShared ? view!.batteryLevel : null,
-          lastSeen: wasShared ? view!.lastSeen : null,
-          activeJourneyId: wasShared ? view!.activeJourneyId : null,
-          activeJourneyDestination: wasShared ? view!.activeJourneyDestination : null,
-          activeJourneyEta: wasShared ? view!.activeJourneyEta : null,
-          location: wasShared && !isStale ? view!.location : null,
+          ...memberStatusFromView(view, new Date()),
         } satisfies FamilyMember;
       }),
     );
 
     return members;
+  }
+
+  /**
+   * Live status for members a screen is watching. Each update arrives as the
+   * member-facing fields only, resolved exactly as `getFamilyMembers` resolves
+   * them, so a live row and a loaded row can never disagree.
+   */
+  watchMemberStatuses(
+    members: readonly Pick<FamilyMember, 'id' | 'connectionId'>[],
+    onUpdate: (memberId: string, status: MemberStatusFields) => void,
+  ): () => void {
+    const stops = members.map((m) =>
+      this.provider.subscribeSharedStatus(m.connectionId, m.id, (view) =>
+        onUpdate(m.id, memberStatusFromView(view, new Date())),
+      ),
+    );
+    return () => stops.forEach((stop) => stop());
   }
 
   async removeMember(connectionId: string, userId: string): Promise<void> {
@@ -247,6 +305,13 @@ export class FamilyService {
       activeJourneyDestination: input.activeJourneyDestination,
       activeJourneyEta: input.activeJourneyEta,
       location: input.location,
+      journeyProgress:
+        input.activeJourneyId && input.routePath
+          ? measureJourneyProgress(input.routePath, input.location)
+          : null,
+      routePath: input.activeJourneyId && input.routePath ? simplifyPath(input.routePath) : null,
+      lastCheckInAt: input.activeJourneyId ? input.lastCheckInAt : null,
+      nextCheckInAt: input.activeJourneyId ? input.nextCheckInAt : null,
       updatedAt: now,
     };
 

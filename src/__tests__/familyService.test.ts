@@ -233,6 +233,9 @@ test('getFamilyMembers hides status when member sets NEVER_SHARE', async () => {
     activeSosId: null,
     batteryLevel: 0.5,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -317,6 +320,9 @@ test('getFamilyMembers shows journey details when SHARE_ALWAYS with shareJourney
     activeSosId: null,
     batteryLevel: 0.8,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -361,6 +367,9 @@ test('getFamilyMembers exposes live location only when shareLocation is true', a
     activeSosId: null,
     batteryLevel: 0.8,
     location: { latitude: 51.5, longitude: -0.1 },
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -403,6 +412,9 @@ test('getFamilyMembers hides location when shareLocation is false, even with oth
     activeSosId: null,
     batteryLevel: 0.8,
     location: { latitude: 51.5, longitude: -0.1 },
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -442,6 +454,10 @@ test('getFamilyMembers hides location once the shared view is stale, unlike othe
     activeJourneyDestination: null,
     activeJourneyEta: null,
     location: { latitude: 51.5, longitude: -0.1 },
+    journeyProgress: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -486,6 +502,9 @@ test('SHARE_DURING_JOURNEY mode hides status when no active journey', async () =
     activeSosId: null,
     batteryLevel: 1.0,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -508,6 +527,9 @@ test('publishStatus derives TRAVELLING when activeJourneyId is set', async () =>
     activeSosId: null,
     batteryLevel: 0.9,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -525,13 +547,16 @@ test('publishStatus derives SOS_ACTIVE when activeSosId is set', async () => {
     activeSosId: 'sos-1',
     batteryLevel: 0.3,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
   expect(snapshot?.status).toBe('SOS_ACTIVE');
 });
 
-test('publishStatus derives HOME when no journey and no SOS', async () => {
+test('publishStatus says only "not on a journey" when no journey and no SOS — never "home"', async () => {
   const { service, provider } = makeService();
 
   await service.publishStatus(USER_A.id, {
@@ -541,10 +566,13 @@ test('publishStatus derives HOME when no journey and no SOS', async () => {
     activeSosId: null,
     batteryLevel: 1.0,
     location: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
-  expect(snapshot?.status).toBe('HOME');
+  expect(snapshot?.status).toBe('IDLE');
 });
 
 test('publishStatus derives ARRIVED when journey just completed', async () => {
@@ -559,6 +587,9 @@ test('publishStatus derives ARRIVED when journey just completed', async () => {
       activeSosId: null,
       batteryLevel: 0.7,
       location: null,
+      routePath: null,
+      lastCheckInAt: null,
+      nextCheckInAt: null,
     },
     true, // wasTravelling
     true, // journeyJustCompleted
@@ -602,6 +633,10 @@ test('getFamilyMembers treats member as OFFLINE when lastSeen > 30 minutes ago',
     activeJourneyId: null,
     activeJourneyDestination: null,
     activeJourneyEta: null,
+    journeyProgress: null,
+    routePath: null,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);

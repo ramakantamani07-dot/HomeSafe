@@ -9,7 +9,10 @@ import { StatusBadge, type Severity } from '../ui/StatusBadge';
 // aren't alerts and shouldn't look like one. Only SOS_ACTIVE is critical.
 // See the redesign audit §4/§14.
 const SEVERITY: Record<FamilyStatusType, Severity> = {
-  HOME: 'safe',
+  IDLE: 'neutral',
+  // Legacy documents only. Neutral now: "home" was never checked, and green
+  // is the colour this app reserves for things it knows to be fine.
+  HOME: 'neutral',
   ARRIVED: 'safe',
   TRAVELLING: 'neutral',
   AT_WORK: 'neutral',

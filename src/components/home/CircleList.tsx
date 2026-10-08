@@ -7,6 +7,7 @@ import { MemberRow } from '../glass';
 import type { FamilyMember } from '../../models/Family';
 import { describeConsentStatus, type BasicPhoneMember } from '../../models/BasicPhoneMember';
 import { allowsLocationLookup } from '../../models/Consent';
+import { describeMemberStatus } from '../circle/memberStatus';
 
 interface CircleListProps {
   members: FamilyMember[];
@@ -55,7 +56,7 @@ export function CircleList({
           key={member.id}
           id={member.id}
           name={member.displayName}
-          status={describeStatus(member)}
+          status={describeMemberStatus(member)}
           kind="app"
           onPress={() => onOpenMember(member)}
           onAction={() => onCall(member)}
@@ -79,36 +80,6 @@ export function CircleList({
       ))}
     </View>
   );
-}
-
-/**
- * Only states we can actually stand behind.
- *
- * Option 15 §1 principle 4 — never claim something we can't know. A member
- * whose status we have no recent basis for reads as "Not sharing", not as
- * anything reassuring.
- */
-function describeStatus(member: FamilyMember): string {
-  switch (member.status) {
-    case 'HOME':
-      return 'At home';
-    case 'AT_WORK':
-      return 'At work';
-    case 'AT_SCHOOL':
-      return 'At school';
-    case 'TRAVELLING':
-      return member.activeJourneyDestination
-        ? `On the way to ${member.activeJourneyDestination}`
-        : 'On the way';
-    case 'ARRIVED':
-      return 'Arrived';
-    case 'SOS_ACTIVE':
-      return 'SOS — needs help';
-    case 'OFFLINE':
-      return 'Not sharing';
-    default:
-      return 'Not sharing';
-  }
 }
 
 function getStyles(theme: ThemeColors) {

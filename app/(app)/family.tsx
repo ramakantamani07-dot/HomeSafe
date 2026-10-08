@@ -1,35 +1,43 @@
-import React from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ImageBackground,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
-import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
-import { useFamily } from '../../src/hooks/useFamily';
-import { FamilyMemberCard } from '../../src/components/family/FamilyMemberCard';
-import { EmptyState } from '../../src/components/ui/EmptyState';
-import { Button } from '../../src/components/ui/Button';
-import { Section, ListRow } from '../../src/components/ui/Section';
-import { StatusBadge } from '../../src/components/ui/StatusBadge';
+import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
+import { useLiveFamily } from '../../src/hooks/useFamily';
 import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
+import { useInterval } from '../../src/hooks/useInterval';
 import { describeConsentStatus } from '../../src/models/BasicPhoneMember';
-import { allowsLocationLookup, isTerminal } from '../../src/models/Consent';
-
-const heroImage = require('../../assets/family/bg.png');
+import { allowsLocationLookup } from '../../src/models/Consent';
+import type { FamilyMember } from '../../src/models/Family';
+import { MemberRow } from '../../src/components/glass';
 import { Icon } from '../../src/components/ui/Icon';
+import { StatusBadge } from '../../src/components/ui/StatusBadge';
+import { FamilySummary } from '../../src/components/family/FamilySummary';
+import { TravellingCard } from '../../src/components/family/TravellingCard';
+import { describeAge, describeMemberStatus } from '../../src/components/circle/memberStatus';
+import { callNumber } from '../../src/utils/deviceLinks';
 
+/** Re-reads the clock for "updated 2 min ago" and minutes-left while open. */
+const CLOCK_TICK_MS = 30_000;
+
+const isOnJourney = (m: FamilyMember) => m.status === 'TRAVELLING' || m.status === 'SOS_ACTIVE';
+
+/**
+ * Family (Option 15 S2b).
+ *
+ * Status is live while this screen is open (`useLiveFamily`) and only then.
+ * Order is attention first: whoever needs help, then whoever is travelling,
+ * then everyone else — app members and basic-phone members in one list, as
+ * the board draws them.
+ *
+ * Invitations keep a place: someone invited you, or you are waiting on
+ * someone, and both need a way to act that the board does not draw.
+ */
 export default function FamilyScreen() {
   const theme = useTheme();
+  const styles = getStyles(theme);
   const router = useRouter();
   const {
     members,
@@ -41,386 +49,283 @@ export default function FamilyScreen() {
     declineInvitation,
     cancelInvitation,
     refresh,
-  } = useFamily();
+  } = useLiveFamily();
+  const { enabled: basicPhoneEnabled, members: basicMembers, find } = useBasicPhoneMembers();
 
-  const { enabled: basicPhoneEnabled, members: basicMembers } = useBasicPhoneMembers();
+  const [now, setNow] = useState(() => new Date());
+  useInterval(() => setNow(new Date()), CLOCK_TICK_MS);
 
-  const [accepting, setAccepting] = React.useState<string | null>(null);
-
-  const handleAccept = async (invitationId: string, fromName: string) => {
-    Alert.alert(
-      'Accept Invitation',
-      `Connect with ${fromName} as a family member?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Accept',
-          onPress: async () => {
-            setAccepting(invitationId);
-            try {
-              await acceptInvitation(invitationId);
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to accept.');
-            } finally {
-              setAccepting(null);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleDecline = async (invitationId: string) => {
-    await declineInvitation(invitationId);
-  };
-
-  const handleCancelSent = async (invitationId: string, toPhone: string) => {
-    Alert.alert(
-      'Cancel Invitation',
-      `Cancel the invitation sent to ${toPhone}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Cancel Invite',
-          style: 'destructive',
-          onPress: () => cancelInvitation(invitationId),
-        },
-      ],
-    );
-  };
-
+  const onJourney = members
+    .filter(isOnJourney)
+    .sort((a, b) => (a.status === 'SOS_ACTIVE' ? -1 : 0) - (b.status === 'SOS_ACTIVE' ? -1 : 0));
+  const others = members.filter((m) => !isOnJourney(m));
   const pendingSent = sentInvitations.filter((i) => i.status === 'PENDING');
 
-  // Members needing attention surface first — everyone else follows in
-  // whatever order the service returned. See the redesign audit §14.
-  const sortedMembers = [...members].sort((a, b) => {
-    const aAttention = a.status === 'SOS_ACTIVE' ? 0 : 1;
-    const bAttention = b.status === 'SOS_ACTIVE' ? 0 : 1;
-    return aAttention - bAttention;
-  });
+  const newestUpdate = members
+    .map((m) => m.updatedAt)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+  const openMember = (m: FamilyMember) =>
+    router.push({ pathname: '/family-member', params: { connectionId: m.connectionId } });
+
+  const accept = (invitationId: string, fromName: string) =>
+    Alert.alert(`Join ${fromName}'s family?`, undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Accept',
+        onPress: () =>
+          acceptInvitation(invitationId).catch(() =>
+            Alert.alert("Couldn't accept", 'Check your connection and try again.'),
+          ),
+      },
+    ]);
+
+  const everyone = members.length + basicMembers.length;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
-        <Text style={[styles.title, { color: theme.textPrimary }]}>Family</Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.inviteButton, { backgroundColor: theme.accent }]}
+          style={styles.circleButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Icon name="chevronLeft" size={22} color={theme.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Family</Text>
+        <TouchableOpacity
+          style={[styles.circleButton, styles.addButton]}
           onPress={() => router.push('/add-someone')}
           accessibilityRole="button"
           accessibilityLabel="Add someone"
         >
-          <Icon name="add" size={20} color={theme.textOnColor} />
+          <Icon name="add" size={22} color={theme.textOnColor} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={theme.accent} />
-        }
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor={theme.accent} />}
       >
-        <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
-          <View
-            style={[
-              styles.heroScrim,
-              { backgroundColor: theme.isDark ? 'rgba(8,12,28,0.68)' : 'rgba(255,255,255,0.4)' },
+        {error && <Text style={styles.error}>{error}</Text>}
+
+        {everyone > 0 && (
+          <FamilySummary
+            people={[
+              ...members.map((m) => ({ id: m.id, name: m.displayName, kind: 'app' as const })),
+              ...basicMembers.map((m) => ({ id: m.id, name: m.displayName, kind: 'basic' as const })),
             ]}
+            travelling={members.filter((m) => m.status === 'TRAVELLING').length}
+            needHelp={members.filter((m) => m.status === 'SOS_ACTIVE').length}
+            updatedAt={newestUpdate}
+            now={now}
           />
-          <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>
-            A safer journey together
-          </Text>
-          <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-            Keep your family connected and informed, wherever life takes you.
-          </Text>
-        </ImageBackground>
-
-        {/* Error */}
-        {error && (
-          <View style={[styles.errorCard, { backgroundColor: theme.critical.bg }]}>
-            <Text style={[styles.errorText, { color: theme.critical.fg }]}>{error}</Text>
-          </View>
         )}
 
-        {/* Pending invitations received */}
         {pendingInvitations.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
-              Pending Invitations ({pendingInvitations.length})
-            </Text>
+          <>
+            <Text style={styles.section}>INVITATIONS</Text>
             {pendingInvitations.map((inv) => (
-              <View
-                key={inv.id}
-                style={[styles.inviteCard, { backgroundColor: theme.surface, borderColor: theme.accent }]}
-              >
-                <View style={styles.inviteInfo}>
-                  <Text style={[styles.inviteName, { color: theme.textPrimary }]}>{inv.fromDisplayName}</Text>
-                  <Text style={[styles.invitePhone, { color: theme.textSecondary }]}>{inv.fromPhone}</Text>
-                  <Text style={[styles.inviteRelationship, { color: theme.textTertiary }]}>{inv.relationship}</Text>
+              <View key={inv.id} style={styles.inviteCard}>
+                <View style={styles.flex}>
+                  <Text style={styles.inviteName}>{inv.fromDisplayName}</Text>
+                  <Text style={styles.inviteDetail}>Wants you in their family</Text>
                 </View>
-                <View style={styles.inviteActions}>
-                  <Button
-                    label="Accept"
-                    onPress={() => handleAccept(inv.id, inv.fromDisplayName)}
-                    loading={accepting === inv.id}
-                    style={styles.inviteActionHalf}
-                  />
-                  <Button
-                    label="Decline"
-                    onPress={() => handleDecline(inv.id)}
-                    variant="secondary"
-                    style={styles.inviteActionHalf}
-                  />
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Family members */}
-        <View style={styles.section}>
-          {sortedMembers.length > 0 ? (
-            <>
-              <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
-                Family Members ({sortedMembers.length})
-              </Text>
-              {sortedMembers.map((member) => (
-                <FamilyMemberCard
-                  key={member.id}
-                  member={member}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/family-member',
-                      params: { connectionId: member.connectionId },
-                    })
-                  }
-                />
-              ))}
-            </>
-          ) : (
-            !isLoading && basicMembers.length === 0 && (
-              <EmptyState
-                icon="people"
-                title="No family members yet"
-                description="Invite family members to see their live safety status during journeys."
-                actionLabel="Add someone"
-                onAction={() => router.push('/add-someone')}
-              />
-            )
-          )}
-          {basicMembers.length > 0 && (
-            <Section title={`Basic phone (${basicMembers.length})`}>
-              {basicMembers.map((m) => (
-                <ListRow
-                  key={m.id}
-                  icon="person"
-                  title={m.displayName}
-                  subtitle={describeConsentStatus(m.consentStatus)}
-                  onPress={() => router.push({ pathname: '/basic-member', params: { memberId: m.id } })}
-                  accessory={
-                    allowsLocationLookup(m.consentStatus) ? (
-                      <StatusBadge label="Consent ✓" severity="safe" />
-                    ) : isTerminal(m.consentStatus) ? undefined : (
-                      <StatusBadge label="Pending" severity="warning" />
-                    )
-                  }
-                />
-              ))}
-            </Section>
-          )}
-          {(sortedMembers.length > 0 || basicMembers.length > 0) && (
-            <Button
-              label="Add someone"
-              icon="add"
-              onPress={() => router.push('/add-someone')}
-              variant="secondary"
-              style={styles.addMemberButton}
-            />
-          )}
-        </View>
-
-        {basicPhoneEnabled && (
-          <View style={[styles.sentCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.sentRelationship, styles.sentInfo, { color: theme.textSecondary }]}>
-              People with a basic phone can be found by their mobile network — only after they
-              reply YES by text. They're texted when you look, at most once an hour.
-            </Text>
-          </View>
-        )}
-
-        {/* Sent invitations */}
-        {pendingSent.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
-              Sent Invitations ({pendingSent.length})
-            </Text>
-            {pendingSent.map((inv) => (
-              <View
-                key={inv.id}
-                style={[styles.sentCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              >
-                <View style={styles.sentInfo}>
-                  <Text style={[styles.sentPhone, { color: theme.textPrimary }]}>{inv.toPhone}</Text>
-                  <Text style={[styles.sentRelationship, { color: theme.textSecondary }]}>{inv.relationship}</Text>
-                  <Text style={[styles.sentExpiry, { color: theme.textTertiary }]}>
-                    Expires {inv.expiresAt.toLocaleDateString()}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[styles.cancelSentButton, { borderColor: theme.border }]}
-                  onPress={() => handleCancelSent(inv.id, inv.toPhone)}
-                >
-                  <Text style={[styles.cancelSentText, { color: theme.textSecondary }]}>Cancel</Text>
+                <TouchableOpacity style={styles.pillSecondary} onPress={() => declineInvitation(inv.id)}>
+                  <Text style={styles.pillSecondaryText}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pillPrimary} onPress={() => accept(inv.id, inv.fromDisplayName)}>
+                  <Text style={styles.pillPrimaryText}>Accept</Text>
                 </TouchableOpacity>
               </View>
             ))}
-          </View>
+          </>
         )}
 
-        {isLoading && sortedMembers.length === 0 && (
-          <ActivityIndicator style={styles.loader} color={theme.accent} />
+        {onJourney.length > 0 && (
+          <>
+            <Text style={styles.section}>TRAVELLING NOW</Text>
+            {onJourney.map((m) => (
+              <TravellingCard
+                key={m.id}
+                member={m}
+                now={now}
+                onCall={() => callNumber(m.phoneNumber)}
+                onWatch={() => router.push({ pathname: '/watch-member', params: { memberId: m.id } })}
+              />
+            ))}
+          </>
+        )}
+
+        {(others.length > 0 || basicMembers.length > 0) && (
+          <>
+            <Text style={styles.section}>FAMILY</Text>
+            <View style={styles.list}>
+              {others.map((m) => {
+                const age = describeAge(m.updatedAt, now);
+                return (
+                  <MemberRow
+                    key={m.id}
+                    id={m.id}
+                    name={m.displayName}
+                    status={age && m.status !== 'OFFLINE' ? `${describeMemberStatus(m)} · ${age}` : describeMemberStatus(m)}
+                    kind="app"
+                    onPress={() => openMember(m)}
+                    onAction={() => callNumber(m.phoneNumber)}
+                  />
+                );
+              })}
+              {basicMembers.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  id={m.id}
+                  name={m.displayName}
+                  status={
+                    allowsLocationLookup(m.consentStatus)
+                      ? 'Basic phone · consent ✓'
+                      : `Basic phone · ${describeConsentStatus(m.consentStatus).toLowerCase()}`
+                  }
+                  kind="basic"
+                  actionDisabled={!allowsLocationLookup(m.consentStatus)}
+                  onPress={() => router.push({ pathname: '/basic-member', params: { memberId: m.id } })}
+                  onAction={() => {
+                    find(m.id);
+                    router.push({ pathname: '/find-result', params: { memberId: m.id } });
+                  }}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {pendingSent.length > 0 && (
+          <>
+            <Text style={styles.section}>WAITING TO ACCEPT</Text>
+            <View style={styles.list}>
+              {pendingSent.map((inv) => (
+                <View key={inv.id} style={styles.sentRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.inviteName}>{inv.toPhone}</Text>
+                    <Text style={styles.inviteDetail}>
+                      Expires {inv.expiresAt.toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                    </Text>
+                  </View>
+                  <StatusBadge label="Pending" severity="warning" />
+                  <TouchableOpacity
+                    onPress={() => cancelInvitation(inv.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cancel invitation to ${inv.toPhone}`}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Icon name="close" size={18} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {everyone === 0 && !isLoading && (
+          <Text style={styles.empty}>
+            No one yet. Add the people you'd want to know you got home.
+          </Text>
+        )}
+
+        <TouchableOpacity style={styles.addSomeone} onPress={() => router.push('/add-someone')}>
+          <Icon name="add" size={20} color={theme.accent} />
+          <Text style={styles.addSomeoneText}>Add someone</Text>
+        </TouchableOpacity>
+
+        {basicPhoneEnabled && (
+          <Text style={styles.note}>
+            Basic phones are found by their network only after they reply YES. They're texted when
+            you look, at most once an hour.
+          </Text>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.heading.fontSize,
-    fontWeight: TYPOGRAPHY.heading.fontWeight,
-  },
-  inviteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hero: {
-    height: 190,
-    borderRadius: RADIUS.xl,
-    marginBottom: SPACING.lg,
-    padding: SPACING.xl,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  heroImage: {
-    borderRadius: RADIUS.xl,
-  },
-  heroScrim: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroTitle: {
-    fontSize: TYPOGRAPHY.heading.fontSize + 2,
-    fontWeight: '800',
-    marginBottom: SPACING.xs,
-    maxWidth: '70%',
-  },
-  heroSubtitle: {
-    fontSize: TYPOGRAPHY.callout.fontSize,
-    lineHeight: TYPOGRAPHY.callout.lineHeight,
-    maxWidth: '65%',
-  },
-  container: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.xxxl,
-    gap: SPACING.xs,
-  },
-  section: {
-    marginBottom: SPACING.sm,
-  },
-  sectionHeader: {
-    fontSize: TYPOGRAPHY.caption.fontSize,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  errorCard: {
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  errorText: {
-    fontSize: TYPOGRAPHY.callout.fontSize,
-  },
-  inviteCard: {
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    gap: SPACING.md,
-  },
-  inviteInfo: {
-    gap: 2,
-  },
-  inviteName: {
-    fontSize: TYPOGRAPHY.bodyStrong.fontSize,
-    fontWeight: TYPOGRAPHY.bodyStrong.fontWeight,
-  },
-  invitePhone: {
-    fontSize: TYPOGRAPHY.callout.fontSize,
-  },
-  inviteRelationship: {
-    fontSize: TYPOGRAPHY.caption.fontSize,
-  },
-  inviteActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  inviteActionHalf: {
-    flex: 1,
-  },
-  addMemberButton: {
-    marginTop: SPACING.md,
-  },
-  sentCard: {
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  sentInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  sentPhone: {
-    fontSize: TYPOGRAPHY.callout.fontSize,
-    fontWeight: '600',
-  },
-  sentRelationship: {
-    fontSize: TYPOGRAPHY.caption.fontSize,
-  },
-  sentExpiry: {
-    fontSize: TYPOGRAPHY.caption.fontSize,
-  },
-  cancelSentButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-  },
-  cancelSentText: {
-    fontSize: TYPOGRAPHY.callout.fontSize,
-  },
-  loader: {
-    marginTop: SPACING.xxxl,
-  },
-});
+function getStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.background },
+    flex: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.sm,
+    },
+    circleButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surface,
+    },
+    addButton: { backgroundColor: theme.accent },
+    title: { flex: 1, fontSize: 26, fontFamily: FONTS.headingXBold, color: theme.textPrimary },
+    container: { padding: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.md, paddingBottom: SPACING.xxxl },
+    error: { fontSize: 14, fontFamily: FONTS.body, color: theme.critical.fg },
+    section: {
+      fontSize: 12,
+      fontFamily: FONTS.bodySemibold,
+      letterSpacing: 0.6,
+      color: theme.textSecondary,
+      marginTop: SPACING.xs,
+    },
+    list: { borderRadius: RADIUS.lg, backgroundColor: theme.surface, overflow: 'hidden' },
+    inviteCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      padding: SPACING.md,
+      borderRadius: RADIUS.lg,
+      backgroundColor: theme.surface,
+      borderWidth: 1.5,
+      borderColor: theme.accent,
+    },
+    inviteName: { fontSize: 16, fontFamily: FONTS.bodySemibold, color: theme.textPrimary },
+    inviteDetail: { fontSize: 13, fontFamily: FONTS.body, color: theme.textSecondary },
+    pillPrimary: {
+      minHeight: 40,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.pill,
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+    },
+    pillPrimaryText: { fontSize: 14, fontFamily: FONTS.bodySemibold, color: theme.textOnColor },
+    pillSecondary: {
+      minHeight: 40,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.pill,
+      justifyContent: 'center',
+      backgroundColor: theme.background,
+    },
+    pillSecondaryText: { fontSize: 14, fontFamily: FONTS.bodySemibold, color: theme.textPrimary },
+    sentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.lg,
+    },
+    empty: { fontSize: 15, lineHeight: 21, fontFamily: FONTS.body, color: theme.textSecondary, textAlign: 'center' },
+    addSomeone: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: SPACING.sm,
+      minHeight: 52,
+      borderRadius: RADIUS.pill,
+      backgroundColor: theme.accentMuted,
+    },
+    addSomeoneText: { fontSize: 16, fontFamily: FONTS.bodySemibold, color: theme.accent },
+    note: { fontSize: 13, lineHeight: 18, fontFamily: FONTS.body, color: theme.textSecondary, textAlign: 'center' },
+  });
+}
