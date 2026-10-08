@@ -53,6 +53,11 @@ import { FirebaseSafetyCheckProvider } from '../implementations/safetyCheck/Fire
 import { MockSafetyCheckProvider } from '../implementations/safetyCheck/MockSafetyCheckProvider';
 import { FirebaseWalkFeedbackProvider } from '../implementations/walkFeedback/FirebaseWalkFeedbackProvider';
 import { MockWalkFeedbackProvider } from '../implementations/walkFeedback/MockWalkFeedbackProvider';
+import { FirebaseUneasyEventProvider } from '../implementations/uneasy/FirebaseUneasyEventProvider';
+import { MockUneasyEventProvider } from '../implementations/uneasy/MockUneasyEventProvider';
+import { MapKitSafePlaceProvider } from '../implementations/safePlaces/MapKitSafePlaceProvider';
+import { MockSafePlaceProvider } from '../implementations/safePlaces/MockSafePlaceProvider';
+import { isNearbyPlacesAvailable } from '../../modules/nearby-places';
 
 import { FakeCallService } from '../services/FakeCallService';
 import { DataExportService } from '../services/DataExportService';
@@ -82,6 +87,8 @@ import { ContactStateProvider } from './ContactContext';
 import { MapStateProvider } from './MapContext';
 import { PrivacyStateProvider } from './PrivacyContext';
 import { JourneyStateProvider } from './JourneyContext';
+import { SafePlaceStateProvider } from './SafePlaceContext';
+import { SafetyPreferencesProvider } from './SafetyPreferencesContext';
 import { LocationTrackingProvider } from './LocationTrackingContext';
 import { CheckInStateProvider } from './CheckInContext';
 import { SOSStateProvider } from './SOSContext';
@@ -250,6 +257,18 @@ const walkFeedbackProvider = devMode
   ? new MockWalkFeedbackProvider()
   : new FirebaseWalkFeedbackProvider(firebaseApp!);
 
+// Nearby safe places. Keyed on whether the MapKit module is actually linked —
+// it is Apple-only, so Android and web get fixtures — rather than on devMode:
+// MKLocalSearch needs no key and no backend, so mock *data* is no reason to
+// hide real places. Same reasoning as the map provider (decision D1).
+const safePlaceProvider = isNearbyPlacesAvailable
+  ? new MapKitSafePlaceProvider()
+  : new MockSafePlaceProvider();
+
+const uneasyEventProvider = devMode
+  ? new MockUneasyEventProvider()
+  : new FirebaseUneasyEventProvider(firebaseApp!);
+
 const fakeCallService = new FakeCallService();
 
 const batteryProvider = devMode ? new MockBatteryProvider() : new ExpoBatteryProvider();
@@ -315,6 +334,8 @@ export {
   safetyCheckProvider,
   safetyCheckService,
   walkFeedbackProvider,
+  uneasyEventProvider,
+  safePlaceProvider,
   devMode,
 };
 
@@ -391,10 +412,15 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
         authenticated tree. It sits outside JourneyStateProvider so that
         any future map usage outside journey screens also has access.
       */}
+      <SafetyPreferencesProvider>
       <MapStateProvider mapProvider={mapProvider}>
+        {/* Independent of the journey tree — AI5 is reachable with or
+            without a journey running. */}
+        <SafePlaceStateProvider safePlaceProvider={safePlaceProvider}>
         <JourneyStateProvider
           journeyService={journeyService}
           walkFeedbackProvider={walkFeedbackProvider}
+          uneasyEventProvider={uneasyEventProvider}
         >
           {/*
             LocationTrackingProvider must be inside JourneyStateProvider so
@@ -444,7 +470,9 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
             </RoutingStateProvider>
           </LocationTrackingProvider>
         </JourneyStateProvider>
+        </SafePlaceStateProvider>
       </MapStateProvider>
+      </SafetyPreferencesProvider>
     </JourneyDraftStateProvider>
     </PlacesStateProvider>
     </ContactStateProvider>

@@ -15,6 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { FIXED_PALETTES, FONTS, RADIUS, SPACING } from '../../src/config/theme';
 import { useSOS } from '../../src/hooks/useSOS';
+import { localEmergencyNumber } from '../../src/config/markets';
+import { SOS_CANCEL_WINDOW_SECONDS, type SOSTier } from '../../src/models/SOS';
 import { useFamily } from '../../src/hooks/useFamily';
 import { CountdownRing } from '../../src/components/ui/CountdownRing';
 import { joinGuardianNames } from '../../src/utils/guardians';
@@ -36,7 +38,11 @@ const HOLD_DURATION_MS = 3_000;
 const HOLD_TICK_MS = 50;
 
 /** Spec §3: 5 s cancel window after sending. */
-const CANCEL_WINDOW_SECONDS = 5;
+/**
+ * Re-exported from the model rather than defined here: `AI8` specifies one
+ * cancel window, and two copies of it would eventually disagree.
+ */
+const CANCEL_WINDOW_SECONDS = SOS_CANCEL_WINDOW_SECONDS;
 
 type SendMode = 'call-and-alert' | 'alert-only';
 
@@ -48,13 +54,23 @@ export default function SOSScreen() {
   // SOS bar (screens 01/06/07). That hold *is* the confirmation, so asking
   // them to hold a second time would be a worse trade in an emergency than
   // the five-second cancel window this screen already gives them.
-  const { autosend } = useLocalSearchParams<{ autosend?: string }>();
+  const { autosend, tier } = useLocalSearchParams<{ autosend?: string; tier?: string }>();
+
+  /**
+   * How far the hold that opened this screen got (`AI8`).
+   *
+   * Tier 2 means the user deliberately held on past the point that alerted
+   * their guardians, which is an unambiguous request for emergency services —
+   * so the mode is already chosen for them. Making someone who held for six
+   * seconds then pick from a list would waste the intent they just expressed.
+   */
+  const holdTier = (Number(tier) || 1) as SOSTier;
 
   const [holdProgress, setHoldProgress] = useState(0);
   const [sending, setSending] = useState(false);
   const [sentAt, setSentAt] = useState<Date | null>(null);
   const [cancelSeconds, setCancelSeconds] = useState(CANCEL_WINDOW_SECONDS);
-  const [mode, setMode] = useState<SendMode>('call-and-alert');
+  const [mode, setMode] = useState<SendMode>(holdTier >= 2 ? 'call-and-alert' : 'alert-only');
   const [silent, setSilent] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -127,6 +143,11 @@ export default function SOSScreen() {
   };
 
   // Post-send cancel window, then hand over to the emergency-mode screen.
+  // Resolved once and used for both the call and the text describing it —
+  // telling someone we will dial one number and dialling another would be
+  // the worst possible place for a mismatch.
+  const emergencyNumber = localEmergencyNumber();
+
   useEffect(() => {
     if (!sentAt || cancelling) return;
 
@@ -137,7 +158,9 @@ export default function SOSScreen() {
         if (mode === 'call-and-alert') {
           // Placing the call is the user's action, not something the app does
           // silently — Linking opens the dialer with the number prefilled.
-          Linking.openURL(Platform.OS === 'ios' ? 'tel://999' : 'tel:999').catch(() => {});
+          Linking.openURL(
+            Platform.OS === 'ios' ? `tel://${emergencyNumber}` : `tel:${emergencyNumber}`,
+          ).catch(() => {});
         }
         router.replace('/(app)/emergency-mode');
         return 0;
@@ -145,7 +168,7 @@ export default function SOSScreen() {
     }, 1_000);
 
     return () => clearInterval(id);
-  }, [sentAt, cancelling, mode, router]);
+  }, [sentAt, cancelling, mode, router, emergencyNumber]);
 
   /**
    * Cancel. Before sending this is just "close"; after sending it resolves the
@@ -233,7 +256,7 @@ export default function SOSScreen() {
             <Text style={styles.holdHint}>
               {members.length > 0 ? `Sent to ${guardians}.` : 'Alert sent.'}{' '}
               {mode === 'call-and-alert'
-                ? `Calling 999 in ${cancelSeconds}s.`
+                ? `Calling ${emergencyNumber} in ${cancelSeconds}s.`
                 : `Opening emergency mode in ${cancelSeconds}s.`}{' '}
               Tap Cancel if this was a mistake.
             </Text>
@@ -255,7 +278,7 @@ export default function SOSScreen() {
         <ModeOption
           selected={mode === 'call-and-alert'}
           onPress={() => setMode('call-and-alert')}
-          title="Call 999 and alert guardians"
+          title={`Call ${emergencyNumber} and alert guardians`}
           subtitle={`${guardians} get your live location`}
         />
         <ModeOption

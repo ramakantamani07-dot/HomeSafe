@@ -45,6 +45,14 @@ interface LocationTrackingContextValue {
   /** Set to true when SOS is active to keep tracking running at high accuracy. */
   setSosTracking(active: boolean): void;
   /**
+   * Raises the update rate for 15 minutes after "Tell my circle" (`AI5`).
+   *
+   * Owned by the tracking service rather than the screen that asks for it, so
+   * it stands back down even if that screen is gone — and by a deadline
+   * rather than a countdown, so backgrounding cannot strand it on.
+   */
+  startUneasyBoost(): void;
+  /**
    * A single position fix, for screens that need an origin *before* a journey
    * exists — the route preview on 04, distance ranking on 02, the map picker's
    * starting camera.
@@ -69,6 +77,7 @@ export const LocationTrackingContext = createContext<LocationTrackingContextValu
   backgroundPermissionRevoked: false,
   dismissPermissionWarning: () => {},
   setSosTracking: () => {},
+  startUneasyBoost: () => {},
   getCurrentPosition: () => Promise.reject(new Error('LocationTrackingContext not mounted.')),
 });
 
@@ -136,6 +145,10 @@ export function LocationTrackingProvider({
       trackingService.onBackgroundPermissionRevoked = null;
     };
   }, [journeyId, trackingService]);
+
+  const startUneasyBoost = useCallback(() => {
+    trackingService.startUneasyBoost();
+  }, [trackingService]);
 
   // SOS tracking control — exposed to SOSContext which is a child provider.
   const setSosTracking = useCallback(
@@ -325,6 +338,7 @@ export function LocationTrackingProvider({
       backgroundPermissionRevoked,
       dismissPermissionWarning,
       setSosTracking,
+      startUneasyBoost,
       getCurrentPosition,
     }),
     [

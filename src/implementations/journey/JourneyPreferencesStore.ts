@@ -4,6 +4,7 @@ import type { JourneyPreferences } from '../../models/JourneyPreferences';
 import {
   DEFAULT_JOURNEY_PREFERENCES,
   isValidCheckInInterval,
+  sanitiseAlertRules,
 } from '../../models/JourneyPreferences';
 
 const STORAGE_KEY = 'wayloc.journey.preferences';
@@ -27,9 +28,15 @@ export const JourneyPreferencesStore = {
       // A value written by an older build may no longer be offered. Falling
       // back to the default is safer than persisting an interval the UI can't
       // represent — the user would see "Off" while check-ins still fired.
-      return isValidCheckInInterval(interval)
-        ? { checkInIntervalMinutes: interval }
-        : DEFAULT_JOURNEY_PREFERENCES;
+      //
+      // Each field falls back on its own: a stale alert rule should not also
+      // discard a check-in interval the user did choose, and vice versa.
+      return {
+        checkInIntervalMinutes: isValidCheckInInterval(interval)
+          ? interval
+          : DEFAULT_JOURNEY_PREFERENCES.checkInIntervalMinutes,
+        alertRules: sanitiseAlertRules(parsed.alertRules),
+      };
     } catch {
       return DEFAULT_JOURNEY_PREFERENCES;
     }

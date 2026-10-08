@@ -1,11 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import type { Journey } from '../models/Journey';
+import type { Coordinates, Journey } from '../models/Journey';
 import type { JourneyPreferences } from '../models/JourneyPreferences';
 import { DEFAULT_JOURNEY_PREFERENCES } from '../models/JourneyPreferences';
 import { JourneyPreferencesStore } from '../implementations/journey/JourneyPreferencesStore';
 import type { WalkRating } from '../models/WalkFeedback';
 import type { WalkFeedbackProvider } from '../providers/WalkFeedbackProvider';
+import type { UneasyEventProvider } from '../providers/UneasyEventProvider';
+import type { UneasyAction } from '../models/UneasyEvent';
 import type { JourneyService, StartJourneyOptions } from '../services/JourneyService';
 import { useAuthContext } from './AuthContext';
 
@@ -30,6 +32,8 @@ interface JourneyContextValue {
    * surfaced to guardians, enforced in the Firestore rules.
    */
   saveWalkFeedback(journeyId: string, rating: WalkRating): Promise<void>;
+  /** Records an `AI5` choice. Fire-and-forget — never blocks the action. */
+  logUneasyEvent(action: UneasyAction, location: Coordinates | null): void;
   /**
    * Deletes the detailed location trail of every finished journey, keeping the
    * journey summaries. Used by Privacy & Security.
@@ -50,16 +54,19 @@ export const JourneyContext = createContext<JourneyContextValue>({
   shareJourney: async () => { throw new Error('JourneyContext not mounted.'); },
   listHistory: async () => [],
   saveWalkFeedback: async () => {},
+  logUneasyEvent: () => {},
   deleteLocationHistory: async () => ({ processed: 0, errors: [] }),
 });
 
 export function JourneyStateProvider({
   journeyService,
   walkFeedbackProvider,
+  uneasyEventProvider,
   children,
 }: {
   journeyService: JourneyService;
   walkFeedbackProvider: WalkFeedbackProvider;
+  uneasyEventProvider: UneasyEventProvider;
   children: React.ReactNode;
 }) {
   const { user } = useAuthContext();
@@ -171,6 +178,23 @@ export function JourneyStateProvider({
     [userId, walkFeedbackProvider],
   );
 
+  /**
+   * Records what the user reached for when they felt uneasy (`AI5`).
+   *
+   * Never awaited on the critical path and never throws: someone who taps
+   * "Call Mum" gets the call whether or not this write lands. A log that can
+   * block the action it is logging is worse than no log.
+   */
+  const logUneasyEvent = useCallback(
+    (action: UneasyAction, location: Coordinates | null) => {
+      if (!userId) return;
+      void uneasyEventProvider
+        .logEvent(userId, action, activeJourney?.id ?? null, location)
+        .catch(() => {});
+    },
+    [userId, uneasyEventProvider, activeJourney?.id],
+  );
+
   const deleteLocationHistory = useCallback(async () => {
     if (!userId) return { processed: 0, errors: [] };
     return journeyService.deleteJourneyHistory(userId);
@@ -194,6 +218,7 @@ export function JourneyStateProvider({
       clearJourneyForSOS,
       listHistory,
       saveWalkFeedback,
+      logUneasyEvent,
       deleteLocationHistory,
       shareJourney,
     }),
@@ -209,6 +234,7 @@ export function JourneyStateProvider({
       clearJourneyForSOS,
       listHistory,
       saveWalkFeedback,
+      logUneasyEvent,
       deleteLocationHistory,
       shareJourney,
     ],

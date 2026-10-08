@@ -31,7 +31,7 @@ export default function RouteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { draft, setAlertRules, reset } = useJourneyDraft();
+  const { draft, reset } = useJourneyDraft();
   const { startJourney, journeyPreferences } = useJourney();
   const { members } = useFamily();
   const { locationStatus } = usePrivacy();
@@ -72,7 +72,7 @@ export default function RouteScreen() {
         destination,
         savedPlaceId: draft.savedPlaceId,
         travelMode: draft.travelMode,
-        alertRules: draft.alertRules,
+        alertRules: journeyPreferences.alertRules,
         arrivalRadiusMeters: draft.arrivalRadiusMeters,
         // The guardian toggle governs the periodic check-in only. Automatic
         // safety checks (late / stopped / off route) are always on and are not

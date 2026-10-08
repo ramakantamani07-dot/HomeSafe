@@ -14,6 +14,8 @@ import {
   getTrackingConfig,
   LOW_BATTERY_THRESHOLD,
   STATIONARY_SPEED_THRESHOLD_MPS,
+  UNEASY_BOOST_MS,
+  isUneasyBoostActive,
 } from '../models/TrackingConfig';
 
 export type TrackingCoordinateCallback = (coords: Coordinates) => void;
@@ -32,6 +34,9 @@ export class LocationTrackingService {
 
   // Mode state — drives config selection
   private sosActive = false;
+  /** When "Tell my circle" last raised the update rate. Null when never, or stood down. */
+  private uneasyBoostStartedAt: number | null = null;
+  private uneasyBoostTimer: ReturnType<typeof setTimeout> | null = null;
   private batteryLevel = 1.0;
   private movementState: MovementState = 'MOVING';
 
@@ -102,12 +107,18 @@ export class LocationTrackingService {
     this.wasUsingBackground = this.location.isUsingBackgroundMode();
 
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+
+    // Re-arm the boost's expiry timer from its deadline. The deadline is a
+    // plain timestamp and survives any number of restarts, so the boost is
+    // preserved while the timer itself never outlives a tracking session.
+    this.armUneasyBoostTimer();
   }
 
   async stopTracking(): Promise<void> {
     await this.flushBatch(); // flushBatch clears the timer internally
 
     await this.location.stopTracking();
+    this.clearUneasyBoostTimer();
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
     this.wasUsingBackground = false;
@@ -122,6 +133,57 @@ export class LocationTrackingService {
   }
 
   /** Call when SOS becomes active or is resolved. Drives config to SOS tier (immediate writes). */
+  /**
+   * Raises the update rate for UNEASY_BOOST_MS (Option 15 §D2).
+   *
+   * The timer here only re-applies the location options at expiry so the device
+   * stops sampling fast; it is **not** what makes the boost end. That is
+   * `getEffectiveConfig`'s deadline check, which is why losing this timer
+   * degrades to "the next config resolution fixes it" rather than to a boost
+   * that never stands down. Calling again restarts the window.
+   */
+  startUneasyBoost(): void {
+    this.uneasyBoostStartedAt = Date.now();
+    this.armUneasyBoostTimer();
+    this.restartTracking();
+  }
+
+  /**
+   * Schedules the drop back to normal rates for whatever is left of the window.
+   *
+   * Idempotent, and safe to call on every tracking start: with no boost running
+   * it does nothing, and with one already expired it stands the boost down
+   * immediately rather than scheduling a timer in the past.
+   */
+  private armUneasyBoostTimer(): void {
+    this.clearUneasyBoostTimer();
+    if (this.uneasyBoostStartedAt === null) return;
+
+    const remaining = this.uneasyBoostStartedAt + UNEASY_BOOST_MS - Date.now();
+    if (remaining <= 0) {
+      this.uneasyBoostStartedAt = null;
+      return;
+    }
+
+    this.uneasyBoostTimer = setTimeout(() => {
+      this.uneasyBoostTimer = null;
+      this.uneasyBoostStartedAt = null;
+      this.restartTracking();
+    }, remaining);
+  }
+
+  /** True while the boost is in force. Deadline-checked, never a stored flag. */
+  isUneasyBoostActive(): boolean {
+    return isUneasyBoostActive(this.uneasyBoostStartedAt, Date.now());
+  }
+
+  private clearUneasyBoostTimer(): void {
+    if (this.uneasyBoostTimer) {
+      clearTimeout(this.uneasyBoostTimer);
+      this.uneasyBoostTimer = null;
+    }
+  }
+
   setSOSActive(active: boolean): void {
     this.sosActive = active;
     if (!active && !this.activeJourneyId && this.location.isTracking()) {
@@ -136,15 +198,23 @@ export class LocationTrackingService {
     const isNowLow = level < LOW_BATTERY_THRESHOLD;
 
     // Restart the subscription so the new frequency takes effect immediately.
-    // Skip if in SOS-only mode (activeJourneyId is null): SOS always wins over battery config.
-    if (wasLow !== isNowLow && this.activeUserId && this.activeJourneyId && this.coordinateCallback) {
-      const userId = this.activeUserId;
-      const journeyId = this.activeJourneyId;
-      const cb = this.coordinateCallback;
-      void this.stopTracking().then(() =>
-        this.startTracking(userId, journeyId, cb),
-      );
-    }
+    if (wasLow !== isNowLow) this.restartTracking();
+  }
+
+  /**
+   * Re-subscribes so a newly-resolved effective config takes effect now rather
+   * than at the next natural restart.
+   *
+   * A no-op when nothing is being tracked — which is also why callers do not
+   * need to check: SOS-only mode has no activeJourneyId, and a boost requested
+   * with no subscription running simply applies when one starts.
+   */
+  private restartTracking(): void {
+    if (!this.activeUserId || !this.activeJourneyId || !this.coordinateCallback) return;
+    const userId = this.activeUserId;
+    const journeyId = this.activeJourneyId;
+    const cb = this.coordinateCallback;
+    void this.stopTracking().then(() => this.startTracking(userId, journeyId, cb));
   }
 
   get subscriptionCount(): number {
@@ -167,6 +237,13 @@ export class LocationTrackingService {
 
   private getEffectiveConfig(): TrackingConfig {
     if (this.sosActive) return TRACKING_CONFIGS.SOS;
+
+    // Checked by deadline on every resolution, so an expired boost stops
+    // applying even if the timer below never fired — see isUneasyBoostActive.
+    if (isUneasyBoostActive(this.uneasyBoostStartedAt, Date.now())) {
+      return getTrackingConfig('UNEASY', this.batteryLevel, this.movementState);
+    }
+
     const mode = this.activeJourneyId ? 'JOURNEY' : 'NORMAL';
     return getTrackingConfig(mode, this.batteryLevel, this.movementState);
   }

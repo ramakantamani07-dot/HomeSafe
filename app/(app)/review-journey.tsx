@@ -24,7 +24,6 @@ import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Button } from '../../src/components/ui/Button';
 import { Icon, type IconName } from '../../src/components/ui/Icon';
 import { AppMapView } from '../../src/components/map/AppMapView';
-import { AlertRulesSheet } from '../../src/components/journey/AlertRulesSheet';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { TRAVEL_MODES, type TravelMode } from '../../src/models/Place';
 
@@ -55,8 +54,11 @@ export default function ReviewJourneyScreen() {
   const styles = getStyles(theme);
   const router = useRouter();
 
-  const { draft, setTravelMode, setSaveAsPlace, setAlertRules, reset } = useJourneyDraft();
-  const { startJourney } = useJourney();
+  const { draft, setTravelMode, setSaveAsPlace, reset } = useJourneyDraft();
+  const { startJourney, journeyPreferences } = useJourney();
+
+  // Shown, not edited — the rules this journey will inherit from Settings.
+  const alertRules = journeyPreferences.alertRules;
   const { isAlreadySaved, savePlace } = usePlaces();
   const { locationStatus, locationBackgroundStatus } = usePrivacy();
   const { members } = useFamily();
@@ -64,7 +66,6 @@ export default function ReviewJourneyScreen() {
 
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingRules, setEditingRules] = useState(false);
 
   const destination = draft.destination;
   const preview = useRoutePreview(position, destination?.coordinates ?? null, draft.travelMode);
@@ -121,7 +122,7 @@ export default function ReviewJourneyScreen() {
         destination,
         savedPlaceId: draft.savedPlaceId,
         travelMode: draft.travelMode,
-        alertRules: draft.alertRules,
+        alertRules: alertRules,
         arrivalRadiusMeters: draft.arrivalRadiusMeters,
       });
 
@@ -278,29 +279,26 @@ export default function ReviewJourneyScreen() {
 
           <View style={styles.rulesHeader}>
             <Text style={styles.rulesTitle}>If something seems off</Text>
-            <TouchableOpacity
-              onPress={() => setEditingRules(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Edit the alert rules"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.linkText}>Edit</Text>
-            </TouchableOpacity>
+            {/* No "Edit" here by design. §10's acceptance criterion: "All
+                setup lives in Settings; nothing on the journey screens asks the
+                user to configure anything." This row tells you what will happen;
+                changing it is a Settings decision, not one to make while trying
+                to leave. */}
           </View>
 
           <RuleRow
             styles={styles}
-            condition={`${draft.alertRules.lateMinutes} min late, or stopped ${draft.alertRules.stoppedMinutes} min`}
+            condition={`${alertRules.lateMinutes} min late, or stopped ${alertRules.stoppedMinutes} min`}
             outcome="Ask if I'm OK"
           />
           <RuleRow
             styles={styles}
-            condition={`No reply in ${draft.alertRules.noReplyMinutes} min`}
+            condition={`No reply in ${alertRules.noReplyMinutes} min`}
             outcome={`Alert ${guardians}`}
           />
           <RuleRow
             styles={styles}
-            condition={`Battery under ${draft.alertRules.lowBatteryPercent}%`}
+            condition={`Battery under ${alertRules.lowBatteryPercent}%`}
             outcome="Send last location"
           />
         </View>
@@ -335,16 +333,6 @@ export default function ReviewJourneyScreen() {
         </TouchableOpacity>
       </View>
 
-      <AlertRulesSheet
-        visible={editingRules}
-        rules={draft.alertRules}
-        guardians={guardians}
-        onSave={(rules) => {
-          setAlertRules(rules);
-          setEditingRules(false);
-        }}
-        onDismiss={() => setEditingRules(false)}
-      />
     </SafeAreaView>
   );
 }

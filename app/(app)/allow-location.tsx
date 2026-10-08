@@ -32,7 +32,7 @@ export default function AllowLocationScreen() {
   const router = useRouter();
 
   const { draft, reset } = useJourneyDraft();
-  const { startJourney } = useJourney();
+  const { startJourney, journeyPreferences } = useJourney();
   const { savePlace, isAlreadySaved } = usePlaces();
   const { requestLocationPermission } = usePrivacy();
   const { members } = useFamily();
@@ -74,7 +74,7 @@ export default function AllowLocationScreen() {
         destination,
         savedPlaceId: draft.savedPlaceId,
         travelMode: draft.travelMode,
-        alertRules: draft.alertRules,
+        alertRules: journeyPreferences.alertRules,
         arrivalRadiusMeters: draft.arrivalRadiusMeters,
       });
 

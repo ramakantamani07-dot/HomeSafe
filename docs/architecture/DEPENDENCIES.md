@@ -163,11 +163,25 @@ set, so an incremental prebuild is only reachable on a machine that has one.
 | `react-native-reanimated` | Software Mansion, releases weekly, in `bundledNativeModules` |
 | `react-native-gesture-handler` | Same — and still needed for gestures outside the sheet |
 | `expo-blur` | Expo first-party |
-| `expo-haptics` | Expo first-party |
+| `expo-haptics` | Expo first-party — installed in Phase 4 at `~15.0.8`, the version SDK 54 pins |
 | `libphonenumber-js` | JS-only, no native surface, widely depended on |
 
 `lottie-react-native` is **deferred to Phase 7** with the sign-in animation, and
 re-checked then rather than now.
+
+### `modules/nearby-places` — written, not installed (6 Oct 2026)
+
+The gate's first question is "does the OS already do this?", and here it did.
+Point-of-interest search was going to mean Google Places and a billed API key;
+`MKLocalSearch` does the same search for free, with no account and no
+per-request cost, on every iOS device.
+
+No Expo package exposes it — `expo-location` wraps CLGeocoder, which does
+addresses only — so this is a local Swift module under `modules/`, autolinked by
+Expo. Apple-only by nature: `requireOptionalNativeModule` returns null on
+Android, web and in Jest, and the provider falls back to fixtures there.
+
+A dependency avoided rather than added, which is the outcome the gate exists for.
 
 ## Where native code belongs
 

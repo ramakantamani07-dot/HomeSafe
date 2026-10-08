@@ -5,9 +5,21 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../config/theme';
 import { Icon } from '../ui/Icon';
+import { haptics } from '../../utils/haptics';
+import { useSafetyPreferences } from '../../context/SafetyPreferencesContext';
+import {
+  sosHoldProgress,
+  sosTierForHold,
+  tier2For,
+  type SOSTier,
+} from '../../models/SOS';
 
-/** Spec §3: press-and-hold for 3 s with visible progress. Never a single tap. */
-const HOLD_DURATION_MS = 3_000;
+/**
+ * Option 15 `AI8`: one continuous press-and-hold expressing two intents —
+ * 3 s alerts guardians, 6 s additionally offers emergency services. Never a
+ * single tap. Thresholds and the tier maths live in models/SOS.ts so they are
+ * testable without a renderer.
+ */
 const HOLD_TICK_MS = 50;
 
 interface SOSHoldBarProps {
@@ -38,8 +50,11 @@ export function SOSHoldBar({ variant = 'bar', style }: SOSHoldBarProps) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
+  const { preferences } = useSafetyPreferences();
+  const tier1Ms = preferences.sosHoldMs;
 
   const [progress, setProgress] = useState(0);
+  const [tier, setTier] = useState<SOSTier>(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const firedRef = useRef(false);
 
@@ -52,32 +67,73 @@ export function SOSHoldBar({ variant = 'bar', style }: SOSHoldBarProps) {
 
   useEffect(() => clear, [clear]);
 
+  const startedAtRef = useRef(0);
+  /** Highest tier already felt, so a 50ms tick cannot buzz twice for one crossing. */
+  const buzzedTierRef = useRef<SOSTier>(0);
+
+  const fire = useCallback(
+    (tier: SOSTier) => {
+      if (firedRef.current || tier === 0) return;
+      firedRef.current = true;
+      clear();
+      setProgress(0);
+      setTier(0);
+      router.push(`/(app)/sos?autosend=true&tier=${tier}`);
+    },
+    [clear, router],
+  );
+
   const handlePressIn = () => {
     firedRef.current = false;
     setProgress(0);
-    const startedAt = Date.now();
+    setTier(0);
+    buzzedTierRef.current = 0;
+    startedAtRef.current = Date.now();
 
     clear();
     timer.current = setInterval(() => {
-      const next = Math.min((Date.now() - startedAt) / HOLD_DURATION_MS, 1);
-      setProgress(next);
+      const held = Date.now() - startedAtRef.current;
+      const reached = sosTierForHold(held, tier1Ms);
+      setProgress(sosHoldProgress(held, tier1Ms));
+      setTier(reached);
 
-      if (next >= 1 && !firedRef.current) {
-        firedRef.current = true;
-        clear();
-        setProgress(0);
-        router.push('/(app)/sos?autosend=true');
+      // The point of this buzz: at 3 s the user learns their guardians have
+      // been told without having to look at the screen.
+      if (reached > buzzedTierRef.current) {
+        buzzedTierRef.current = reached;
+        haptics.sosTierReached(reached as 1 | 2);
       }
+
+      // Tier 2 is the maximum, so there is nothing further to express by
+      // holding on — send it rather than making them wait to lift a finger.
+      if (held >= tier2For(tier1Ms)) fire(2);
     }, HOLD_TICK_MS);
   };
 
+  /**
+   * Releasing sends whatever tier the hold reached.
+   *
+   * The alert therefore goes out when the gesture *completes* rather than the
+   * instant tier 1 is crossed — at most ~3 s later than the spec's literal
+   * reading. That is the price of letting one gesture carry two intents, and it
+   * buys the user the ability to escalate without lifting and pressing again,
+   * which in an emergency is worth more than those seconds.
+   */
   const handlePressOut = () => {
+    const held = Date.now() - startedAtRef.current;
     clear();
-    if (!firedRef.current) setProgress(0);
+    const reached = sosTierForHold(held, tier1Ms);
+    if (reached > 0) {
+      fire(reached);
+    } else {
+      setProgress(0);
+      setTier(0);
+    }
   };
 
-  const holding = progress > 0;
-  const secondsLeft = Math.max(0, Math.ceil((1 - progress) * (HOLD_DURATION_MS / 1_000)));
+  const holding = progress > 0 || tier > 0;
+  const tierSpanMs = tier1Ms; // tier 2 is the same span again — see tier2For
+  const secondsLeft = Math.max(0, Math.ceil((1 - progress) * (tierSpanMs / 1_000)));
 
   if (variant === 'round') {
     return (
@@ -96,7 +152,7 @@ export function SOSHoldBar({ variant = 'bar', style }: SOSHoldBarProps) {
           pointerEvents="none"
         />
         <Text style={styles.roundLabel} pointerEvents="none">
-          {holding ? secondsLeft : 'SOS'}
+          {holding ? (tier >= 1 ? secondsLeft || '!' : secondsLeft) : 'SOS'}
         </Text>
       </Pressable>
     );
@@ -119,7 +175,11 @@ export function SOSHoldBar({ variant = 'bar', style }: SOSHoldBarProps) {
       <View style={styles.content} pointerEvents="none">
         <Icon name="warning" size={18} color={theme.critical.fg} />
         <Text style={styles.label}>
-          {holding ? `Keep holding… ${secondsLeft}` : 'Press and hold for SOS'}
+          {!holding
+            ? 'Press and hold for SOS'
+            : tier >= 1
+              ? `Guardians ready · hold ${secondsLeft} more to call for help`
+              : `Keep holding… ${secondsLeft}`}
         </Text>
       </View>
     </Pressable>

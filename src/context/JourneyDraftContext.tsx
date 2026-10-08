@@ -1,7 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
-import type { AlertRules } from '../models/AlertRules';
-import { DEFAULT_ALERT_RULES } from '../models/AlertRules';
 import type { Coordinates } from '../models/Journey';
 import type { Place, PlaceSuggestion, TravelMode } from '../models/Place';
 import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../models/Place';
@@ -14,7 +12,6 @@ export interface JourneyDraft {
   /** Set when the destination came from a saved place, so arrival radius and naming follow it. */
   savedPlaceId: string | null;
   travelMode: TravelMode;
-  alertRules: AlertRules;
   arrivalRadiusMeters: number;
   /** State of screen 04's "Save as a place" switch. Only meaningful for unsaved places. */
   saveAsPlace: boolean;
@@ -25,7 +22,6 @@ const EMPTY_DRAFT: JourneyDraft = {
   destination: null,
   savedPlaceId: null,
   travelMode: 'walk',
-  alertRules: DEFAULT_ALERT_RULES,
   arrivalRadiusMeters: DEFAULT_ARRIVAL_RADIUS_METERS,
   saveAsPlace: false,
   origin: 'home',
@@ -39,7 +35,6 @@ interface JourneyDraftContextValue {
     options?: { savedPlaceId?: string | null; origin?: DraftOrigin; arrivalRadiusMeters?: number },
   ): void;
   setTravelMode(mode: TravelMode): void;
-  setAlertRules(rules: AlertRules): void;
   setSaveAsPlace(save: boolean): void;
   reset(): void;
 
@@ -84,7 +79,6 @@ const JourneyDraftContext = createContext<JourneyDraftContextValue>({
   draft: EMPTY_DRAFT,
   setDestination: notMounted,
   setTravelMode: notMounted,
-  setAlertRules: notMounted,
   setSaveAsPlace: notMounted,
   reset: notMounted,
   search: { query: '', results: [] },
@@ -149,7 +143,6 @@ export function JourneyDraftStateProvider({ children }: { children: React.ReactN
       draft,
       setDestination,
       setTravelMode: (travelMode) => setDraft((c) => ({ ...c, travelMode })),
-      setAlertRules: (alertRules) => setDraft((c) => ({ ...c, alertRules })),
       setSaveAsPlace: (saveAsPlace) => setDraft((c) => ({ ...c, saveAsPlace })),
       reset: () => {
         setDraft(EMPTY_DRAFT);

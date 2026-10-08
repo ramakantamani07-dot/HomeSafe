@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../context/ThemeContext';
+import { localEmergencyNumber } from '../../config/markets';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../config/theme';
 import { useSafetyCheck } from '../../hooks/useSafetyCheck';
 import { useJourney } from '../../hooks/useJourney';
@@ -37,6 +38,7 @@ function formatMMSS(totalSeconds: number): string {
 export function SafetyCheckOverlay() {
   const theme = useTheme();
   const styles = getStyles(theme);
+  const emergencyNumber = localEmergencyNumber();
   const router = useRouter();
 
   const { activeCheck, reason, secondsUntilEscalation, hasEscalated, confirmOk, addTime } =
@@ -129,7 +131,8 @@ export function SafetyCheckOverlay() {
               — {guardians} get an alert, your live location and battery.
             </Step>
             <Step styles={styles} theme={theme} index={3} active={false}>
-              <Text style={styles.stepStrong}>Then</Text> — they can call you, or call 999 for you.
+              <Text style={styles.stepStrong}>Then</Text> — they can call you, or call{' '}
+              {emergencyNumber} for you.
             </Step>
           </View>
         </ScrollView>

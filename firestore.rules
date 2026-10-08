@@ -294,6 +294,22 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      // ── Uneasy events ──────────────────────────────────────────────────────
+      // "Feeling uneasy?" (AI5). Owner-only, like walkFeedback and for the same
+      // reason: these are notes about how someone felt, and a guardian able to
+      // read them would change what people are willing to record.
+      //
+      // Append-only by design. An uneasy moment happened; letting it be edited
+      // or removed would make the log worthless for the route-safety work it
+      // exists to feed, and would let someone be pressured into erasing it.
+      match /uneasyEvents/{eventId} {
+        allow read:   if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.action in
+               ['opened', 'called-guardian', 'fake-call', 'told-circle', 'dismissed'];
+        allow update, delete: if false;
+      }
+
       // ── SOS Events ─────────────────────────────────────────────────────────
       // Stores: userId, journeyId, location, status, triggeredAt, createdAt, …
       match /sosEvents/{sosId} {

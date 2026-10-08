@@ -34,6 +34,7 @@ import { UneasyPill } from '../../src/components/journey/UneasyPill';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { SAFETY_CHECK_EXTENSION_MINUTES } from '../../src/models/SafetyCheck';
 import { currentLeg, formatDistance } from '../../src/models/RouteResult';
+import { haptics } from '../../src/utils/haptics';
 
 /** When the check-in ring turns amber — the last two minutes of the window. */
 const CHECK_IN_URGENT_SECONDS = 120;
@@ -271,6 +272,7 @@ export default function ActiveJourneyScreen() {
   const handleImOk = async () => {
     try {
       await confirmSafe();
+      haptics.checkIn();
     } catch {
       Alert.alert('Error', "Couldn't send your check-in. Please try again.");
     }

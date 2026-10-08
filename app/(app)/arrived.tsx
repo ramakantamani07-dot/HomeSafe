@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
+import { haptics } from '../../src/utils/haptics';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { usePlaces } from '../../src/hooks/usePlaces';
 import { useJourney } from '../../src/hooks/useJourney';
@@ -93,6 +94,13 @@ export default function ArrivedScreen() {
    * and §1 principle 4 rules that out.
    */
   const endedEarly = params.endedEarly === 'true';
+
+  // Arriving is the one unambiguously good outcome in this app, and worth
+  // feeling. Suppressed when the journey was ended early: nothing was
+  // achieved, and congratulating someone for stopping would read as mockery.
+  useEffect(() => {
+    if (!endedEarly) haptics.arrived();
+  }, [endedEarly]);
 
   const latitude = params.lat ? Number(params.lat) : null;
   const longitude = params.lng ? Number(params.lng) : null;
