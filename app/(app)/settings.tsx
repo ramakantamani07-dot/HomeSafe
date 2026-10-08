@@ -53,8 +53,10 @@ function getPickerStyles(theme: ThemeColors) {
       flexDirection: 'row',
       gap: SPACING.xs,
       padding: SPACING.xs,
-      margin: SPACING.md,
-      marginTop: 0,
+      // Even on all four sides, so the track sits centred in its card. It had
+      // marginTop 0 against SPACING.md elsewhere, which pushed it up against
+      // the card's top edge.
+      margin: SPACING.sm,
       backgroundColor: theme.background,
       borderRadius: RADIUS.md,
     },

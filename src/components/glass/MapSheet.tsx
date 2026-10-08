@@ -59,12 +59,23 @@ export function MapSheet({
   const { height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
+  // The highest the sheet's top edge may go: below the status bar, with a
+  // sliver of map showing, the way iOS's own sheets stop. A full-height sheet
+  // previously reached y = 0, putting the search field and its clear button
+  // under the clock, signal and battery — visible clutter, and the ✕ sat
+  // inside the system's touch area for the status bar.
+  const topLimit = insets.top + SPACING.sm;
+
   // Detents are fractions of screen height (see SHEET_DETENTS); translateY is
-  // measured from fully-open, so the smallest detent has the largest offset.
+  // measured from the top of the screen, so the smallest detent has the largest
+  // offset. "Full" means as high as `topLimit` allows, never higher.
   const offsets = useMemo(
-    () => SHEET_DETENTS.map((fraction) => screenHeight * (1 - fraction)),
-    [screenHeight],
+    () => SHEET_DETENTS.map((fraction) => Math.max(screenHeight * (1 - fraction), topLimit)),
+    [screenHeight, topLimit],
   );
+  // Sized to what is visible at full, so the bottom of the content — and its
+  // home-indicator padding — is not pushed off-screen by the top limit.
+  const sheetHeight = screenHeight - topLimit;
 
   const translateY = useSharedValue(offsets[initialDetent]);
   const startY = useSharedValue(0);
@@ -135,7 +146,7 @@ export function MapSheet({
 
   return (
     <Animated.View
-      style={[styles.sheet, { height: screenHeight }, sheetStyle, style]}
+      style={[styles.sheet, { height: sheetHeight }, sheetStyle, style]}
       // box-none so the map stays tappable through the sheet's own bounds
       // wherever the sheet isn't actually drawn.
       pointerEvents="box-none"
