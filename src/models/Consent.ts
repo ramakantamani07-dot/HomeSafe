@@ -103,3 +103,20 @@ export interface ConsentEvent {
 
 /** How long an unanswered SMS request stands. Spec's default, configurable. */
 export const CONSENT_REQUEST_TTL_MS = 48 * 60 * 60 * 1_000;
+
+/**
+ * Resending the request: at most once an hour, three times in all. Mirrors the
+ * server (`functions/src/networkLocation/config.ts`), held equal by the parity
+ * test. Past that, silence is the member's answer.
+ */
+export const CONSENT_RESEND_MIN_INTERVAL_MS = 60 * 60 * 1_000;
+export const CONSENT_RESEND_LIMIT = 3;
+
+/** What happened when the guardian tapped "Resend consent text". */
+export type ResendOutcome =
+  | 'sent'
+  | 'not-sent'
+  | 'too-soon'
+  | 'limit-reached'
+  | 'not-pending'
+  | 'failed';

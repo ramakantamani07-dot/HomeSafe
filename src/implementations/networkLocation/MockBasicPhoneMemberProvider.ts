@@ -1,5 +1,12 @@
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../../models/BasicPhoneMember';
-import { CONSENT_REQUEST_TTL_MS, type Consent, type ConsentStatus } from '../../models/Consent';
+import {
+  CONSENT_REQUEST_TTL_MS,
+  CONSENT_RESEND_LIMIT,
+  CONSENT_RESEND_MIN_INTERVAL_MS,
+  type Consent,
+  type ConsentStatus,
+  type ResendOutcome,
+} from '../../models/Consent';
 import {
   countsTowardLimit,
   type LocateAudit,
@@ -31,6 +38,7 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
   private members = new Map<string, BasicPhoneMember>();
   private consents = new Map<string, Consent>();
   private audits: LocateAudit[] = [];
+  private resends = new Map<string, Date[]>();
   private memberListeners = new Set<() => void>();
   private consentListeners = new Set<() => void>();
   private nextId = 1;
@@ -91,6 +99,26 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
 
   async stopFinding(_ownerId: string, memberId: string): Promise<void> {
     this.setStatus(memberId, 'REVOKED');
+  }
+
+  /** Same limits as the server, so the screen meets the same refusals. */
+  async resendRequest(_ownerId: string, memberId: string): Promise<ResendOutcome> {
+    const consent = this.consents.get(memberId);
+    if (!consent || consent.status !== 'PENDING_SMS') return 'not-pending';
+    const previous = this.resends.get(memberId) ?? [];
+    if (previous.length >= CONSENT_RESEND_LIMIT) return 'limit-reached';
+    const now = new Date();
+    const last = previous[previous.length - 1];
+    if (last && now.getTime() - last.getTime() < CONSENT_RESEND_MIN_INTERVAL_MS) return 'too-soon';
+
+    this.resends.set(memberId, [...previous, now]);
+    this.consents.set(memberId, {
+      ...consent,
+      expiresAt: new Date(now.getTime() + CONSENT_REQUEST_TTL_MS),
+      requestDelivery: 'sent',
+    });
+    this.notify();
+    return 'sent';
   }
 
   async listFinds(_ownerId: string, memberId: string, limit: number): Promise<LocateAudit[]> {

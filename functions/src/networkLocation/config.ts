@@ -31,12 +31,23 @@ export function isMarketEnabled(market: MarketCode | null): boolean {
   if (!market) return false;
   return (process.env.NETWORK_LOCATION_MARKETS ?? '')
     .split(',')
-    .map((m) => m.trim().toUpperCase())
+    .map((m: string) => m.trim().toUpperCase())
     .includes(market);
 }
 
 /** Mirrors `CONSENT_REQUEST_TTL_MS` in `src/models/Consent.ts`. */
 export const CONSENT_REQUEST_TTL_MS = 48 * 60 * 60 * 1_000;
+
+/**
+ * Resending the consent request (spec §4 step 5: "allow resend with rate
+ * limits"). Mirrors `src/models/Consent.ts`; the parity test holds them equal.
+ *
+ * Generous enough for "they didn't see it", tight enough that a guardian
+ * cannot use resend to pester someone who is choosing not to answer — silence
+ * is an answer too, and after three resends it is the one we respect.
+ */
+export const CONSENT_RESEND_MIN_INTERVAL_MS = 60 * 60 * 1_000;
+export const CONSENT_RESEND_LIMIT = 3;
 
 /**
  * At most one "they checked your location" text per member per hour (spec §5).

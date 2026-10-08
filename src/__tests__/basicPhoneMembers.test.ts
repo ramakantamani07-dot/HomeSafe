@@ -149,4 +149,14 @@ describe('mock basic-phone finding', () => {
     expect(child.guardianAttestedAt).toBeInstanceOf(Date);
     expect(adult.guardianAttestedAt).toBeNull();
   });
+
+  it('resends only while waiting, once an hour, with the same refusals as the server', async () => {
+    const { members } = setup();
+    const sam = await members.addMember('me', input);
+    expect(await members.resendRequest('me', sam.id)).toBe('sent');
+    expect(await members.resendRequest('me', sam.id)).toBe('too-soon');
+
+    members.simulateReply(sam.id, 'ACTIVE');
+    expect(await members.resendRequest('me', sam.id)).toBe('not-pending');
+  });
 });

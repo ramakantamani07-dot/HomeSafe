@@ -88,6 +88,8 @@ export interface StoredConsent {
    * `status` and `updatedAt`, so a client cannot claim to be anyone else.
    */
   revokedBy?: string;
+  /** Each time the guardian resent the request — bounded by the resend limit. */
+  resendsAt?: Timestamp[];
   /** Set once the revocation's side effects have run, so they run once. */
   revocationHandledAt?: Timestamp;
 }

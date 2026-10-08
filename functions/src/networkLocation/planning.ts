@@ -1,4 +1,9 @@
-import { TRANSPARENCY_NOTICE_INTERVAL_MS, type SmsTemplate } from './config';
+import {
+  CONSENT_RESEND_LIMIT,
+  CONSENT_RESEND_MIN_INTERVAL_MS,
+  TRANSPARENCY_NOTICE_INTERVAL_MS,
+  type SmsTemplate,
+} from './config';
 import {
   allowsLocationLookup,
   isRateLimited,
@@ -200,4 +205,29 @@ export function planRevocation(
     writeEvent: revokedBy === undefined,
     notify: revokedBy !== 'member-revoked' && requestDelivered ? 'guardian-stopped' : null,
   };
+}
+
+// ── Resend ──────────────────────────────────────────────────────────────────
+
+export type ResendRefusal = 'not-pending' | 'too-soon' | 'limit-reached';
+
+/**
+ * Whether the consent request may be texted again.
+ *
+ * Only while it is still waiting: once someone has answered — or stopped it —
+ * asking again is a new request, made deliberately, not a resend.
+ */
+export function gateResend(
+  status: ConsentStatus,
+  previousResendsAt: Date[],
+  now: Date,
+): ResendRefusal | null {
+  if (status !== 'PENDING_SMS') return 'not-pending';
+  if (previousResendsAt.length >= CONSENT_RESEND_LIMIT) return 'limit-reached';
+  const last = previousResendsAt.reduce<Date | null>(
+    (latest, at) => (latest === null || at > latest ? at : latest),
+    null,
+  );
+  if (last && now.getTime() - last.getTime() < CONSENT_RESEND_MIN_INTERVAL_MS) return 'too-soon';
+  return null;
 }

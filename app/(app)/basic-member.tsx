@@ -19,18 +19,19 @@ import { Section, ListRow } from '../../src/components/ui/Section';
 import { StatusBadge, type Severity } from '../../src/components/ui/StatusBadge';
 import { Button } from '../../src/components/ui/Button';
 import { LastFinds } from '../../src/components/circle/LastFinds';
+import { describeResendOutcome } from '../../src/components/circle/findCopy';
 
 /**
  * A basic-phone member: consent and finds (Option 15 S3).
  *
  * Status is live — a STOP shows here the moment the server records it.
  *
- * Diverges from the board in two places, both for principle 4:
- *  - "Resend consent text" is absent. A client may only create a consent or
- *    revoke it (D17), so a resend needs a server function that does not exist
- *    yet; a row that did nothing would be worse than no row.
- *  - "Text Sam each time · Always" reads "At most once an hour", because that
- *    is what the server does (spec §5's throttle).
+ * Diverges from the board once, for principle 4: "Text Sam each time ·
+ * Always" reads "At most once an hour", because that is what the server does
+ * (spec §5's throttle).
+ *
+ * "Resend consent text" appears only while a request is waiting — after an
+ * answer, asking again is a new request, not a resend.
  */
 export default function BasicMemberScreen() {
   const theme = useTheme();
@@ -41,7 +42,8 @@ export default function BasicMemberScreen() {
   const member = useBasicPhoneMember(memberId);
   const consent = useMemberConsent(memberId);
   const audits = useMemberFinds(memberId);
-  const { find, stopFinding } = useBasicPhoneMembers();
+  const { find, stopFinding, resendRequest } = useBasicPhoneMembers();
+  const [resending, setResending] = useState(false);
   const [now] = useState(() => new Date());
 
   if (!member) {
@@ -71,6 +73,14 @@ export default function BasicMemberScreen() {
         { text: 'Stop finding', style: 'destructive', onPress: () => stopFinding(member.id) },
       ],
     );
+
+  const resend = async () => {
+    if (resending) return;
+    setResending(true);
+    const { title, body } = describeResendOutcome(await resendRequest(member.id), name);
+    setResending(false);
+    Alert.alert(title, body);
+  };
 
   const findNow = () => {
     find(member.id);
@@ -103,6 +113,14 @@ export default function BasicMemberScreen() {
         <Section>
           <ListRow icon="time" title="Limit" value={`${LOCATE_LIMIT_PER_HOUR} finds an hour`} />
           <ListRow icon="message" title={`Text ${name} when you look`} value="At most once an hour" />
+          {status === 'PENDING_SMS' && (
+            <ListRow
+              icon="send"
+              title="Resend consent text"
+              value={resending ? 'Sending…' : undefined}
+              onPress={resend}
+            />
+          )}
         </Section>
 
         {isTerminal(status) ? (

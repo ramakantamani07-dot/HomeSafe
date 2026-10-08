@@ -29,6 +29,7 @@ export { enforceDataRetention, onUserAccountDeleted } from './retention';
 export { getSharedJourney } from './sharing';
 export {
   requestConsentSms,
+  resendConsentRequest,
   inboundConsentSms,
   locateMember,
   onConsentRevoked,

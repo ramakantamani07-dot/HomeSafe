@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhoneMember';
-import type { Consent } from '../models/Consent';
+import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 import type { BasicPhoneMemberProvider } from '../providers/BasicPhoneMemberProvider';
 import {
@@ -26,6 +26,7 @@ interface BasicPhoneContextValue {
   finds: Readonly<Record<string, FindState>>;
   addMember(input: NewBasicPhoneMember): Promise<BasicPhoneMember>;
   stopFinding(memberId: string): Promise<void>;
+  resendRequest(memberId: string): Promise<ResendOutcome>;
   find(memberId: string): Promise<void>;
   listFinds(memberId: string, limit: number): Promise<LocateAudit[]>;
   subscribeConsent(memberId: string, onChange: (consent: Consent | null) => void): Unsubscribe;
@@ -41,6 +42,7 @@ const BasicPhoneContext = createContext<BasicPhoneContextValue>({
     throw new Error('BasicPhoneContext not mounted.');
   },
   stopFinding: async () => {},
+  resendRequest: async () => 'failed',
   find: async () => {},
   listFinds: async () => [],
   subscribeConsent: () => noop,
@@ -99,6 +101,12 @@ export function BasicPhoneStateProvider({
     [userId, memberProvider],
   );
 
+  const resendRequest = useCallback(
+    async (memberId: string): Promise<ResendOutcome> =>
+      userId ? memberProvider.resendRequest(userId, memberId) : 'failed',
+    [userId, memberProvider],
+  );
+
   const find = useCallback(
     async (memberId: string) => {
       setFinds((prev) => ({ ...prev, [memberId]: { status: 'finding' } }));
@@ -129,8 +137,18 @@ export function BasicPhoneStateProvider({
   );
 
   const value = useMemo(
-    () => ({ enabled, members, finds, addMember, stopFinding, find, listFinds, subscribeConsent }),
-    [enabled, members, finds, addMember, stopFinding, find, listFinds, subscribeConsent],
+    () => ({
+      enabled,
+      members,
+      finds,
+      addMember,
+      stopFinding,
+      resendRequest,
+      find,
+      listFinds,
+      subscribeConsent,
+    }),
+    [enabled, members, finds, addMember, stopFinding, resendRequest, find, listFinds, subscribeConsent],
   );
 
   return <BasicPhoneContext.Provider value={value}>{children}</BasicPhoneContext.Provider>;

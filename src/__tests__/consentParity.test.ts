@@ -10,10 +10,17 @@
  * the app suite safe.
  */
 import * as server from '../../functions/src/networkLocation/consent';
+import * as serverConfig from '../../functions/src/networkLocation/config';
 import { applyConsentEvent, type ConsentEventKind } from '../services/ConsentStateMachine';
 import { CONSENT_KEYWORDS, parseConsentReply } from '../models/ConsentKeywords';
 import { LOCATE_LIMIT_PER_HOUR, LOCATE_MIN_INTERVAL_MS, isRateLimited } from '../models/LocateAudit';
-import { allowsLocationLookup, isTerminal } from '../models/Consent';
+import {
+  CONSENT_REQUEST_TTL_MS,
+  CONSENT_RESEND_LIMIT,
+  CONSENT_RESEND_MIN_INTERVAL_MS,
+  allowsLocationLookup,
+  isTerminal,
+} from '../models/Consent';
 
 describe('consent rules: client and server agree', () => {
   it('on every state × event', () => {
@@ -65,5 +72,11 @@ describe('consent rules: client and server agree', () => {
     for (const h of histories) {
       expect(server.isRateLimited(h, now)).toBe(isRateLimited(h, now));
     }
+  });
+
+  it('on the request deadline and the resend limits', () => {
+    expect(serverConfig.CONSENT_REQUEST_TTL_MS).toBe(CONSENT_REQUEST_TTL_MS);
+    expect(serverConfig.CONSENT_RESEND_LIMIT).toBe(CONSENT_RESEND_LIMIT);
+    expect(serverConfig.CONSENT_RESEND_MIN_INTERVAL_MS).toBe(CONSENT_RESEND_MIN_INTERVAL_MS);
   });
 });

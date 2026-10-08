@@ -7,6 +7,7 @@ import { isMarketEnabled, marketForNumber, dltTemplateId } from '../networkLocat
 import { MockSmsProvider, signMockWebhook, MOCK_SIGNATURE_HEADER } from '../networkLocation/mockAdapters';
 import {
   gateLocate,
+  gateResend,
   planReply,
   planRevocation,
   shouldSendTransparencyNotice,
@@ -260,5 +261,26 @@ describe('planRevocation', () => {
     expect(planRevocation(undefined, true).notify).toBe('guardian-stopped');
     expect(planRevocation('guardian-removed', true).notify).toBe('guardian-stopped');
     expect(planRevocation(undefined, false).notify).toBeNull();
+  });
+});
+
+describe('gateResend', () => {
+  const now = new Date('2026-10-08T12:00:00Z');
+  const ago = (min: number) => new Date(now.getTime() - min * 60_000);
+
+  it('resends a waiting request', () => {
+    expect(gateResend('PENDING_SMS', [], now)).toBeNull();
+    expect(gateResend('PENDING_SMS', [ago(61)], now)).toBeNull();
+  });
+
+  it('never resends once someone has answered or stopped it', () => {
+    for (const s of ['SMS_APPROVED', 'OPERATOR_PENDING', 'ACTIVE', 'DECLINED', 'EXPIRED', 'REVOKED'] as const) {
+      expect(gateResend(s, [], now)).toBe('not-pending');
+    }
+  });
+
+  it('waits an hour between resends, and stops after three', () => {
+    expect(gateResend('PENDING_SMS', [ago(30)], now)).toBe('too-soon');
+    expect(gateResend('PENDING_SMS', [ago(300), ago(200), ago(100)], now)).toBe('limit-reached');
   });
 });

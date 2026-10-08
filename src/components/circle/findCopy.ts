@@ -1,3 +1,4 @@
+import type { ResendOutcome } from '../../models/Consent';
 import type { NetworkLocationFailure } from '../../providers/NetworkLocationProvider';
 
 /**
@@ -73,4 +74,29 @@ export function formatFindTime(at: Date, now: Date): string {
   if (at.getTime() >= startOfToday) return `Today ${time}`;
   if (at.getTime() >= startOfToday - dayMs) return `Yesterday ${time}`;
   return `${at.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${time}`;
+}
+
+/** What the member screen says after "Resend consent text". */
+export function describeResendOutcome(
+  outcome: ResendOutcome,
+  name: string,
+): { title: string; body: string } {
+  switch (outcome) {
+    case 'sent':
+      return { title: 'Sent again', body: `${name} has a new text, and 48 hours to reply.` };
+    case 'not-sent':
+      return { title: "Couldn't text them", body: 'Their network did not accept the message. Try again later.' };
+    case 'too-soon':
+      return { title: 'Sent recently', body: 'You can resend once an hour. Give them a little time to see it.' };
+    case 'limit-reached':
+      return {
+        title: 'No more resends',
+        body: `${name} has been asked several times. Not replying can be an answer too — you could call them instead.`,
+      };
+    case 'not-pending':
+      return { title: 'Nothing to resend', body: `${name} has already answered this request.` };
+    case 'failed':
+    default:
+      return { title: "Couldn't resend", body: 'Check your connection and try again.' };
+  }
 }

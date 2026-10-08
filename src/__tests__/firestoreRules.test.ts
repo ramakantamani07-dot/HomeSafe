@@ -887,6 +887,7 @@ describeWithEmulator('Firestore security rules', () => {
       { lastNoticeAt: new Date('2099-01-01') },
       { recentLookupsAt: [] },
       { requestSms: { status: 'sent', at: new Date() } },
+      { resendsAt: [] },
     ]) {
       await assertFails(setDoc(doc(db, 'users', 'user-a', 'consents', 'm-8'), { ...base, ...extra }));
     }

@@ -1,5 +1,5 @@
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhoneMember';
-import type { Consent } from '../models/Consent';
+import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 
 /**
@@ -40,6 +40,12 @@ export interface BasicPhoneMemberProvider {
    * follows when it lands (revocation layer 3).
    */
   stopFinding(ownerId: string, memberId: string): Promise<void>;
+
+  /**
+   * Texts the consent request again, if the server's limit allows. Never
+   * throws: every outcome is something the screen explains.
+   */
+  resendRequest(ownerId: string, memberId: string): Promise<ResendOutcome>;
 
   /** The most recent lookups of one member, newest first, refused ones included. */
   listFinds(ownerId: string, memberId: string, limit: number): Promise<LocateAudit[]>;

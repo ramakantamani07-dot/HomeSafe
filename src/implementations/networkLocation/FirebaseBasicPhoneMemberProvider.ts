@@ -13,6 +13,7 @@ import {
   writeBatch,
   type Firestore,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../../models/BasicPhoneMember';
@@ -21,6 +22,7 @@ import {
   type Consent,
   type ConsentRequestDelivery,
   type ConsentStatus,
+  type ResendOutcome,
 } from '../../models/Consent';
 import type { LocateAudit, LocateOutcome, LocateReason } from '../../models/LocateAudit';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
@@ -64,9 +66,11 @@ type StoredAudit = {
  */
 export class FirebaseBasicPhoneMemberProvider implements BasicPhoneMemberProvider {
   private readonly db: Firestore;
+  private readonly functions: Functions;
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
+    this.functions = getFunctions(app);
   }
 
   subscribeMembers(ownerId: string, onChange: (members: BasicPhoneMember[]) => void): Unsubscribe {
@@ -139,6 +143,22 @@ export class FirebaseBasicPhoneMemberProvider implements BasicPhoneMemberProvide
     // Not awaited past the local write: a queued write is already in effect
     // locally, and waiting for the server would make "Stop" depend on signal.
     batch.commit().catch(() => {});
+  }
+
+  async resendRequest(_ownerId: string, memberId: string): Promise<ResendOutcome> {
+    try {
+      const call = httpsCallable<{ memberId: string }, { delivery: ConsentRequestDelivery }>(
+        this.functions,
+        'resendConsentRequest',
+      );
+      const { data } = await call({ memberId });
+      return data.delivery === 'sent' ? 'sent' : 'not-sent';
+    } catch (err) {
+      const refusal = (err as { details?: { refusal?: string } }).details?.refusal;
+      return refusal === 'too-soon' || refusal === 'limit-reached' || refusal === 'not-pending'
+        ? refusal
+        : 'failed';
+    }
   }
 
   async listFinds(ownerId: string, memberId: string, limit: number): Promise<LocateAudit[]> {
