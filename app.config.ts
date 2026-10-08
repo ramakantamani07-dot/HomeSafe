@@ -125,6 +125,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     'expo-task-manager',
+    // Picker only (Phase 5b, Invite someone). On iOS the system picker needs
+    // no permission and hands back just the one contact chosen; this string
+    // is the declaration iOS requires once the framework is linked, worded
+    // for what the app actually does.
+    [
+      'expo-contacts',
+      {
+        contactsPermission:
+          'wayLoc opens your contacts only when you choose someone to invite, and reads only the person you pick.',
+      },
+    ],
     [
       'expo-notifications',
       {

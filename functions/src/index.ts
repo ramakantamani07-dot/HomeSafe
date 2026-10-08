@@ -16,7 +16,7 @@
  *   retention/  data retention and account deletion
  *   sharing/    public guardian tracking link
  *   networkLocation/  basic-phone members: consent SMS, STOP webhook, locate
- *   family/     Ask "OK?" from Watch live
+ *   family/     Ask "OK?", invitee lookup, invitation push
  *
  * Side-effect import order matters only in that `shared/firebase` must be
  * initialised before anything touches Firestore; every module imports it, and
@@ -35,4 +35,4 @@ export {
   locateMember,
   onConsentRevoked,
 } from './networkLocation';
-export { askMemberOk } from './family';
+export { askMemberOk, lookupInvitee, onFamilyInvitationCreated } from './family';

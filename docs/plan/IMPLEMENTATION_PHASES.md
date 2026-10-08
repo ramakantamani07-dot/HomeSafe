@@ -25,7 +25,7 @@ compound.
 | 3 · Journey | **Done bar one item** | "Open places on the way" — see D4 below |
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
-| 5b · Family redesign | **Steps 1–5 done** | Invite someone + Invite sent (6) — needs `expo-contacts` |
+| 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
 | 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
@@ -1015,6 +1015,22 @@ claim the app cannot back.
   on a journey, and the badge drew it in green — "at home" and "fine", from
   nothing. New status `IDLE` ("Not on a journey") is the default; legacy `HOME`
   documents now read the same and are no longer green.
+
+- **Step 6 done.** `family-invite.tsx` is Invite someone: Choose from contacts
+  (`expo-contacts` picker — passed the dependency gate, see DEPENDENCIES.md;
+  no contacts permission on iOS), or type the number; "On wayLoc ✓" only for a
+  picked contact (F1), through `lookupInvitee`, limited to 20 numbers per
+  account per day server-side — the server cannot prove a number came from
+  contacts, so the limit is the real enumeration defence; "Who is Priya to
+  you?" chips stored as `theyAreMy` (F3), with the person invited shown the
+  inverse (Daughter → Parent) and nothing where no honest inverse exists;
+  what is shared, read from the actual connection defaults; a button naming
+  the person. `invite-sent.tsx` replaces the alert: pending card with real
+  expiry, "Message them how to join" through the share sheet (F2), and a
+  next-step line that depends on whether they have wayLoc.
+  `onFamilyInvitationCreated` pushes the invitee when they have the app, so
+  the screen's notification line is true when it is shown.
+- **Step 7 done.** Add someone's smartphone path hands over to Invite someone.
 
 ### Work, in order
 

@@ -5,6 +5,7 @@ import type {
   FamilyPermissions,
   FamilyStatusSnapshot,
   AskOkOutcome,
+  InviteeStatus,
   SharedFamilyView,
   Watcher,
 } from '../models/Family';
@@ -15,6 +16,7 @@ export interface InviteMemberInput {
   fromPhone: string;
   toPhone: string;
   relationship: string;
+  theyAreMy: string;
 }
 
 export interface CreateConnectionInput {
@@ -23,6 +25,7 @@ export interface CreateConnectionInput {
   fromDisplayName: string;
   fromPhone: string;
   fromRelationship: string;
+  fromTheyAreMy: string | null;
   toUserId: string;
   toDisplayName: string;
   toPhone: string;
@@ -128,6 +131,12 @@ export interface FamilyProvider {
    * side: membership, journey and rate limit are checked there. Never throws.
    */
   askIfOk(connectionId: string): Promise<AskOkOutcome>;
+
+  /**
+   * Whether `phone` has a wayLoc account. Call only for a contact the person
+   * just picked (F1); the server limits it per day. Never throws.
+   */
+  lookupInvitee(phone: string): Promise<InviteeStatus>;
 
   /** Who in this connection is watching `watchedId`, live. */
   subscribeWatchers(

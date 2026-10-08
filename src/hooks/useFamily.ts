@@ -5,6 +5,7 @@ import { useInterval } from './useInterval';
 import { useFamilyContext } from '../context/FamilyContext';
 import type {
   AskOkOutcome,
+  InviteeStatus,
   FamilyConnection,
   FamilyInvitation,
   FamilyMember,
@@ -12,6 +13,7 @@ import type {
   Watcher,
 } from '../models/Family';
 import { WATCH_HEARTBEAT_MS } from '../models/Family';
+import type { PickedContact } from '../providers/ContactPickerProvider';
 
 export interface UseFamilyReturn {
   members: FamilyMember[];
@@ -19,7 +21,7 @@ export interface UseFamilyReturn {
   sentInvitations: FamilyInvitation[];
   isLoading: boolean;
   error: string | null;
-  inviteMember(toPhone: string, relationship: string): Promise<void>;
+  inviteMember(toPhone: string, theyAreMy: string): Promise<FamilyInvitation>;
   acceptInvitation(invitationId: string): Promise<FamilyConnection>;
   declineInvitation(invitationId: string): Promise<void>;
   cancelInvitation(invitationId: string): Promise<void>;
@@ -32,6 +34,9 @@ export interface UseFamilyReturn {
   stopWatching(member: FamilyMember): Promise<void>;
   askIfOk(member: FamilyMember): Promise<AskOkOutcome>;
   recordOk(): void;
+  canPickContacts: boolean;
+  pickContact(): Promise<PickedContact | null>;
+  lookupInvitee(phone: string): Promise<InviteeStatus>;
 }
 
 export function useFamily(): UseFamilyReturn {

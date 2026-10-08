@@ -56,6 +56,54 @@ export const FAMILY_RELATIONSHIPS = [
 
 export type FamilyRelationship = (typeof FAMILY_RELATIONSHIPS)[number];
 
+/**
+ * "Who is Priya to you?" (Phase 5b Invite someone, decision F3).
+ *
+ * Asked from the inviter's side — what the *other* person is to them — which
+ * is how people describe family. The older list answered the opposite
+ * question ("your relationship to them") and read backwards to most people.
+ * Stored in its own field, `theyAreMy`, so records made with the old question
+ * keep their old meaning instead of silently flipping.
+ */
+export const THEY_ARE_MY = [
+  'Daughter',
+  'Son',
+  'Parent',
+  'Partner',
+  'Sibling',
+  'Grandparent',
+  'Friend',
+  'Other',
+] as const;
+
+export type TheyAreMy = (typeof THEY_ARE_MY)[number];
+
+/**
+ * What the inviter is to the person invited, given what the person invited is
+ * to the inviter. Gender is not asked, so a parent's child reads "Child" — and
+ * where there is no honest inverse, nothing is shown rather than a guess.
+ */
+const INVERSE: Readonly<Record<TheyAreMy, string>> = {
+  Daughter: 'Parent',
+  Son: 'Parent',
+  Parent: 'Child',
+  Partner: 'Partner',
+  Sibling: 'Sibling',
+  Grandparent: 'Grandchild',
+  Friend: 'Friend',
+  Other: '',
+};
+
+/** The label `viewerId` sees for the other person in a connection. */
+export function relationshipLabel(
+  connection: Pick<FamilyConnection, 'relationship' | 'theyAreMy' | 'initiatedBy'>,
+  viewerId: string,
+): string {
+  const theyAreMy = (connection.theyAreMy ?? null) as TheyAreMy | null;
+  if (!theyAreMy) return connection.relationship;
+  return connection.initiatedBy === viewerId ? theyAreMy : (INVERSE[theyAreMy] ?? '');
+}
+
 export interface FamilyPermissions {
   sharingMode: SharingMode;
   shareLocation: boolean;
@@ -90,6 +138,8 @@ export interface FamilyConnection {
   user1Phone: string;
   user2Phone: string;
   relationship: string;
+  /** What the person invited is to the inviter (`initiatedBy`). Absent on legacy records. */
+  theyAreMy?: string | null;
   status: FamilyConnectionStatus;
   initiatedBy: string;
   /** What user1 shares with user2 */
@@ -108,6 +158,8 @@ export interface FamilyInvitation {
   fromPhone: string;
   toPhone: string;
   relationship: string;
+  /** What the person invited is to the inviter. Absent on legacy records. */
+  theyAreMy?: string | null;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'CANCELLED';
   createdAt: Date;
   expiresAt: Date;
@@ -359,3 +411,29 @@ export function describeWatchers(watchers: readonly Watcher[]): string | null {
 
 /** What happened when a watcher tapped Ask "OK?" (S2c). */
 export type AskOkOutcome = 'sent' | 'no-device' | 'too-soon' | 'not-travelling' | 'failed';
+
+/**
+ * Whether a number someone picked has a wayLoc account (decision F1).
+ * `unknown` covers "not checked", "limit reached" and "could not ask" alike —
+ * in each case the screen says nothing either way.
+ */
+export type InviteeStatus = 'on-wayloc' | 'not-on-wayloc' | 'unknown';
+
+/**
+ * A number from a contact card as E.164, or null when it cannot be read as one.
+ *
+ * Contacts hold numbers however people typed them: spaces, dashes, a leading
+ * national 0. One with a country code is taken as written; one without is read
+ * as a UK or Indian mobile, the markets wayLoc serves — anything else needs
+ * the person to pick the country themselves rather than us guessing it.
+ */
+export function normaliseContactNumber(raw: string): string | null {
+  const compact = raw.replace(/[\s\-().]/g, '');
+  if (/^\+[1-9]\d{6,14}$/.test(compact)) return compact;
+  if (/^00[1-9]\d{6,14}$/.test(compact)) return `+${compact.slice(2)}`;
+  const uk = compact.match(/^0(7\d{9})$/);
+  if (uk) return `+44${uk[1]}`;
+  const india = compact.match(/^0?([6-9]\d{9})$/);
+  if (india) return `+91${india[1]}`;
+  return null;
+}

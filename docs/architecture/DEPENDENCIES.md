@@ -183,6 +183,37 @@ Android, web and in Jest, and the provider falls back to fixtures there.
 
 A dependency avoided rather than added, which is the outcome the gate exists for.
 
+### `expo-contacts` — added, picker only (8 Oct 2026)
+
+For Invite someone's "Choose from contacts" (Phase 5b, decision F1).
+
+**Check 1 first.** The OS does this: `CNContactPickerViewController` runs out
+of process, needs no contacts permission, and returns only the contact the
+person picks — better for privacy than reading the address book, and enough
+for F1, since a picked number provably came from the inviter's contacts. The
+fallback, if the package failed the gate, was a small Swift module around it.
+
+**It passed, and wraps that exact controller** (`presentContactPickerAsync`,
+`ios/ContactsModule.swift`), so no Swift was needed:
+
+| Check | Result |
+|---|---|
+| Last publish | 2026-10-05 |
+| Maintainers | 12 — Expo first-party |
+| Licence | MIT |
+| Expo SDK | `bundledNativeModules`: `~15.0.11`, installed via `expo install` |
+| Native code | Yes — one rebuild |
+
+**Used for the picker only.** Nothing calls `getContactsAsync` or asks for
+address-book permission. On iOS the picker needs none; the config plugin's
+`NSContactsUsageDescription` is the declaration iOS requires once the
+framework is linked, worded for what the app does.
+
+**Android caveat, recorded:** Expo's picker requires `READ_CONTACTS` there.
+Android is not yet a tested target; when it is, either accept that prompt or
+use `Intent.ACTION_PICK` on `ContactsContract.CommonDataKinds.Phone`, which
+needs no permission.
+
 ## Where native code belongs
 
 Swift/Kotlin is the right answer when the platform already does the work

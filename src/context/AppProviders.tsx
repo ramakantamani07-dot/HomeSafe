@@ -61,6 +61,8 @@ import { FirebaseBasicPhoneMemberProvider } from '../implementations/networkLoca
 import { MockBasicPhoneMemberProvider } from '../implementations/networkLocation/MockBasicPhoneMemberProvider';
 import { FirebaseNetworkLocationProvider } from '../implementations/networkLocation/FirebaseNetworkLocationProvider';
 import { MockNetworkLocationProvider } from '../implementations/networkLocation/MockNetworkLocationProvider';
+import { ExpoContactPickerProvider } from '../implementations/deviceContacts/ExpoContactPickerProvider';
+import { MockContactPickerProvider } from '../implementations/deviceContacts/MockContactPickerProvider';
 import { isNearbyPlacesAvailable } from '../../modules/nearby-places';
 
 import { FakeCallService } from '../services/FakeCallService';
@@ -312,6 +314,14 @@ const familyProvider = devMode
 
 const familyService = new FamilyService(familyProvider);
 
+// The system contact picker where it is linked (a dev client or release
+// build), keyed on the native module like the map and nearby places — mock
+// data is no reason to hide a real picker. Expo Go falls back to a fixed pick
+// in mock mode, and to no button at all otherwise.
+const nativeContactPicker = new ExpoContactPickerProvider();
+const contactPicker =
+  nativeContactPicker.isAvailable || !devMode ? nativeContactPicker : new MockContactPickerProvider();
+
 const dataExportProvider = devMode
   ? new MockDataExportProvider()
   : new FirebaseDataExportProvider(firebaseApp!);
@@ -482,7 +492,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
                   BatteryStateProvider so it can read activeSOS, activeJourney,
                   and batteryLevel to publish the user's live family status.
                 */}
-                <FamilyStateProvider familyService={familyService}>
+                <FamilyStateProvider familyService={familyService} contactPicker={contactPicker}>
                   <BasicPhoneStateProvider
                     memberProvider={basicPhoneMemberProvider}
                     locationProvider={networkLocationProvider}

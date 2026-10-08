@@ -6,6 +6,7 @@ import type {
   FamilyPermissions,
   FamilyStatusSnapshot,
   AskOkOutcome,
+  InviteeStatus,
   SharedFamilyView,
   Watcher,
 } from '../../models/Family';
@@ -82,6 +83,7 @@ export class MockFamilyProvider implements FamilyProvider {
         user1Phone: isFromUser1 ? '+911111111111' : '+910000000000',
         user2Phone: isFromUser1 ? '+910000000000' : '+911111111111',
         relationship: demo.relationship,
+        theyAreMy: demo.relationship,
         status: 'ACTIVE',
         initiatedBy: me,
         user1Permissions: sharePerms,
@@ -132,6 +134,7 @@ export class MockFamilyProvider implements FamilyProvider {
       fromPhone: input.fromPhone,
       toPhone: input.toPhone,
       relationship: input.relationship,
+      theyAreMy: input.theyAreMy,
       status: 'PENDING',
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
@@ -175,6 +178,7 @@ export class MockFamilyProvider implements FamilyProvider {
       user1Phone: isFromUser1 ? input.fromPhone : input.toPhone,
       user2Phone: isFromUser1 ? input.toPhone : input.fromPhone,
       relationship: input.fromRelationship,
+      theyAreMy: input.fromTheyAreMy,
       status: 'ACTIVE',
       initiatedBy: input.fromUserId,
       user1Permissions: defaultPerms,
@@ -266,6 +270,12 @@ export class MockFamilyProvider implements FamilyProvider {
   /** Demo people have no device, so nothing is delivered — and the screen says so. */
   async askIfOk(_connectionId: string): Promise<AskOkOutcome> {
     return 'no-device';
+  }
+
+  /** Indian numbers ending in an even digit "have wayLoc", so both badges are visible in mock mode. */
+  async lookupInvitee(phone: string): Promise<InviteeStatus> {
+    const last = Number(phone.slice(-1));
+    return Number.isNaN(last) ? 'unknown' : last % 2 === 0 ? 'on-wayloc' : 'not-on-wayloc';
   }
 
   async stopWatching(connectionId: string, watcherId: string): Promise<void> {

@@ -4,7 +4,9 @@ import {
   MAX_SHARED_PATH_POINTS,
   WATCH_PRESENCE_TTL_MS,
   describeWatchers,
+  normaliseContactNumber,
   presentWatchers,
+  relationshipLabel,
   defaultFamilyPermissions,
   deriveSharedView,
   measureJourneyProgress,
@@ -183,5 +185,32 @@ describe('watch presence', () => {
     service.watchWatchers('emma', ['c1'], (list) => fresh.push(...list));
     await service.announceWatching('c1', 'mum', 'Mum', 'emma', now);
     expect(fresh[0].until.getTime() - now.getTime()).toBe(WATCH_PRESENCE_TTL_MS);
+  });
+});
+
+describe('relationships (F3)', () => {
+  const conn = { relationship: 'Daughter', theyAreMy: 'Daughter', initiatedBy: 'mum' };
+
+  it('shows the inviter what they chose, and the invitee the inverse', () => {
+    expect(relationshipLabel(conn, 'mum')).toBe('Daughter');
+    expect(relationshipLabel(conn, 'emma')).toBe('Parent');
+    expect(relationshipLabel({ ...conn, theyAreMy: 'Parent' }, 'emma')).toBe('Child');
+    expect(relationshipLabel({ ...conn, theyAreMy: 'Friend' }, 'emma')).toBe('Friend');
+  });
+
+  it('shows nothing rather than guess an inverse', () => {
+    expect(relationshipLabel({ ...conn, theyAreMy: 'Other' }, 'emma')).toBe('');
+  });
+
+  it('keeps legacy records exactly as they were', () => {
+    expect(relationshipLabel({ relationship: 'Sibling', initiatedBy: 'mum' }, 'emma')).toBe('Sibling');
+  });
+
+  it('reads contact-card numbers', () => {
+    expect(normaliseContactNumber('+91 98765 43210')).toBe('+919876543210');
+    expect(normaliseContactNumber('07700 900123')).toBe('+447700900123');
+    expect(normaliseContactNumber('0044 7700 900123')).toBe('+447700900123');
+    expect(normaliseContactNumber('98765-43210')).toBe('+919876543210');
+    expect(normaliseContactNumber('555 0100')).toBeNull();
   });
 });

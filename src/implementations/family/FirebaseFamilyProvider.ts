@@ -27,6 +27,7 @@ import type {
   FamilyStatusSnapshot,
   JourneyProgress,
   AskOkOutcome,
+  InviteeStatus,
   SharedFamilyView,
   Watcher,
 } from '../../models/Family';
@@ -45,6 +46,7 @@ type StoredInvitation = {
   fromPhone: string;
   toPhone: string;
   relationship: string;
+  theyAreMy?: string | null;
   status: FamilyInvitation['status'];
   createdAt: Timestamp;
   expiresAt: Timestamp;
@@ -58,6 +60,7 @@ type StoredConnection = {
   user1Phone: string;
   user2Phone: string;
   relationship: string;
+  theyAreMy?: string | null;
   status: FamilyConnectionStatus;
   initiatedBy: string;
   user1Permissions: FamilyPermissions;
@@ -132,6 +135,7 @@ function invitationFromFirestore(id: string, data: StoredInvitation): FamilyInvi
     fromPhone: data.fromPhone,
     toPhone: data.toPhone,
     relationship: data.relationship,
+    theyAreMy: data.theyAreMy ?? null,
     status: data.status,
     createdAt: data.createdAt.toDate(),
     expiresAt: data.expiresAt.toDate(),
@@ -148,6 +152,7 @@ function connectionFromFirestore(id: string, data: StoredConnection): FamilyConn
     user1Phone: data.user1Phone,
     user2Phone: data.user2Phone,
     relationship: data.relationship,
+    theyAreMy: data.theyAreMy ?? null,
     status: data.status,
     initiatedBy: data.initiatedBy,
     user1Permissions: data.user1Permissions,
@@ -233,6 +238,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       fromPhone: input.fromPhone,
       toPhone: input.toPhone,
       relationship: input.relationship,
+      theyAreMy: input.theyAreMy,
       status: 'PENDING',
       createdAt: now,
       expiresAt,
@@ -286,6 +292,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       user1Phone: isFromUser1 ? input.fromPhone : input.toPhone,
       user2Phone: isFromUser1 ? input.toPhone : input.fromPhone,
       relationship: input.fromRelationship,
+      theyAreMy: input.fromTheyAreMy,
       status: 'ACTIVE',
       initiatedBy: input.fromUserId,
       user1Permissions: defaultPerms,
@@ -419,6 +426,16 @@ export class FirebaseFamilyProvider implements FamilyProvider {
     } catch (err) {
       const refusal = (err as { details?: { refusal?: string } }).details?.refusal;
       return refusal === 'too-soon' || refusal === 'not-travelling' ? refusal : 'failed';
+    }
+  }
+
+  async lookupInvitee(phone: string): Promise<InviteeStatus> {
+    try {
+      const call = httpsCallable<{ phone: string }, { onWayloc: boolean }>(this.functions, 'lookupInvitee');
+      const { data } = await call({ phone });
+      return data.onWayloc ? 'on-wayloc' : 'not-on-wayloc';
+    } catch {
+      return 'unknown';
     }
   }
 

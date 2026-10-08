@@ -76,6 +76,7 @@ export default function AppLayout() {
         <Stack.Screen name="medical-id" />
         <Stack.Screen name="delete-account" />
         <Stack.Screen name="family-invite" />
+        <Stack.Screen name="invite-sent" />
         <Stack.Screen name="family-member" />
         <Stack.Screen name="watch-member" />
         {/* Basic-phone members (network location, Phase 6.4). */}

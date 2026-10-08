@@ -6,9 +6,11 @@ import type {
   FamilyMember,
   AskOkOutcome,
   FamilyPermissions,
+  InviteeStatus,
   Watcher,
 } from '../models/Family';
 import type { FamilyService } from '../services/FamilyService';
+import type { ContactPickerProvider, PickedContact } from '../providers/ContactPickerProvider';
 import { useAuthContext } from './AuthContext';
 import { useJourneyContext } from './JourneyContext';
 import { useSOSContext } from './SOSContext';
@@ -23,7 +25,8 @@ interface FamilyContextValue {
   sentInvitations: FamilyInvitation[];
   isLoading: boolean;
   error: string | null;
-  inviteMember(toPhone: string, relationship: string): Promise<void>;
+  /** `theyAreMy`: what the person invited is to you (F3). Returns the invitation sent. */
+  inviteMember(toPhone: string, theyAreMy: string): Promise<FamilyInvitation>;
   acceptInvitation(invitationId: string): Promise<FamilyConnection>;
   declineInvitation(invitationId: string): Promise<void>;
   cancelInvitation(invitationId: string): Promise<void>;
@@ -48,6 +51,12 @@ interface FamilyContextValue {
   askIfOk(member: FamilyMember): Promise<AskOkOutcome>;
   /** Answer someone's Ask "OK?": publishes a fresh "I'm OK" time. */
   recordOk(): void;
+  /** Whether "Choose from contacts" can be offered on this device. */
+  canPickContacts: boolean;
+  /** The system contact picker — returns only the person chosen. */
+  pickContact(): Promise<PickedContact | null>;
+  /** "On wayLoc ✓" for a picked contact's number (F1). */
+  lookupInvitee(phone: string): Promise<InviteeStatus>;
 }
 
 const FamilyContext = createContext<FamilyContextValue>({
@@ -56,7 +65,9 @@ const FamilyContext = createContext<FamilyContextValue>({
   sentInvitations: [],
   isLoading: false,
   error: null,
-  inviteMember: async () => {},
+  inviteMember: async () => {
+    throw new Error('FamilyContext not mounted.');
+  },
   acceptInvitation: async () => { throw new Error('FamilyContext not mounted.'); },
   declineInvitation: async () => {},
   cancelInvitation: async () => {},
@@ -69,13 +80,18 @@ const FamilyContext = createContext<FamilyContextValue>({
   stopWatching: async () => {},
   askIfOk: async () => 'failed',
   recordOk: () => {},
+  canPickContacts: false,
+  pickContact: async () => null,
+  lookupInvitee: async () => 'unknown',
 });
 
 export function FamilyStateProvider({
   familyService,
+  contactPicker,
   children,
 }: {
   familyService: FamilyService;
+  contactPicker: ContactPickerProvider;
   children: React.ReactNode;
 }) {
   const { user } = useAuthContext();
@@ -225,6 +241,9 @@ export function FamilyStateProvider({
     [userId, userName, familyService],
   );
 
+  const pickContact = useCallback(() => contactPicker.pick(), [contactPicker]);
+  const lookupInvitee = useCallback((phone: string) => familyService.lookupInvitee(phone), [familyService]);
+
   const askIfOk = useCallback(
     (member: FamilyMember) => familyService.askIfOk(member.connectionId),
     [familyService],
@@ -240,10 +259,11 @@ export function FamilyStateProvider({
   const userPhone = user?.phone ?? '';
 
   const inviteMember = useCallback<FamilyContextValue['inviteMember']>(
-    async (toPhone, relationship) => {
+    async (toPhone, theyAreMy) => {
       if (!userId) throw new Error('You must be signed in.');
-      await familyService.inviteMember(userId, userName, userPhone, toPhone, relationship);
+      const invitation = await familyService.inviteMember(userId, userName, userPhone, toPhone, theyAreMy);
       setSentInvitations(await familyService.getSentInvitations(userId));
+      return invitation;
     },
     [userId, userName, userPhone, familyService],
   );
@@ -323,6 +343,9 @@ export function FamilyStateProvider({
       stopWatching,
       askIfOk,
       recordOk,
+      canPickContacts: contactPicker.isAvailable,
+      pickContact,
+      lookupInvitee,
     }),
     [
       members,
@@ -343,6 +366,9 @@ export function FamilyStateProvider({
       stopWatching,
       askIfOk,
       recordOk,
+      contactPicker,
+      pickContact,
+      lookupInvitee,
     ],
   );
 

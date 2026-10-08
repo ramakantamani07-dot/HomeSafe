@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,223 +13,203 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
-import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
+import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useFamily } from '../../src/hooks/useFamily';
+import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
+import { normaliseContactNumber, type InviteeStatus, type TheyAreMy } from '../../src/models/Family';
 import { PhoneInput } from '../../src/components/common/PhoneInput';
-import { FAMILY_RELATIONSHIPS } from '../../src/models/Family';
-import type { FamilyRelationship } from '../../src/models/Family';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Button } from '../../src/components/ui/Button';
-import type { ThemeColors } from '../../src/config/theme';
+import { Icon } from '../../src/components/ui/Icon';
+import { StatusBadge } from '../../src/components/ui/StatusBadge';
+import { RelationshipChips } from '../../src/components/family/RelationshipChips';
+import { WhatIsShared } from '../../src/components/family/WhatIsShared';
 
-export default function FamilyInviteScreen() {
+const E164 = /^\+[1-9]\d{6,14}$/;
+
+/**
+ * Invite someone (Phase 5b; replaces "Invite Family Member").
+ *
+ * Choose from contacts first — fastest, and the only path that may say
+ * whether someone is on wayLoc (decision F1: only for a person the inviter
+ * already has in their contacts). Typing a number never triggers that lookup.
+ *
+ * The board's "we'll text a link" is not offered: there is no SMS provider
+ * yet (F2). Invite sent offers "send them a message yourself" instead.
+ */
+export default function InviteSomeoneScreen() {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
-  const { inviteMember } = useFamily();
+  const { inviteMember, canPickContacts, pickContact, lookupInvitee } = useFamily();
+  const { enabled: basicPhoneEnabled } = useBasicPhoneMembers();
 
   const [phone, setPhone] = useState('');
-  const [relationship, setRelationship] = useState<FamilyRelationship>('Parent');
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Bumped to re-seed PhoneInput when a contact fills the number in.
+  const [phoneKey, setPhoneKey] = useState(0);
+  const [picked, setPicked] = useState<{ name: string; phone: string } | null>(null);
+  const [status, setStatus] = useState<InviteeStatus>('unknown');
+  const [theyAreMy, setTheyAreMy] = useState<TheyAreMy | null>(null);
+  const [sending, setSending] = useState(false);
 
-  const handleSend = async () => {
-    setError(null);
-    setIsSending(true);
-    try {
-      await inviteMember(phone, relationship);
+  const name = picked?.name || null;
+  const who = name?.split(' ')[0] ?? 'them';
+  const valid = E164.test(phone);
+  const ready = valid && theyAreMy !== null;
+
+  const choose = async () => {
+    const contact = await pickContact();
+    if (!contact) return;
+    const number = contact.phoneNumbers.map(normaliseContactNumber).find((n): n is string => n !== null);
+    if (!number) {
       Alert.alert(
-        'Invitation Sent',
-        `An invitation has been sent to ${phone}. They can accept it when they open wayLoc.`,
-        [{ text: 'OK', onPress: () => router.back() }],
+        `No number we can use for ${contact.name || 'them'}`,
+        'Type their mobile number, with its country code.',
       );
+      return;
+    }
+    setPicked({ name: contact.name, phone: number });
+    setPhone(number);
+    setPhoneKey((k) => k + 1);
+    setStatus('unknown');
+    // F1: only for someone from their own contacts.
+    setStatus(await lookupInvitee(number));
+  };
+
+  const typed = (value: string) => {
+    setPhone(value);
+    // A typed number is no longer the contact that was picked.
+    if (picked && value !== picked.phone) {
+      setPicked(null);
+      setStatus('unknown');
+    }
+  };
+
+  const send = async () => {
+    if (!ready || !theyAreMy) return;
+    setSending(true);
+    try {
+      const invitation = await inviteMember(phone, theyAreMy);
+      router.replace({
+        pathname: '/invite-sent',
+        params: {
+          name: name ?? '',
+          phone,
+          theyAreMy,
+          expiresAt: invitation.expiresAt.toISOString(),
+          status,
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send invitation.');
+      Alert.alert("Couldn't send the invite", err instanceof Error ? err.message : 'Try again in a moment.');
     } finally {
-      setIsSending(false);
+      setSending(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          disabled={isSending}
-        >
-          <Text style={[styles.backText, isSending && styles.disabled]}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Invite Family Member</Text>
-        <View style={styles.backButton} />
-      </View>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <ScreenHeader title="Invite someone" onBack={() => router.back()} />
 
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Explanation */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>
-            Enter the phone number of a wayLoc user you want to connect with.
-            They will receive a pending invitation and can accept or decline.
+          {canPickContacts && (
+            <>
+              <TouchableOpacity style={styles.contacts} onPress={choose} accessibilityRole="button">
+                <Icon name="person" size={18} color={theme.accent} />
+                <Text style={styles.contactsText}>Choose from contacts</Text>
+              </TouchableOpacity>
+              <Text style={styles.or}>or type their number</Text>
+            </>
+          )}
+
+          <PhoneInput key={phoneKey} initialValue={picked?.phone} onPhoneChange={typed} />
+
+          {picked && (
+            <View style={styles.person}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{(picked.name || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.flex}>
+                <Text style={styles.personName}>{picked.name || picked.phone}</Text>
+                <Text style={styles.personDetail}>From your contacts</Text>
+              </View>
+              {status === 'on-wayloc' && <StatusBadge label="On wayLoc ✓" severity="safe" />}
+              {status === 'not-on-wayloc' && <StatusBadge label="Not on wayLoc" severity="neutral" />}
+            </View>
+          )}
+
+          {basicPhoneEnabled && valid && status !== 'on-wayloc' && (
+            <TouchableOpacity
+              onPress={() => router.replace({ pathname: '/add-someone', params: { name: name ?? '', phone } })}
+              accessibilityRole="link"
+            >
+              <Text style={styles.link}>Basic phone with no apps? Ask them by SMS instead</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.question}>Who is {name ? who : 'this person'} to you?</Text>
+          <RelationshipChips value={theyAreMy} onChange={setTheyAreMy} />
+
+          <WhatIsShared name={name ? who : 'They'} />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Button
+            label={name ? `Send invite to ${who}` : 'Send invite'}
+            icon="message"
+            variant="primary"
+            onPress={send}
+            disabled={!ready}
+            loading={sending}
+          />
+          <Text style={styles.footnote}>
+            Not on wayLoc yet? After sending, you can message them how to join.
           </Text>
         </View>
-
-        {/* Phone number */}
-        <Text style={styles.label}>Their phone number</Text>
-        <PhoneInput
-          onPhoneChange={setPhone}
-          disabled={isSending}
-          onSubmit={handleSend}
-        />
-
-        {/* Relationship */}
-        <Text style={[styles.label, { marginTop: SPACING.xl }]}>Your relationship to them</Text>
-        <View style={styles.relationshipGrid}>
-          {FAMILY_RELATIONSHIPS.map((rel) => (
-            <TouchableOpacity
-              key={rel}
-              style={[
-                styles.relChip,
-                relationship === rel && styles.relChipSelected,
-              ]}
-              onPress={() => setRelationship(rel)}
-              disabled={isSending}
-            >
-              <Text
-                style={[
-                  styles.relChipText,
-                  relationship === rel && styles.relChipTextSelected,
-                ]}
-              >
-                {rel}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Error */}
-        {error && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {/* Send button */}
-        <Button
-          label="Send Invitation"
-          onPress={handleSend}
-          loading={isSending}
-          style={styles.sendButton}
-        />
-
-        <Text style={styles.footerNote}>
-          Family members can only see your location and journey details based on
-          the sharing settings you configure after connecting.
-        </Text>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 function getStyles(theme: ThemeColors) {
   return StyleSheet.create({
-    safe: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    headerRow: {
+    safe: { flex: 1, backgroundColor: theme.background },
+    flex: { flex: 1 },
+    container: { padding: SPACING.lg, gap: SPACING.md, paddingBottom: SPACING.xxxl },
+    contacts: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      backgroundColor: theme.surface,
-    },
-    backButton: { width: 64 },
-    backText: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.accent,
-      fontWeight: '600',
-    },
-    disabled: { opacity: 0.4 },
-    screenTitle: {
-      fontSize: TYPOGRAPHY.bodyStrong.fontSize,
-      fontWeight: '700',
-      color: theme.textPrimary,
-    },
-    container: {
-      padding: SPACING.xl,
-      paddingBottom: SPACING.xxxl,
-    },
-    infoCard: {
-      backgroundColor: theme.accentMuted,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md + 2,
-      marginBottom: SPACING.xl,
-    },
-    infoText: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.accent,
-      lineHeight: 19,
-    },
-    label: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      fontWeight: '700',
-      color: theme.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: SPACING.sm,
-    },
-    relationshipGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+      justifyContent: 'center',
       gap: SPACING.sm,
-    },
-    relChip: {
+      minHeight: 52,
       borderRadius: RADIUS.pill,
-      paddingHorizontal: SPACING.md + 2,
-      paddingVertical: SPACING.sm,
-      borderWidth: 1.5,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
-    },
-    relChipSelected: {
-      borderColor: theme.accent,
       backgroundColor: theme.accentMuted,
     },
-    relChipText: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.textSecondary,
-      fontWeight: '500',
-    },
-    relChipTextSelected: {
-      color: theme.accent,
-      fontWeight: '700',
-    },
-    errorCard: {
-      backgroundColor: theme.critical.bg,
-      borderRadius: RADIUS.sm + 2,
+    contactsText: { fontSize: 16, fontFamily: FONTS.bodySemibold, color: theme.accent },
+    or: { textAlign: 'center', fontSize: 13, fontFamily: FONTS.body, color: theme.textSecondary },
+    person: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
       padding: SPACING.md,
-      marginTop: SPACING.md + 2,
+      borderRadius: RADIUS.lg,
+      backgroundColor: theme.surface,
     },
-    errorText: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.critical.fg,
-      lineHeight: 18,
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
     },
-    sendButton: {
-      marginTop: SPACING.xl,
-    },
-    footerNote: {
-      marginTop: SPACING.lg,
-      fontSize: 12,
-      color: theme.textTertiary,
-      textAlign: 'center',
-      lineHeight: 17,
-    },
+    avatarText: { fontSize: 16, fontFamily: FONTS.heading, color: theme.textOnColor },
+    personName: { fontSize: 16, fontFamily: FONTS.bodySemibold, color: theme.textPrimary },
+    personDetail: { fontSize: 13, fontFamily: FONTS.body, color: theme.textSecondary },
+    link: { fontSize: 14, fontFamily: FONTS.bodySemibold, color: theme.accent },
+    question: { fontSize: 16, fontFamily: FONTS.bodySemibold, color: theme.textPrimary, marginTop: SPACING.xs },
+    footer: { padding: SPACING.lg, gap: SPACING.sm },
+    footnote: { textAlign: 'center', fontSize: 13, fontFamily: FONTS.body, color: theme.textSecondary },
   });
 }

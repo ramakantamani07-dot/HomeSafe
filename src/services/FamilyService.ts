@@ -7,10 +7,12 @@ import type {
   FamilyStatusSnapshot,
   FamilyStatusType,
   AskOkOutcome,
+  InviteeStatus,
   SharedFamilyView,
   Watcher,
 } from '../models/Family';
 import {
+  relationshipLabel,
   computeConnectionId,
   deriveSharedView,
   WATCH_PRESENCE_TTL_MS,
@@ -103,6 +105,7 @@ export class FamilyService {
     fromDisplayName: string,
     fromPhone: string,
     toPhone: string,
+    /** What the person invited is to the inviter — "Who is Priya to you?" (F3). */
     relationship: string,
   ): Promise<FamilyInvitation> {
     const phone = toPhone.trim();
@@ -137,7 +140,10 @@ export class FamilyService {
       fromDisplayName,
       fromPhone,
       toPhone: phone,
+      // Both fields: `theyAreMy` carries the meaning; `relationship` keeps
+      // older readers showing something rather than nothing.
       relationship,
+      theyAreMy: relationship,
     });
   }
 
@@ -197,6 +203,7 @@ export class FamilyService {
       fromDisplayName: invitation.fromDisplayName,
       fromPhone: invitation.fromPhone,
       fromRelationship: invitation.relationship,
+      fromTheyAreMy: invitation.theyAreMy ?? null,
       toUserId: currentUserId,
       toDisplayName: currentDisplayName,
       toPhone: currentPhone,
@@ -238,7 +245,7 @@ export class FamilyService {
           connectionId: conn.id,
           displayName: isUser1 ? conn.user2DisplayName : conn.user1DisplayName,
           phoneNumber: isUser1 ? conn.user2Phone : conn.user1Phone,
-          relationship: conn.relationship,
+          relationship: relationshipLabel(conn, userId),
           connectionStatus: conn.status,
           theirPermissions,
           myPermissions,
@@ -291,6 +298,10 @@ export class FamilyService {
 
   askIfOk(connectionId: string): Promise<AskOkOutcome> {
     return this.provider.askIfOk(connectionId);
+  }
+
+  lookupInvitee(phone: string): Promise<InviteeStatus> {
+    return E164_REGEX.test(phone) ? this.provider.lookupInvitee(phone) : Promise.resolve('unknown');
   }
 
   /** Everyone watching `userId` across these connections, merged, live. */
