@@ -26,7 +26,7 @@ compound.
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
-| 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
+| 6 · Network location | **6.1–6.4 done, against mocks** (incl. resend consent, D26) | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
 
@@ -34,6 +34,51 @@ compound.
 destination, and a button that goes nowhere is worse than no button. It ships
 the two tiles the app can already do honestly — **Call guardian** and **Fake
 call** — and simply omits the other two rather than rendering them inert.
+
+### Fixed from on-device testing (8 Oct 2026)
+
+First runs on an iPhone 15 turned up layout and navigation faults the test
+suite cannot see. Each was fixed at its cause, not at the screen:
+
+| Seen on the phone | Cause | Fix |
+|---|---|---|
+| Search sheet under the clock and battery; ✕ hard to tap | `MapSheet` full detent reached y = 0 | Full stops below the status bar; sheet sized to match |
+| Appearance picker off-centre | No top margin against `SPACING.md` elsewhere | Even margin on all sides |
+| Family's "Add someone" hidden until dragged up | Second sheet stacked at half height; OS clips the rest | `STACKED_SHEET_OPTIONS` — sheets opened from a sheet open full |
+| "Location" squeezed to a letter per line | `ListRow` value could take the whole row | Value capped at 60% and wraps — fixes every row |
+| "GO_BACK was not handled" — Back did nothing | `router.back()` with no screen behind | `useGoBack` goes Home when there is no history |
+| iOS "Ask a parent to approve" on Call | Demo placeholder number handed to the dialler under Screen Time limits | `isUnreachableNumber` explains instead; emergency numbers never affected |
+| "1 others" | Plural | Fixed |
+
+### What is left
+
+**Not yet proven against a real backend.** Everything below works against
+mocks and the Firestore emulator, and has never run on Firebase or between two
+real phones: consent SMS / STOP / locate (6.3), resend consent, revocation
+layer 3, retention clean-up, live family status, watch presence, Ask "OK?",
+the invitation push, and the "On wayLoc" lookup. Getting there needs a
+Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
+(`docs/reference/RUNNING.md`), and a Firestore TTL policy on `smsInbound`.
+**This is the highest-value next step.**
+
+**Buildable now**
+
+| Work | Phase |
+|---|---|
+| Safe zones for basic-phone members — CAMARA geofence or scheduled verify, hysteresis | 6.5 |
+| SOS and check-in by SMS / missed call for basic-phone members | 6.6 |
+| Battery profile over a real journey, memory pass, offline queue, accessibility pass, runbooks | 8 |
+
+**Waiting on a decision or an input**
+
+| Item | Needs |
+|---|---|
+| Sign-in v6 (Phase 7) | `AH1`–`AH4` boards |
+| Pocket mode (D14) | What it should do |
+| Open places on the way (D4) | Per-journey Places cost measured before the flag is turned on |
+| Real network location, SMS (G3) | Operator aggregator, SMS providers, TRAI DLT, legal review |
+| Revocation offline window; short-lived operator grants on the Phase 8 list? | Two open checkboxes in the revocation design |
+| Known gaps below | Artwork (Android notification icon, app icon symbol), a support-email domain, EAS project rename, branding on OTP / biometric screens |
 
 ### Known gaps, none of them blocking
 

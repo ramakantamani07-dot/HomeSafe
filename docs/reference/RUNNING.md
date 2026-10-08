@@ -8,8 +8,15 @@ family, SOS and safety checks all work against in-memory data.
 
 ```bash
 npm install
-npx expo run:ios --device        # pick your iPhone when prompted
+npx expo run:ios --device        # where it works — not on this project's Mac; see below
 ```
+
+On the machine this project is developed on, `expo run:ios` cannot find
+Simulator.app, so device builds go through `xcodebuild` and `devicectl` —
+see "If the device build fails" below. After a JavaScript-only change no
+rebuild is needed: with Metro running, restart the app on the phone
+(`xcrun devicectl device process launch --device <udid> --terminate-existing
+com.ramasatish.wayLoc`, phone unlocked) and it fetches the new bundle.
 
 `react-native-maps`, `expo-task-manager` and background notifications are native
 modules, so Expo Go will not work — this needs a dev client, which
@@ -134,10 +141,14 @@ see `docs/reference/NATIVE_ARCHITECTURE_REVIEW.md` P0 #2.
 ```bash
 npx tsc --noEmit                 # app types
 npm --prefix functions run build # Cloud Functions types
-npm test                         # 188 unit tests, no emulator needed
+npm test                         # unit tests, no emulator needed
 npm run check:tokens             # no raw colours outside the design system
 
 # Firestore rules tests need the emulator:
 npx firebase emulators:exec --project=demo-wayloc --only firestore \
   "npx jest --selectProjects rules"
+
+# Cloud Functions, including their Firestore-emulator tests:
+npm --prefix functions test
+npm --prefix functions run test:emulator
 ```
