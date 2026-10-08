@@ -134,3 +134,55 @@ describeEmulator('network location on Firestore', () => {
     expect(audit).toMatchObject({ outcome: 'success', location: null, accuracyMeters: null, hasLocation: false });
   });
 });
+
+describeEmulator('safe zones on Firestore', () => {
+  const { checkZone } = require('../networkLocation/safeZones');
+  const { MockOperatorLocationProvider } = require('../networkLocation/mockAdapters');
+
+  beforeEach(() => {
+    process.env.NETWORK_LOCATION_MARKETS = 'GB';
+    setAdaptersForTesting(createMockAdapters('secret'));
+  });
+
+  async function zoneAround(memberId: string, inside: boolean) {
+    // The mock operator's position for PHONE, so the zone can be placed on or off it.
+    const fix = await new MockOperatorLocationProvider().retrieve(PHONE, 0);
+    const centre = inside ? { latitude: fix.latitude, longitude: fix.longitude } : { latitude: 0, longitude: 0 };
+    const ref = db.collection(`users/${OWNER}/safeZones`).doc();
+    await ref.set({ memberId, name: 'School', centre, radiusMeters: 800, createdAt: Timestamp.now() });
+    return ref;
+  }
+
+  test('readings move the zone through hysteresis, audited, with one event', async () => {
+    await seed('m-zone', 'ACTIVE');
+    const ref = await zoneAround('m-zone', true);
+    const check = async () => checkZone(require('../networkLocation/adapters').getAdapters(), await ref.get());
+
+    await check();
+    expect((await ref.get()).data()).toMatchObject({ state: 'inside', pendingCount: 0 });
+
+    // Move the zone away: two readings outside before it flips.
+    await ref.update({ centre: { latitude: 0, longitude: 0 } });
+    await check();
+    expect((await ref.get()).data()).toMatchObject({ state: 'inside', pendingState: 'outside', pendingCount: 1 });
+    await check();
+    expect((await ref.get()).data()).toMatchObject({ state: 'outside', pendingCount: 0 });
+
+    const events = await db.collection(`users/${OWNER}/zoneEvents`).where('zoneId', '==', ref.id).get();
+    expect(events.docs.map((d) => d.data().event)).toEqual(['left']);
+
+    const audits = await db.collection(`users/${OWNER}/locateAudits`).where('memberId', '==', 'm-zone').get();
+    expect(audits.docs.every((d) => d.data().reason === 'geofence' && d.data().location === null)).toBe(true);
+    expect(audits.size).toBe(3);
+  });
+
+  test('a zone is not checked, or audited, without ACTIVE consent', async () => {
+    await seed('m-zone-off', 'REVOKED');
+    const ref = await zoneAround('m-zone-off', true);
+    await checkZone(require('../networkLocation/adapters').getAdapters(), await ref.get());
+
+    expect((await ref.get()).data()?.state).toBeUndefined();
+    const audits = await db.collection(`users/${OWNER}/locateAudits`).where('memberId', '==', 'm-zone-off').get();
+    expect(audits.size).toBe(0);
+  });
+});

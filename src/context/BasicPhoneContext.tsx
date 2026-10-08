@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhoneMember';
 import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
+import type { NewSafeZone, SafeZone } from '../models/SafeZone';
 import type { BasicPhoneMemberProvider } from '../providers/BasicPhoneMemberProvider';
 import {
   NetworkLocationError,
@@ -30,6 +31,9 @@ interface BasicPhoneContextValue {
   find(memberId: string): Promise<void>;
   listFinds(memberId: string, limit: number): Promise<LocateAudit[]>;
   subscribeConsent(memberId: string, onChange: (consent: Consent | null) => void): Unsubscribe;
+  subscribeZones(memberId: string, onChange: (zones: SafeZone[]) => void): Unsubscribe;
+  addZone(zone: NewSafeZone): Promise<void>;
+  deleteZone(zoneId: string): Promise<void>;
 }
 
 const noop = () => {};
@@ -46,6 +50,9 @@ const BasicPhoneContext = createContext<BasicPhoneContextValue>({
   find: async () => {},
   listFinds: async () => [],
   subscribeConsent: () => noop,
+  subscribeZones: () => noop,
+  addZone: async () => {},
+  deleteZone: async () => {},
 });
 
 /**
@@ -136,6 +143,27 @@ export function BasicPhoneStateProvider({
     [userId, memberProvider],
   );
 
+  const subscribeZones = useCallback(
+    (memberId: string, onChange: (zones: SafeZone[]) => void) =>
+      userId ? memberProvider.subscribeZones(userId, memberId, onChange) : noop,
+    [userId, memberProvider],
+  );
+
+  const addZone = useCallback(
+    async (zone: NewSafeZone) => {
+      if (!userId) throw new Error('Sign in to add a zone.');
+      await memberProvider.addZone(userId, zone);
+    },
+    [userId, memberProvider],
+  );
+
+  const deleteZone = useCallback(
+    async (zoneId: string) => {
+      if (userId) await memberProvider.deleteZone(userId, zoneId);
+    },
+    [userId, memberProvider],
+  );
+
   const value = useMemo(
     () => ({
       enabled,
@@ -147,8 +175,24 @@ export function BasicPhoneStateProvider({
       find,
       listFinds,
       subscribeConsent,
+      subscribeZones,
+      addZone,
+      deleteZone,
     }),
-    [enabled, members, finds, addMember, stopFinding, resendRequest, find, listFinds, subscribeConsent],
+    [
+      enabled,
+      members,
+      finds,
+      addMember,
+      stopFinding,
+      resendRequest,
+      find,
+      listFinds,
+      subscribeConsent,
+      subscribeZones,
+      addZone,
+      deleteZone,
+    ],
   );
 
   return <BasicPhoneContext.Provider value={value}>{children}</BasicPhoneContext.Provider>;

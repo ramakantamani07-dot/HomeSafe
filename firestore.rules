@@ -402,6 +402,37 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Safe zones (Phase 6.5) ─────────────────────────────────────────────
+      // A guardian's circles around places, for one of their basic-phone
+      // members. The client writes the circle; the server writes what the
+      // network says (state, pending readings, last checked) — a client able to
+      // set `state` could fake an arrival, so those fields are refused here.
+      // Radius bounds mirror ZONE_MIN/MAX_RADIUS_M: network location cannot
+      // honestly answer for a circle smaller than its own accuracy.
+      match /safeZones/{zoneId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['memberId', 'name', 'centre', 'radiusMeters', 'createdAt'])
+          && exists(/databases/$(database)/documents/users/$(userId)/basicPhoneMembers/$(request.resource.data.memberId))
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 40
+          && request.resource.data.centre.latitude is number
+          && request.resource.data.centre.longitude is number
+          && request.resource.data.radiusMeters is number
+          && request.resource.data.radiusMeters >= 500
+          && request.resource.data.radiusMeters <= 5000
+          && request.resource.data.createdAt is timestamp;
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      // Arrivals and departures — server-written, append-only, owner-read.
+      match /zoneEvents/{eventId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       // ── Locate audits ──────────────────────────────────────────────────────
       // Every lookup attempt, including refused ones — an audit that recorded
       // only successes could not answer "did anyone try to find me without my

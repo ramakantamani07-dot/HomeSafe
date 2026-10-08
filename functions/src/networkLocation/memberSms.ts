@@ -31,6 +31,7 @@ export async function sendMemberSms(
   to: string,
   template: SmsTemplate,
   guardianName: string,
+  place?: string,
 ): Promise<boolean> {
   const market = marketForNumber(to);
   if (!market || !isMarketEnabled(market)) {
@@ -41,7 +42,7 @@ export async function sendMemberSms(
     to,
     market,
     template,
-    body: renderSms(template, guardianName),
+    body: renderSms(template, guardianName, place),
     dltTemplateId: dltTemplateId(template, market),
   });
   return true;

@@ -26,7 +26,7 @@ compound.
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
-| 6 · Network location | **6.1–6.4 done, against mocks** (incl. resend consent, D26) | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
+| 6 · Network location | **6.1–6.5 done, against mocks** (incl. resend consent D26, safe zones D27) | CIBA operator callback and geofence subscriptions (G3) · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
 
@@ -54,7 +54,7 @@ suite cannot see. Each was fixed at its cause, not at the screen:
 
 **Not yet proven against a real backend.** Everything below works against
 mocks and the Firestore emulator, and has never run on Firebase or between two
-real phones: consent SMS / STOP / locate (6.3), resend consent, revocation
+real phones: consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, revocation
 layer 3, retention clean-up, live family status, watch presence, Ask "OK?",
 the invitation push, and the "On wayLoc" lookup. Getting there needs a
 Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
@@ -65,7 +65,6 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 
 | Work | Phase |
 |---|---|
-| Safe zones for basic-phone members — CAMARA geofence or scheduled verify, hysteresis | 6.5 |
 | SOS and check-in by SMS / missed call for basic-phone members | 6.6 |
 | Battery profile over a real journey, memory pass, offline queue, accessibility pass, runbooks | 8 |
 
@@ -190,6 +189,39 @@ offline window; nothing short of short-lived operator grants does.
 - [x] Layer 3 as a Firestore trigger — **accepted 8 Oct** (D23)
 - [ ] Is the offline window acceptable, mitigated by layer 1?
 - [ ] Should short-lived operator grants go on the Phase 8 hardening list rather than being dismissed?
+
+---
+
+## Decisions settled 8 Oct 2026 — Phase 6.5 safe zones
+
+### D27 · Safe zones are checked by Location Verification, with hysteresis
+
+- **Verification, not retrieval.** `checkSafeZones` (every 15 minutes) asks
+  the operator "inside this circle?" — CAMARA Location Verification — and
+  never learns where the member actually is. Geofence *subscriptions* are the
+  spec's preferred path and a marked TODO until G3 names an operator.
+- **The same gate as Find**: the guardian holds the member, consent is ACTIVE,
+  the market is on — checked before the call, and consent again before any
+  alert, so a STOP landing mid-check still wins. Every check is audited
+  (reason `geofence`, no location stored). Checks do not use the hourly Find
+  allowance; a yes/no about one circle is a weaker request.
+- **Hysteresis.** Two agreeing readings flip a zone; a wobble at the edge
+  produces nothing; events are only flips, so nothing re-alerts. The first
+  reading sets the state *without* an event — someone found inside on the
+  first check did not "arrive", and saying so would be invented.
+- **Honest limits.** Radius 500 m–5 km, because a circle smaller than network
+  accuracy would alert on noise. Five zones per member: the app stops at five,
+  and the check only ever reads the oldest five, since rules cannot count.
+- **The member is told once**, by SMS, when a zone is created — not on every
+  check, which would be a text every fifteen minutes.
+- **Copy:** "Sam reached School", "around 08:42, from their mobile network —
+  approximate". Never "safely at school".
+- **Rules:** a client writes only the circle, for its own member, within the
+  bounds; state and events are server-only; zones are not edited in place.
+  Emulator tests cover the rules and the full check (three readings, one
+  `left` event, three audits; nothing checked without ACTIVE consent).
+- **Cost:** one verification per zone per 15 minutes, while consent is
+  ACTIVE. With no adapter configured the function returns before any query.
 
 ---
 

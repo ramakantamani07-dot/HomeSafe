@@ -1,5 +1,7 @@
 import {
   collection,
+  addDoc,
+  deleteDoc,
   doc,
   getDocs,
   getFirestore,
@@ -25,6 +27,7 @@ import {
   type ResendOutcome,
 } from '../../models/Consent';
 import type { LocateAudit, LocateOutcome, LocateReason } from '../../models/LocateAudit';
+import type { NewSafeZone, SafeZone, ZoneState } from '../../models/SafeZone';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
 import type { Unsubscribe } from '../../providers/types';
 
@@ -57,6 +60,17 @@ type StoredAudit = {
   location: { latitude: number; longitude: number } | null;
   accuracyMeters: number | null;
   at: Timestamp;
+};
+
+type StoredZone = {
+  memberId: string;
+  name: string;
+  centre: { latitude: number; longitude: number };
+  radiusMeters: number;
+  createdAt: Timestamp;
+  state?: ZoneState;
+  lastCheckedAt?: Timestamp | null;
+  lastEventAt?: Timestamp | null;
 };
 
 /**
@@ -183,6 +197,46 @@ export class FirebaseBasicPhoneMemberProvider implements BasicPhoneMemberProvide
         at: a.at.toDate(),
       };
     });
+  }
+
+  subscribeZones(ownerId: string, memberId: string, onChange: (zones: SafeZone[]) => void): Unsubscribe {
+    return onSnapshot(
+      query(collection(this.db, 'users', ownerId, 'safeZones'), where('memberId', '==', memberId)),
+      (snap) =>
+        onChange(
+          snap.docs
+            .map((d) => {
+              const z = d.data() as StoredZone;
+              return {
+                id: d.id,
+                memberId: z.memberId,
+                name: z.name,
+                centre: z.centre,
+                radiusMeters: z.radiusMeters,
+                state: z.state ?? 'unknown',
+                lastCheckedAt: z.lastCheckedAt?.toDate() ?? null,
+                lastEventAt: z.lastEventAt?.toDate() ?? null,
+                createdAt: z.createdAt?.toDate() ?? new Date(),
+              } satisfies SafeZone;
+            })
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+        ),
+      () => {},
+    );
+  }
+
+  async addZone(ownerId: string, zone: NewSafeZone): Promise<void> {
+    await addDoc(collection(this.db, 'users', ownerId, 'safeZones'), {
+      memberId: zone.memberId,
+      name: zone.name.trim(),
+      centre: { latitude: zone.centre.latitude, longitude: zone.centre.longitude },
+      radiusMeters: zone.radiusMeters,
+      createdAt: Timestamp.now(),
+    });
+  }
+
+  async deleteZone(ownerId: string, zoneId: string): Promise<void> {
+    await deleteDoc(doc(this.db, 'users', ownerId, 'safeZones', zoneId));
   }
 }
 

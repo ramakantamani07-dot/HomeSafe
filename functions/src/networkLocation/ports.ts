@@ -85,6 +85,22 @@ export class OperatorError extends Error {
 export interface OperatorLocationProvider {
   /** Throws `OperatorError`. Never called without ACTIVE consent. */
   retrieve(phoneNumber: string, maxAgeSeconds: number): Promise<OperatorFix>;
+
+  /**
+   * Whether the number is within `radiusMeters` of a point — CAMARA Location
+   * *Verification*. Answers yes or no and never says where they are, which is
+   * why safe zones use it rather than `retrieve`: "has she reached school?"
+   * does not need "she is at the chemist". Throws `OperatorError`.
+   *
+   * TODO(G3): CAMARA Geofencing *Subscriptions* would push enter/leave events
+   * instead of us asking; add it here once an aggregator is chosen and its
+   * callback signature scheme is known (camaraproject/Geofencing).
+   */
+  verify(
+    phoneNumber: string,
+    centre: { latitude: number; longitude: number },
+    radiusMeters: number,
+  ): Promise<boolean>;
 }
 
 // ── Operator consent (layer 2) ──────────────────────────────────────────────

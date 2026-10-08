@@ -34,5 +34,7 @@ export {
   inboundConsentSms,
   locateMember,
   onConsentRevoked,
+  checkSafeZones,
+  onSafeZoneCreated,
 } from './networkLocation';
 export { askMemberOk, lookupInvitee, onFamilyInvitationCreated } from './family';

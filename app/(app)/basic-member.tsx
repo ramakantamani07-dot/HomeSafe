@@ -10,6 +10,7 @@ import {
   useBasicPhoneMembers,
   useMemberConsent,
   useMemberFinds,
+  useMemberZones,
 } from '../../src/hooks/useBasicPhoneMembers';
 import { useGoBack } from '../../src/hooks/useGoBack';
 import { describeConsentStatus } from '../../src/models/BasicPhoneMember';
@@ -20,6 +21,7 @@ import { Section, ListRow } from '../../src/components/ui/Section';
 import { StatusBadge, type Severity } from '../../src/components/ui/StatusBadge';
 import { Button } from '../../src/components/ui/Button';
 import { LastFinds } from '../../src/components/circle/LastFinds';
+import { SafeZonesSection } from '../../src/components/circle/SafeZonesSection';
 import { describeResendOutcome } from '../../src/components/circle/findCopy';
 
 /**
@@ -44,7 +46,8 @@ export default function BasicMemberScreen() {
   const member = useBasicPhoneMember(memberId);
   const consent = useMemberConsent(memberId);
   const audits = useMemberFinds(memberId);
-  const { find, stopFinding, resendRequest } = useBasicPhoneMembers();
+  const zones = useMemberZones(memberId);
+  const { find, stopFinding, resendRequest, deleteZone } = useBasicPhoneMembers();
   const [resending, setResending] = useState(false);
   const [now] = useState(() => new Date());
 
@@ -111,6 +114,17 @@ export default function BasicMemberScreen() {
 
         <Text style={styles.sectionLabel}>LAST FINDS</Text>
         <LastFinds audits={audits} now={now} />
+
+        {!isTerminal(status) && (
+          <SafeZonesSection
+            name={name}
+            zones={zones}
+            checking={allowsLocationLookup(status)}
+            now={now}
+            onAdd={() => router.push({ pathname: '/add-zone', params: { memberId: member.id } })}
+            onDelete={(zone) => deleteZone(zone.id)}
+          />
+        )}
 
         <Section>
           <ListRow icon="time" title="Limit" value={`${LOCATE_LIMIT_PER_HOUR} finds an hour`} />

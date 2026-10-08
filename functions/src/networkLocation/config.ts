@@ -55,6 +55,14 @@ export const CONSENT_RESEND_LIMIT = 3;
  */
 export const TRANSPARENCY_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
 
+/**
+ * How often safe zones are verified. Each check is a billed operator call per
+ * zone, so this is a cost decision as much as a freshness one: fifteen
+ * minutes, with two agreeing readings to flip, means an arrival is reported
+ * within about half an hour.
+ */
+export const ZONE_CHECK_SCHEDULE = 'every 15 minutes';
+
 /** How stale an operator fix may be and still be worth showing (CAMARA `maxAge`). */
 export const LOCATE_MAX_AGE_SECONDS = 60;
 
@@ -70,6 +78,7 @@ export type SmsTemplate =
   | 'consent-help'
   | 'stop-confirmed'
   | 'guardian-stopped'
+  | 'zone-created'
   | 'transparency';
 
 /**
@@ -80,7 +89,7 @@ export type SmsTemplate =
  * English only for now. Hindi templates need a native speaker's review before
  * they are sent to anyone, and India's need DLT registration first anyway.
  */
-export function renderSms(template: SmsTemplate, guardianName: string): string {
+export function renderSms(template: SmsTemplate, guardianName: string, place = 'a place'): string {
   switch (template) {
     case 'consent-request':
       return `${guardianName} wants to see your approximate location using wayLoc. Reply YES to allow or NO to refuse. Reply STOP anytime to stop.`;
@@ -96,6 +105,11 @@ export function renderSms(template: SmsTemplate, guardianName: string): string {
       // Only this guardian: others who asked separately may still be able to,
       // so "no one can" would not be true here the way it is after STOP.
       return `wayLoc: ${guardianName} can no longer see your location through wayLoc. Reply STOP anytime to stop sharing with anyone.`;
+    case 'zone-created':
+      // Once, when the zone is made — not on every check. Checks run every
+      // fifteen minutes; texting each one would be noise, and a member told
+      // once what is being watched knows what they agreed to.
+      return `wayLoc: ${guardianName} will be told when you arrive at or leave ${place}. Reply STOP anytime to stop.`;
     case 'transparency':
       return `${guardianName} checked your approximate location via wayLoc. Reply STOP to stop.`;
   }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useBasicPhoneContext } from '../context/BasicPhoneContext';
 import type { Consent } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
+import type { SafeZone } from '../models/SafeZone';
 
 /** Basic-phone members and their Find state (Option 15 S2–S4, AI13). */
 export function useBasicPhoneMembers() {
@@ -54,4 +55,17 @@ export function useMemberFinds(memberId: string | undefined): LocateAudit[] {
   }, [memberId, findStatus, listFinds]);
 
   return audits;
+}
+
+/** A member's safe zones, live — state changes as the server checks them. */
+export function useMemberZones(memberId: string | undefined): SafeZone[] {
+  const { subscribeZones } = useBasicPhoneContext();
+  const [zones, setZones] = useState<SafeZone[]>([]);
+
+  useEffect(() => {
+    if (!memberId) return;
+    return subscribeZones(memberId, setZones);
+  }, [memberId, subscribeZones]);
+
+  return zones;
 }

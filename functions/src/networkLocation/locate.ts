@@ -38,7 +38,7 @@ const DENIAL_FAILURE: Readonly<Record<LocateDenial, LocateFailure>> = {
   'denied-rate-limited': 'rate-limited',
 };
 
-type AuditOutcome = LocateDenial | 'success' | 'provider-error';
+export type AuditOutcome = LocateDenial | 'success' | 'provider-error';
 
 /**
  * The single guarded lookup (Phase 6.3). Manual, SOS and geofence lookups all
@@ -124,7 +124,7 @@ export async function locate(
   return { ok: true, fix };
 }
 
-async function writeAudit(
+export async function writeAudit(
   ownerId: string,
   memberId: string,
   reason: LocateReason,

@@ -95,6 +95,18 @@ export class MockOperatorLocationProvider implements OperatorLocationProvider {
       observedAt: new Date(),
     };
   }
+
+  /** Inside when the mock fix's centre is within the zone — same stable position as `retrieve`. */
+  async verify(
+    phoneNumber: string,
+    centre: { latitude: number; longitude: number },
+    radiusMeters: number,
+  ): Promise<boolean> {
+    const fix = await this.retrieve(phoneNumber, 0);
+    const dLat = (fix.latitude - centre.latitude) * 111_000;
+    const dLon = (fix.longitude - centre.longitude) * 111_000 * Math.cos((centre.latitude * Math.PI) / 180);
+    return Math.sqrt(dLat * dLat + dLon * dLon) <= radiusMeters;
+  }
 }
 
 /** Behaves as an operator that accepts our recorded (layer 1) consent. */

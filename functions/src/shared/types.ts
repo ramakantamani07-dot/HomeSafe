@@ -112,3 +112,19 @@ export interface StoredFamilyConnection {
 export interface StoredSharedStatus {
   status: string | null;
 }
+
+// ── Safe zones (mirrors src/models/SafeZone.ts) ─────────────────────────────
+
+export interface StoredSafeZone {
+  memberId: string;
+  name: string;
+  centre: { latitude: number; longitude: number };
+  radiusMeters: number;
+  createdAt: Timestamp;
+  // Server-only — the rules refuse them from a client.
+  state?: 'inside' | 'outside' | 'unknown';
+  pendingState?: 'inside' | 'outside' | null;
+  pendingCount?: number;
+  lastCheckedAt?: Timestamp | null;
+  lastEventAt?: Timestamp | null;
+}

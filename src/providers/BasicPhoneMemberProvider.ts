@@ -1,6 +1,7 @@
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhoneMember';
 import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
+import type { NewSafeZone, SafeZone } from '../models/SafeZone';
 
 /**
  * The guardian's side of basic-phone members: the people, their consent, and
@@ -49,4 +50,12 @@ export interface BasicPhoneMemberProvider {
 
   /** The most recent lookups of one member, newest first, refused ones included. */
   listFinds(ownerId: string, memberId: string, limit: number): Promise<LocateAudit[]>;
+
+  /** A member's safe zones, live — state changes as the server checks them. */
+  subscribeZones(ownerId: string, memberId: string, onChange: (zones: SafeZone[]) => void): () => void;
+
+  /** Adds a zone. The server texts the member once to say it exists. */
+  addZone(ownerId: string, zone: NewSafeZone): Promise<void>;
+
+  deleteZone(ownerId: string, zoneId: string): Promise<void>;
 }

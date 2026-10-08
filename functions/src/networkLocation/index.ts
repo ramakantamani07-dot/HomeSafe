@@ -7,8 +7,10 @@
  *   ports.ts           SMS / operator / consent-strategy interfaces
  *   mockAdapters.ts    the only adapters until G3 names providers
  *   store.ts           the one transactional way a consent changes
+ *   zones.ts           safe-zone hysteresis — pure
  */
 export { requestConsentSms, resendConsentRequest } from './requestConsent';
 export { inboundConsentSms } from './inboundSms';
 export { locateMember } from './locate';
 export { onConsentRevoked } from './revocation';
+export { checkSafeZones, onSafeZoneCreated } from './safeZones';

@@ -966,6 +966,39 @@ describeWithEmulator('Firestore security rules', () => {
     await assertSucceeds(stop.commit());
   });
 
+  test('safe zones: only the circle from a client, only for their own member, within bounds', async () => {
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, getDoc, Timestamp } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const other = testEnv.authenticatedContext('user-b').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-z'), {
+      displayName: 'Sam',
+      phoneNumber: '+447700900011',
+      consentStatus: 'ACTIVE',
+    });
+    const zone = {
+      memberId: 'm-z',
+      name: 'School',
+      centre: { latitude: 51.5, longitude: -0.1 },
+      radiusMeters: 800,
+      createdAt: Timestamp.now(),
+    };
+    const ref = (d: import('firebase/firestore').Firestore, id: string) => doc(d, 'users', 'user-a', 'safeZones', id);
+
+    await assertSucceeds(setDoc(ref(db, 'z1'), zone));
+    // A client cannot fake what the network said, or edit a zone in place.
+    await assertFails(setDoc(ref(db, 'z2'), { ...zone, state: 'inside' }));
+    await assertFails(updateDoc(ref(db, 'z1'), { radiusMeters: 900 }));
+    // Bounds, and only for a member they hold.
+    await assertFails(setDoc(ref(db, 'z3'), { ...zone, radiusMeters: 100 }));
+    await assertFails(setDoc(ref(db, 'z4'), { ...zone, radiusMeters: 50_000 }));
+    await assertFails(setDoc(ref(db, 'z5'), { ...zone, memberId: 'nobody' }));
+    // Nobody else reads it; events are server-only.
+    await assertFails(getDoc(ref(other, 'z1')));
+    await assertFails(setDoc(doc(db, 'users', 'user-a', 'zoneEvents', 'e1'), { event: 'arrived' }));
+  });
+
   test('a revocation may change nothing but the status', async () => {
     const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
     const { doc, setDoc, updateDoc } = require('firebase/firestore');

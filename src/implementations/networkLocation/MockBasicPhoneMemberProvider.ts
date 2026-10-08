@@ -13,6 +13,7 @@ import {
   type LocateOutcome,
   type LocateReason,
 } from '../../models/LocateAudit';
+import type { NewSafeZone, SafeZone } from '../../models/SafeZone';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
 import type { Unsubscribe } from '../../providers/types';
 import type { MockLocateLedger } from './MockNetworkLocationProvider';
@@ -39,6 +40,8 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
   private consents = new Map<string, Consent>();
   private audits: LocateAudit[] = [];
   private resends = new Map<string, Date[]>();
+  private zones: SafeZone[] = [];
+  private zoneListeners = new Set<() => void>();
   private memberListeners = new Set<() => void>();
   private consentListeners = new Set<() => void>();
   private nextId = 1;
@@ -138,6 +141,34 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
     const current = this.consents.get(memberId)?.status;
     if (!current || current === 'REVOKED' || current === 'DECLINED' || current === 'EXPIRED') return;
     this.setStatus(memberId, status);
+  }
+
+  // ── Safe zones ────────────────────────────────────────────────────────────
+  // No server runs in mock mode, so zones stay "waiting for the first check" —
+  // the honest state for a zone nothing is checking.
+
+  subscribeZones(_ownerId: string, memberId: string, onChange: (zones: SafeZone[]) => void): Unsubscribe {
+    const emit = () => onChange(this.zones.filter((z) => z.memberId === memberId));
+    this.zoneListeners.add(emit);
+    emit();
+    return () => this.zoneListeners.delete(emit);
+  }
+
+  async addZone(_ownerId: string, zone: NewSafeZone): Promise<void> {
+    this.zones.push({
+      ...zone,
+      id: `zone-${this.zones.length + 1}`,
+      state: 'unknown',
+      lastCheckedAt: null,
+      lastEventAt: null,
+      createdAt: new Date(),
+    });
+    this.zoneListeners.forEach((l) => l());
+  }
+
+  async deleteZone(_ownerId: string, zoneId: string): Promise<void> {
+    this.zones = this.zones.filter((z) => z.id !== zoneId);
+    this.zoneListeners.forEach((l) => l());
   }
 
   // ── MockLocateLedger ──────────────────────────────────────────────────────
