@@ -25,7 +25,7 @@ compound.
 | 3 · Journey | **Done bar one item** | "Open places on the way" — see D4 below |
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
-| 5b · Family redesign | **Steps 1–3 done; 4 partly** | Watch live presence (4), Ask "OK?" (5), Invite someone + Invite sent (6) |
+| 5b · Family redesign | **Steps 1–5 done** | Invite someone + Invite sent (6) — needs `expo-contacts` |
 | 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
@@ -991,10 +991,26 @@ claim the app cannot back.
   while Family or Watch live is mounted, counted so two screens share one set.
 - **Step 3 done.** `family.tsx` rebuilt on the S2b layout, with invitations
   received and sent kept as compact rows.
-- **Step 4 partly done.** `watch-member.tsx` shows route, position, live
-  freshness, progress, ETA, distance left, battery and check-in times. The
-  watcher record and "can see you're watching" are not built, so the screen
-  does not say it.
+- **Step 4 done.** `watch-member.tsx` shows route, position, live freshness,
+  progress, ETA, distance left, battery and check-in times. Opening it writes
+  `familyConnections/{id}/watchers/{watcherId}` — refreshed every minute, gone
+  on close, lapsing by itself after two minutes — and the traveller's On the
+  way pill reads "Mum is watching" (F4: by name). Rules: only the watcher
+  writes it, only about the other member, only members read; one emulator
+  test. The traveller listens only during a journey, so Watch live says
+  "can see that you're watching" only then.
+  *Limitation, recorded:* presence is courtesy, not enforcement. Reading
+  `sharedStatus` does not require announcing, so a modified client could watch
+  silently. Enforcing it would mean gating `sharedStatus` reads on a presence
+  document, which would also hide the Family list — not worth it for v1.
+- **Step 5 done.** `askMemberOk` (callable): asker must be an active member,
+  the member must be travelling *as shared with the asker*, once per five
+  minutes per pair; push with I'm OK / SOS buttons. Only the I'm OK button
+  answers — opening the push does not — and the answer is published as a fresh
+  `lastCheckInAt`, so it reaches Watch live through shared status with no reply
+  channel of its own. Watch live says "Asked at 21:45 — waiting" until then,
+  and "Couldn't reach Emma" when the member has no device registered (always,
+  for mock demo people).
 - **Found and fixed on the way:** the publisher reported `HOME` for anyone not
   on a journey, and the badge drew it in green — "at home" and "fine", from
   nothing. New status `IDLE` ("Not on a journey") is the default; legacy `HOME`

@@ -22,6 +22,7 @@ import { AppProviders, deviceIntegrityProvider } from '../src/context/AppProvide
 import { useAuth } from '../src/hooks/useAuth';
 import { usePrivacy } from '../src/hooks/usePrivacy';
 import { useCheckIn } from '../src/hooks/useCheckIn';
+import { useFamily } from '../src/hooks/useFamily';
 import { useSOS } from '../src/hooks/useSOS';
 import { BiometricGate } from '../src/components/security/BiometricGate';
 import { useSafetyCheck } from '../src/hooks/useSafetyCheck';
@@ -62,6 +63,19 @@ const PROMPT_ACTIONS = [
 ];
 
 Notifications.setNotificationCategoryAsync(CHECKIN_PROMPT_CATEGORY, PROMPT_ACTIONS).catch(() => {});
+
+/**
+ * Ask "OK?" from someone watching (S2c). Must match `ASK_OK_CATEGORY` in
+ * functions/src/family/askOk.ts, or iOS shows the push without its buttons.
+ * Worded "I'm OK" because that is what was asked.
+ */
+const ASK_OK_CATEGORY = 'wayloc.ok-request';
+const ASK_OK_TYPE = 'OK_REQUESTED';
+const ANSWER_OK_ACTION = 'ANSWER_OK';
+Notifications.setNotificationCategoryAsync(ASK_OK_CATEGORY, [
+  { identifier: ANSWER_OK_ACTION, buttonTitle: "I'm OK" },
+  { identifier: SOS_ACTION, buttonTitle: 'SOS', options: { isDestructive: true } },
+]).catch(() => {});
 Notifications.setNotificationCategoryAsync(
   SAFETY_CHECK_NOTIFICATION_CATEGORY,
   PROMPT_ACTIONS,
@@ -83,6 +97,7 @@ function SafetyPromptNotificationBridge() {
   const { phase, confirmSafe } = useCheckIn();
   const { confirmOk } = useSafetyCheck();
   const { triggerSOS } = useSOS();
+  const { recordOk } = useFamily();
   const prevPhaseRef = React.useRef(phase);
 
   useEffect(() => {
@@ -121,13 +136,18 @@ function SafetyPromptNotificationBridge() {
       } else if (id === SAFETY_CHECK_NOTIFICATION_ID) {
         if (action === CONFIRM_SAFE_ACTION) void confirmOk();
         else if (action === SOS_ACTION) void triggerSOS();
+      } else if (response.notification.request.content.data?.type === ASK_OK_TYPE) {
+        // Only the button is an answer. Opening the push is not "I'm OK" —
+        // the person asking would be told something nobody said.
+        if (action === ANSWER_OK_ACTION) recordOk();
+        else if (action === SOS_ACTION) void triggerSOS();
       }
       // A default tap (no action chosen) just opens the app, where the same
       // prompt is already on screen.
     };
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => subscription.remove();
-  }, [confirmSafe, confirmOk, triggerSOS]);
+  }, [confirmSafe, confirmOk, triggerSOS, recordOk]);
 
   return null;
 }

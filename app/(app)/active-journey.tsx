@@ -16,6 +16,7 @@ import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/c
 import { useJourney } from '../../src/hooks/useJourney';
 import { useSafetyCheck } from '../../src/hooks/useSafetyCheck';
 import { useFamily } from '../../src/hooks/useFamily';
+import { describeWatchers, presentWatchers } from '../../src/models/Family';
 import { useBatteryStatus } from '../../src/hooks/useBatteryStatus';
 import { useActiveJourneyLocation } from '../../src/hooks/useActiveJourneyLocation';
 import { useJourneyMap } from '../../src/hooks/useJourneyMap';
@@ -89,7 +90,7 @@ export default function ActiveJourneyScreen() {
   const { route, formattedEta, formattedDistance, eta, isLoading: routeLoading } = useRoute();
   const { addTime, adjustedEta } = useSafetyCheck();
   const { phase: checkInPhase, timeRemainingSeconds, confirmSafe } = useCheckIn();
-  const { members } = useFamily();
+  const { members, watchers } = useFamily();
   const { batteryPercent } = useBatteryStatus();
 
   const [ending, setEnding] = useState(false);
@@ -369,7 +370,11 @@ export default function ActiveJourneyScreen() {
             ]}
           />
           <Text style={styles.sharingPillText} numberOfLines={1}>
-            {members.length > 0 ? `${guardians} can see you` : 'No guardians yet'}
+            {/* Someone actively watching outranks who merely could (S2c,
+                decision F4: by name). Re-evaluated on the freshness tick, so
+                a lapsed presence drops off without a timer of its own. */}
+            {describeWatchers(presentWatchers(watchers, new Date())) ??
+              (members.length > 0 ? `${guardians} can see you` : 'No guardians yet')}
           </Text>
         </GlassPill>
       </View>

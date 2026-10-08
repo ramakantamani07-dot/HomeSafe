@@ -5,7 +5,9 @@ import type {
   FamilyInvitation,
   FamilyPermissions,
   FamilyStatusSnapshot,
+  AskOkOutcome,
   SharedFamilyView,
+  Watcher,
 } from '../../models/Family';
 import {
   computeConnectionId,
@@ -31,6 +33,8 @@ export class MockFamilyProvider implements FamilyProvider {
   private connections: FamilyConnection[] = [];
   private ownStatuses: Map<string, FamilyStatusSnapshot> = new Map();
   private sharedStatuses: Map<string, SharedFamilyView> = new Map();
+  private watchers: Map<string, Watcher> = new Map();
+  private watcherListeners: Set<() => void> = new Set();
   private sharedListeners: Map<string, Set<(view: SharedFamilyView | null) => void>> = new Map();
   private nextId = 1;
 
@@ -252,6 +256,37 @@ export class MockFamilyProvider implements FamilyProvider {
     this.sharedListeners.set(key, listeners);
     onChange(this.sharedStatuses.get(key) ?? null);
     return () => listeners.delete(onChange);
+  }
+
+  async announceWatching(connectionId: string, watcher: Watcher): Promise<void> {
+    this.watchers.set(`${connectionId}:${watcher.watcherId}`, watcher);
+    this.watcherListeners.forEach((l) => l());
+  }
+
+  /** Demo people have no device, so nothing is delivered — and the screen says so. */
+  async askIfOk(_connectionId: string): Promise<AskOkOutcome> {
+    return 'no-device';
+  }
+
+  async stopWatching(connectionId: string, watcherId: string): Promise<void> {
+    this.watchers.delete(`${connectionId}:${watcherId}`);
+    this.watcherListeners.forEach((l) => l());
+  }
+
+  subscribeWatchers(
+    connectionId: string,
+    watchedId: string,
+    onChange: (watchers: Watcher[]) => void,
+  ): () => void {
+    const emit = () =>
+      onChange(
+        [...this.watchers.entries()]
+          .filter(([key, w]) => key.startsWith(`${connectionId}:`) && w.watching === watchedId)
+          .map(([, w]) => w),
+      );
+    this.watcherListeners.add(emit);
+    emit();
+    return () => this.watcherListeners.delete(emit);
   }
 
   async getSharedStatus(

@@ -138,6 +138,26 @@ service cloud.firestore {
           && request.auth.uid == publisherUserId
           && isConnectionMember(connectionId, publisherUserId);
       }
+
+      // ── Watch presence (Phase 5b, S2c) ────────────────────────────────────
+      // "Mum is watching": one doc per watcher, written only by that watcher,
+      // readable by the connection. Courtesy, not enforcement — reading
+      // sharedStatus does not require announcing — but nobody can announce on
+      // someone else's behalf, or name a stranger as the one watching.
+      match /watchers/{watcherId} {
+        allow read: if request.auth != null
+          && isActiveConnectionMember(connectionId, request.auth.uid);
+        allow create, update: if request.auth != null
+          && request.auth.uid == watcherId
+          && isActiveConnectionMember(connectionId, watcherId)
+          && request.resource.data.keys().hasOnly(['watcherId', 'name', 'watching', 'until'])
+          && request.resource.data.watcherId == watcherId
+          && request.resource.data.watching != watcherId
+          && isActiveConnectionMember(connectionId, request.resource.data.watching)
+          && request.resource.data.name is string
+          && request.resource.data.until is timestamp;
+        allow delete: if request.auth != null && request.auth.uid == watcherId;
+      }
     }
 
     // ─── Journey Shares ─────────────────────────────────────────────────────

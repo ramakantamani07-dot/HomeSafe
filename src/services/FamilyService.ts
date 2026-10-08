@@ -6,11 +6,14 @@ import type {
   FamilyPermissions,
   FamilyStatusSnapshot,
   FamilyStatusType,
+  AskOkOutcome,
   SharedFamilyView,
+  Watcher,
 } from '../models/Family';
 import {
   computeConnectionId,
   deriveSharedView,
+  WATCH_PRESENCE_TTL_MS,
   measureJourneyProgress,
   simplifyPath,
 } from '../models/Family';
@@ -260,6 +263,48 @@ export class FamilyService {
       this.provider.subscribeSharedStatus(m.connectionId, m.id, (view) =>
         onUpdate(m.id, memberStatusFromView(view, new Date())),
       ),
+    );
+    return () => stops.forEach((stop) => stop());
+  }
+
+  // ─── Watch presence ──────────────────────────────────────────────────────────
+
+  /** Tells `watchedId` that `watcherName` has Watch live open, for the next TTL. */
+  announceWatching(
+    connectionId: string,
+    watcherId: string,
+    watcherName: string,
+    watchedId: string,
+    now: Date,
+  ): Promise<void> {
+    return this.provider.announceWatching(connectionId, {
+      watcherId,
+      name: watcherName.trim() || 'Someone in your family',
+      watching: watchedId,
+      until: new Date(now.getTime() + WATCH_PRESENCE_TTL_MS),
+    });
+  }
+
+  stopWatching(connectionId: string, watcherId: string): Promise<void> {
+    return this.provider.stopWatching(connectionId, watcherId);
+  }
+
+  askIfOk(connectionId: string): Promise<AskOkOutcome> {
+    return this.provider.askIfOk(connectionId);
+  }
+
+  /** Everyone watching `userId` across these connections, merged, live. */
+  watchWatchers(
+    userId: string,
+    connectionIds: readonly string[],
+    onChange: (watchers: Watcher[]) => void,
+  ): () => void {
+    const byConnection = new Map<string, Watcher[]>();
+    const stops = connectionIds.map((id) =>
+      this.provider.subscribeWatchers(id, userId, (list) => {
+        byConnection.set(id, list);
+        onChange([...byConnection.values()].flat());
+      }),
     );
     return () => stops.forEach((stop) => stop());
   }

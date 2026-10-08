@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, identityColor, type ThemeColors } from '../../src/config/theme';
-import { useLiveFamily } from '../../src/hooks/useFamily';
+import { useLiveFamily, useWatchPresence } from '../../src/hooks/useFamily';
 import { useInterval } from '../../src/hooks/useInterval';
 import { regionForPoints, type MapMarker } from '../../src/models/MapModels';
 import { formatDistance, formatEta } from '../../src/models/RouteResult';
@@ -13,7 +13,7 @@ import { AppMapView } from '../../src/components/map/AppMapView';
 import { GlassPill } from '../../src/components/glass';
 import { Icon, type IconName } from '../../src/components/ui/Icon';
 import { JourneyProgressBar } from '../../src/components/family/JourneyProgressBar';
-import { describeMemberStatus } from '../../src/components/circle/memberStatus';
+import { describeAskOkOutcome, describeMemberStatus } from '../../src/components/circle/memberStatus';
 import { callNumber, textNumber } from '../../src/utils/deviceLinks';
 
 /** "updated 10 s ago" needs seconds, so this ticks faster than Family's list. */
@@ -23,11 +23,13 @@ const LIVE_TICK_MS = 5_000;
  * Watching someone's journey (Option 15 S2c, "Watch live").
  *
  * Everything shown is what they published, live while this screen is open.
- * Two board elements wait on later Phase 5b steps and are absent until then,
- * because each would be a claim nothing yet backs:
- *  - "Ask OK?" — needs the check-in prompt function (step 5);
- *  - "Emma can see that you're watching" — needs the watcher record (step 4).
- * The road name is absent too: it is not published.
+ * Opening it tells them, by name, that you are watching (`useWatchPresence`,
+ * decision F4); their On the way screen shows it.
+ *
+ * Ask "OK?" pushes them a prompt; their answer arrives as a fresh "I'm OK"
+ * time in what they share, so it shows in the check-in line with no reply
+ * channel of its own. Until it does, the screen says when you asked — not
+ * that they are fine. The road name is absent: it is not published.
  */
 export default function WatchMemberScreen() {
   const theme = useTheme();
@@ -35,11 +37,14 @@ export default function WatchMemberScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
-  const { members } = useLiveFamily();
+  const { members, askIfOk } = useLiveFamily();
   const member = members.find((m) => m.id === memberId);
+  useWatchPresence(member);
 
   const [now, setNow] = useState(() => new Date());
   useInterval(() => setNow(new Date()), LIVE_TICK_MS);
+  const [askedAt, setAskedAt] = useState<Date | null>(null);
+  const [asking, setAsking] = useState(false);
 
   if (!member) return null;
 
@@ -67,7 +72,25 @@ export default function WatchMemberScreen() {
     member.nextCheckInAt ? `next check-in ${formatEta(member.nextCheckInAt)}` : null,
   ].filter(Boolean);
 
+  const travelling = member.status === 'TRAVELLING';
+  const answered = askedAt !== null && member.lastCheckInAt !== null && member.lastCheckInAt >= askedAt;
+  const ask = async () => {
+    if (asking) return;
+    setAsking(true);
+    const outcome = await askIfOk(member);
+    setAsking(false);
+    if (outcome === 'sent') {
+      setAskedAt(new Date());
+      return;
+    }
+    const message = describeAskOkOutcome(outcome, name);
+    if (message) Alert.alert(message.title, message.body);
+  };
+
   const sharingEnds = member.theirPermissions.sharingMode === 'SHARE_DURING_JOURNEY';
+  // Their app listens for watchers only while they are on a journey, so the
+  // line is true only then.
+  const seesWatchers = member.status === 'TRAVELLING' || member.status === 'SOS_ACTIVE';
   const subline = [member.batteryLevel !== null ? `battery ${Math.round(member.batteryLevel * 100)}%` : null]
     .filter(Boolean)
     .join(' · ');
@@ -116,6 +139,9 @@ export default function WatchMemberScreen() {
               {minutesLeft !== null && minutesLeft >= 0 && <Text style={styles.minutes}>{minutesLeft} min</Text>}
               <Text style={styles.details}>{details.join(' · ')}</Text>
             </View>
+            {askedAt && !answered && (
+              <Text style={styles.asked}>Asked "OK?" at {formatEta(askedAt)} — waiting for {name}</Text>
+            )}
             {checkIn.length > 0 && (
               <View style={styles.checkInRow}>
                 <Icon name="check" size={14} color={theme.safe.fg} />
@@ -128,9 +154,28 @@ export default function WatchMemberScreen() {
         <View style={styles.actions}>
           <Action icon="call" label="Call" onPress={() => callNumber(member.phoneNumber)} tone="safe" styles={styles} theme={theme} />
           <Action icon="message" label="Message" onPress={() => textNumber(member.phoneNumber)} tone="accent" styles={styles} theme={theme} />
+          {travelling && (
+            <Action
+              icon="check"
+              label={asking ? 'Asking…' : 'Ask "OK?"'}
+              onPress={ask}
+              tone="warning"
+              styles={styles}
+              theme={theme}
+            />
+          )}
         </View>
 
-        {sharingEnds && <Text style={styles.footnote}>Sharing stops when {name} arrives.</Text>}
+        {(seesWatchers || sharingEnds) && (
+          <Text style={styles.footnote}>
+            {[
+              seesWatchers ? `${name} can see that you're watching.` : null,
+              sharingEnds ? `Sharing stops when ${name} arrives.` : null,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -147,12 +192,12 @@ function Action({
   icon: IconName;
   label: string;
   onPress(): void;
-  tone: 'safe' | 'accent';
+  tone: 'safe' | 'accent' | 'warning';
   styles: ReturnType<typeof getStyles>;
   theme: ThemeColors;
 }) {
-  const fg = tone === 'safe' ? theme.safe.fg : theme.accent;
-  const bg = tone === 'safe' ? theme.safe.bg : theme.accentMuted;
+  const fg = tone === 'safe' ? theme.safe.fg : tone === 'warning' ? theme.warning.fg : theme.accent;
+  const bg = tone === 'safe' ? theme.safe.bg : tone === 'warning' ? theme.warning.bg : theme.accentMuted;
   return (
     <TouchableOpacity style={[styles.action, { backgroundColor: bg }]} onPress={onPress} accessibilityRole="button">
       <Icon name={icon} size={20} color={fg} />
@@ -194,6 +239,7 @@ function getStyles(theme: ThemeColors) {
     details: { flexShrink: 1, fontSize: 14, fontFamily: FONTS.body, color: theme.textSecondary, textAlign: 'right' },
     checkInRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
     checkIn: { fontSize: 14, fontFamily: FONTS.bodySemibold, color: theme.safe.fg },
+    asked: { fontSize: 14, fontFamily: FONTS.body, color: theme.warning.fg },
     actions: { flexDirection: 'row', gap: SPACING.sm },
     action: {
       flex: 1,

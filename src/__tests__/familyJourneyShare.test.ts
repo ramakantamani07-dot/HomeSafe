@@ -2,6 +2,9 @@ import { MockFamilyProvider } from '../implementations/family/MockFamilyProvider
 import { FamilyService } from '../services/FamilyService';
 import {
   MAX_SHARED_PATH_POINTS,
+  WATCH_PRESENCE_TTL_MS,
+  describeWatchers,
+  presentWatchers,
   defaultFamilyPermissions,
   deriveSharedView,
   measureJourneyProgress,
@@ -134,5 +137,51 @@ describe('live member status', () => {
 
     // The initial (empty) view, then the journey — and nothing once stopped.
     expect(seen).toEqual(['OFFLINE', 'TRAVELLING']);
+  });
+});
+
+describe('watch presence', () => {
+  const now = new Date('2026-10-08T21:00:00Z');
+  const w = (id: string, name: string, msFromNow: number) => ({
+    watcherId: id,
+    name,
+    watching: 'emma',
+    until: new Date(now.getTime() + msFromNow),
+  });
+
+  it('drops a lapsed announcement, and counts each person once', () => {
+    const list = presentWatchers([w('mum', 'Mum', 60_000), w('alex', 'Alex', -1), w('mum', 'Mum', 90_000)], now);
+    expect(list.map((x) => x.name)).toEqual(['Mum']);
+  });
+
+  it('names who is watching', () => {
+    expect(describeWatchers([])).toBeNull();
+    expect(describeWatchers([w('mum', 'Mum', 1)])).toBe('Mum is watching');
+    expect(describeWatchers([w('mum', 'Mum', 1), w('alex', 'Alex', 1)])).toBe('Mum and Alex are watching');
+    expect(describeWatchers([w('a', 'Mum', 1), w('b', 'Alex', 1), w('c', 'Sam', 1)])).toBe(
+      'Mum and 2 others are watching',
+    );
+  });
+
+  it('announces until the TTL, merges connections, and withdraws', async () => {
+    const provider = new MockFamilyProvider();
+    provider._reset();
+    const service = new FamilyService(provider);
+    const seen: string[][] = [];
+    const stop = service.watchWatchers('emma', ['c1', 'c2'], (list) => seen.push(list.map((x) => x.name)));
+
+    await service.announceWatching('c1', 'mum', 'Mum', 'emma', now);
+    await service.announceWatching('c2', 'alex', 'Alex', 'emma', now);
+    await service.announceWatching('c2', 'alex', 'Alex', 'someone-else', now);
+    expect(seen[seen.length - 1].sort()).toEqual(['Mum']);
+
+    await service.stopWatching('c1', 'mum');
+    expect(seen[seen.length - 1]).toEqual([]);
+    stop();
+
+    const fresh: { until: Date }[] = [];
+    service.watchWatchers('emma', ['c1'], (list) => fresh.push(...list));
+    await service.announceWatching('c1', 'mum', 'Mum', 'emma', now);
+    expect(fresh[0].until.getTime() - now.getTime()).toBe(WATCH_PRESENCE_TTL_MS);
   });
 });

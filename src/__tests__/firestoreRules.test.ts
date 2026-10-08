@@ -325,6 +325,40 @@ describeWithEmulator('Firestore security rules', () => {
     );
   });
 
+  test('watch presence: only the watcher announces, only about a member, only members read', async () => {
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc, deleteDoc, Timestamp } = require('firebase/firestore');
+    const connId = 'user-w1_user-w2';
+    const mumDb = testEnv.authenticatedContext('user-w1').firestore() as import('firebase/firestore').Firestore;
+    const emmaDb = testEnv.authenticatedContext('user-w2').firestore() as import('firebase/firestore').Firestore;
+    const strangerDb = testEnv.authenticatedContext('stranger').firestore() as import('firebase/firestore').Firestore;
+    await setDoc(doc(mumDb, 'familyConnections', connId), {
+      user1Id: 'user-w1',
+      user2Id: 'user-w2',
+      initiatedBy: 'user-w1',
+      status: 'ACTIVE',
+      createdAt: new Date(),
+    });
+    const until = Timestamp.fromMillis(Date.now() + 120_000);
+    const presence = { watcherId: 'user-w1', name: 'Mum', watching: 'user-w2', until };
+    const ref = (db: import('firebase/firestore').Firestore, id: string) =>
+      doc(db, 'familyConnections', connId, 'watchers', id);
+
+    await assertSucceeds(setDoc(ref(mumDb, 'user-w1'), presence));
+    await assertSucceeds(getDoc(ref(emmaDb, 'user-w1')));
+    await assertFails(getDoc(ref(strangerDb, 'user-w1')));
+
+    // Nobody announces for someone else, or about someone outside the connection.
+    await assertFails(setDoc(ref(emmaDb, 'user-w1'), presence));
+    await assertFails(setDoc(ref(mumDb, 'user-w1'), { ...presence, watching: 'stranger' }));
+    await assertFails(setDoc(ref(mumDb, 'user-w1'), { ...presence, watching: 'user-w1' }));
+    await assertFails(setDoc(ref(mumDb, 'user-w1'), { ...presence, extra: true }));
+
+    // Only the watcher withdraws it.
+    await assertFails(deleteDoc(ref(emmaDb, 'user-w1')));
+    await assertSucceeds(deleteDoc(ref(mumDb, 'user-w1')));
+  });
+
   test('cannot publish sharedStatus impersonating another connection member', async () => {
     const { assertFails } = require('@firebase/rules-unit-testing');
     const { doc, setDoc } = require('firebase/firestore');

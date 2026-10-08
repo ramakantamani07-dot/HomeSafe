@@ -4,7 +4,9 @@ import type {
   FamilyConnection,
   FamilyInvitation,
   FamilyMember,
+  AskOkOutcome,
   FamilyPermissions,
+  Watcher,
 } from '../models/Family';
 import type { FamilyService } from '../services/FamilyService';
 import { useAuthContext } from './AuthContext';
@@ -33,6 +35,19 @@ interface FamilyContextValue {
    * Counted, so two family screens open at once share one set of listeners.
    */
   startLiveUpdates(): () => void;
+  /**
+   * People watching *you* (S2c presence). Raw — lapsed entries included, so a
+   * screen filters with its own clock via `presentWatchers`. Listened for only
+   * while you are on a journey.
+   */
+  watchers: Watcher[];
+  /** Announces you are watching `member`, until the presence TTL. Refresh to extend. */
+  announceWatching(member: FamilyMember): Promise<void>;
+  stopWatching(member: FamilyMember): Promise<void>;
+  /** Ask "OK?" — pushes the member a prompt. The answer arrives as their `lastCheckInAt`. */
+  askIfOk(member: FamilyMember): Promise<AskOkOutcome>;
+  /** Answer someone's Ask "OK?": publishes a fresh "I'm OK" time. */
+  recordOk(): void;
 }
 
 const FamilyContext = createContext<FamilyContextValue>({
@@ -49,6 +64,11 @@ const FamilyContext = createContext<FamilyContextValue>({
   updatePermissions: async () => {},
   refresh: async () => {},
   startLiveUpdates: () => () => {},
+  watchers: [],
+  announceWatching: async () => {},
+  stopWatching: async () => {},
+  askIfOk: async () => 'failed',
+  recordOk: () => {},
 });
 
 export function FamilyStateProvider({
@@ -66,7 +86,13 @@ export function FamilyStateProvider({
   const { route } = useRoutingContext();
   const { currentCheckIn } = useCheckInContext();
   const routePath = route?.coordinates ?? null;
-  const lastCheckInAt = currentCheckIn?.respondedAt ?? null;
+  // An answer to Ask "OK?" counts as much as a scheduled check-in — it is the
+  // same statement, made on request — so the newer of the two is published.
+  const [lastOkAt, setLastOkAt] = useState<Date | null>(null);
+  const checkInAnsweredAt = currentCheckIn?.respondedAt ?? null;
+  const lastCheckInAt =
+    lastOkAt && (!checkInAnsweredAt || lastOkAt > checkInAnsweredAt) ? lastOkAt : checkInAnsweredAt;
+  const recordOk = useCallback(() => setLastOkAt(new Date()), []);
   const nextCheckInAt = activeJourney?.nextCheckInAt ?? null;
 
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -180,6 +206,37 @@ export function FamilyStateProvider({
 
   const userId = user?.id ?? null;
   const userName = user?.name ?? '';
+
+  // ─── Who is watching me — only while I am on a journey ─────────────────────
+  const [watchers, setWatchers] = useState<Watcher[]>([]);
+  const connectionKey = members.map((m) => m.connectionId).join('|');
+  const onJourney = activeJourney !== null;
+  useEffect(() => {
+    setWatchers([]);
+    if (!userId || !onJourney || !connectionKey) return;
+    return familyService.watchWatchers(userId, connectionKey.split('|'), setWatchers);
+  }, [userId, onJourney, connectionKey, familyService]);
+
+  const announceWatching = useCallback(
+    async (member: FamilyMember) => {
+      if (!userId) return;
+      await familyService.announceWatching(member.connectionId, userId, userName, member.id, new Date());
+    },
+    [userId, userName, familyService],
+  );
+
+  const askIfOk = useCallback(
+    (member: FamilyMember) => familyService.askIfOk(member.connectionId),
+    [familyService],
+  );
+
+  const stopWatching = useCallback(
+    async (member: FamilyMember) => {
+      if (!userId) return;
+      await familyService.stopWatching(member.connectionId, userId);
+    },
+    [userId, familyService],
+  );
   const userPhone = user?.phone ?? '';
 
   const inviteMember = useCallback<FamilyContextValue['inviteMember']>(
@@ -261,6 +318,11 @@ export function FamilyStateProvider({
       updatePermissions,
       refresh,
       startLiveUpdates,
+      watchers,
+      announceWatching,
+      stopWatching,
+      askIfOk,
+      recordOk,
     }),
     [
       members,
@@ -276,6 +338,11 @@ export function FamilyStateProvider({
       updatePermissions,
       refresh,
       startLiveUpdates,
+      watchers,
+      announceWatching,
+      stopWatching,
+      askIfOk,
+      recordOk,
     ],
   );
 

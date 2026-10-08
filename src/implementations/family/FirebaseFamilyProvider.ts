@@ -8,12 +8,14 @@ import {
   addDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
   Timestamp,
   Firestore,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { FamilyProvider, InviteMemberInput, CreateConnectionInput } from '../../providers/FamilyProvider';
@@ -24,7 +26,9 @@ import type {
   FamilyPermissions,
   FamilyStatusSnapshot,
   JourneyProgress,
+  AskOkOutcome,
   SharedFamilyView,
+  Watcher,
 } from '../../models/Family';
 import type { Coordinates } from '../../models/Journey';
 import {
@@ -195,6 +199,12 @@ function familyStatusDoc(db: Firestore, userId: string) {
   return doc(db, 'users', userId, 'familyStatus', 'current');
 }
 
+function watchersCol(db: Firestore, connectionId: string) {
+  return collection(db, 'familyConnections', connectionId, 'watchers');
+}
+
+type StoredWatcher = { watcherId: string; name: string; watching: string; until: Timestamp };
+
 function sharedStatusDoc(db: Firestore, connectionId: string, publisherUserId: string) {
   return doc(db, 'familyConnections', connectionId, 'sharedStatus', publisherUserId);
 }
@@ -203,9 +213,11 @@ function sharedStatusDoc(db: Firestore, connectionId: string, publisherUserId: s
 
 export class FirebaseFamilyProvider implements FamilyProvider {
   private readonly db: Firestore;
+  private readonly functions: Functions;
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
+    this.functions = getFunctions(app);
   }
 
   // ─── Invitations ────────────────────────────────────────────────────────────
@@ -383,6 +395,51 @@ export class FirebaseFamilyProvider implements FamilyProvider {
       sharedStatusDoc(this.db, connectionId, publisherUserId),
       (snap) => onChange(snap.exists() ? sharedViewFromFirestore(snap.data() as StoredSharedStatus) : null),
       // Keep the last good view: a dropped listener is not a member going offline.
+      () => {},
+    );
+  }
+
+  // ─── Watch presence ──────────────────────────────────────────────────────────
+
+  async announceWatching(connectionId: string, watcher: Watcher): Promise<void> {
+    const data: StoredWatcher = {
+      watcherId: watcher.watcherId,
+      name: watcher.name,
+      watching: watcher.watching,
+      until: Timestamp.fromDate(watcher.until),
+    };
+    await setDoc(doc(watchersCol(this.db, connectionId), watcher.watcherId), data);
+  }
+
+  async askIfOk(connectionId: string): Promise<AskOkOutcome> {
+    try {
+      const call = httpsCallable<{ connectionId: string }, { delivered: boolean }>(this.functions, 'askMemberOk');
+      const { data } = await call({ connectionId });
+      return data.delivered ? 'sent' : 'no-device';
+    } catch (err) {
+      const refusal = (err as { details?: { refusal?: string } }).details?.refusal;
+      return refusal === 'too-soon' || refusal === 'not-travelling' ? refusal : 'failed';
+    }
+  }
+
+  async stopWatching(connectionId: string, watcherId: string): Promise<void> {
+    await deleteDoc(doc(watchersCol(this.db, connectionId), watcherId));
+  }
+
+  subscribeWatchers(
+    connectionId: string,
+    watchedId: string,
+    onChange: (watchers: Watcher[]) => void,
+  ): () => void {
+    return onSnapshot(
+      query(watchersCol(this.db, connectionId), where('watching', '==', watchedId)),
+      (snap) =>
+        onChange(
+          snap.docs.map((d) => {
+            const w = d.data() as StoredWatcher;
+            return { watcherId: w.watcherId, name: w.name, watching: w.watching, until: w.until.toDate() };
+          }),
+        ),
       () => {},
     );
   }

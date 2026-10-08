@@ -313,3 +313,49 @@ export function measureJourneyProgress(
     metersRemaining: Math.round(total - cumulative[nearest]),
   };
 }
+
+// ─── Watch presence (Phase 5b step 4) ──────────────────────────────────────────
+
+/**
+ * Someone with Watch live open on a member (S2c). The watched person sees who
+ * (decision F4: by name — it is their location).
+ */
+export interface Watcher {
+  watcherId: string;
+  name: string;
+  /** The member being watched. */
+  watching: string;
+  /** Presence lapses by itself at this time unless refreshed. */
+  until: Date;
+}
+
+/**
+ * How long one announcement of watching lasts. Refreshed while the screen is
+ * open and deleted when it closes; the expiry is for when neither happens — a
+ * crash, a dead battery — so nobody is shown as "watching" forever.
+ */
+export const WATCH_PRESENCE_TTL_MS = 2 * 60 * 1_000;
+
+/** How often an open Watch live screen re-announces itself. */
+export const WATCH_HEARTBEAT_MS = 60 * 1_000;
+
+/** Watchers still present at `now`, by name, each person once. */
+export function presentWatchers(watchers: readonly Watcher[], now: Date): Watcher[] {
+  const seen = new Set<string>();
+  return watchers.filter((w) => {
+    if (w.until.getTime() <= now.getTime() || seen.has(w.watcherId)) return false;
+    seen.add(w.watcherId);
+    return true;
+  });
+}
+
+/** "Mum is watching", "Mum and Alex are watching", "Mum and 2 others are watching". */
+export function describeWatchers(watchers: readonly Watcher[]): string | null {
+  if (watchers.length === 0) return null;
+  if (watchers.length === 1) return `${watchers[0].name} is watching`;
+  if (watchers.length === 2) return `${watchers[0].name} and ${watchers[1].name} are watching`;
+  return `${watchers[0].name} and ${watchers.length - 1} others are watching`;
+}
+
+/** What happened when a watcher tapped Ask "OK?" (S2c). */
+export type AskOkOutcome = 'sent' | 'no-device' | 'too-soon' | 'not-travelling' | 'failed';

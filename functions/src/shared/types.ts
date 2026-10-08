@@ -99,3 +99,16 @@ export interface StoredBasicPhoneMember {
   phoneNumber: string;
   consentStatus: StoredConsent['status'];
 }
+
+// ── Family (mirrors src/models/Family.ts) ───────────────────────────────────
+
+export interface StoredFamilyConnection {
+  user1Id: string;
+  user2Id: string;
+  status: 'PENDING' | 'ACTIVE' | 'DECLINED' | 'CANCELLED';
+}
+
+/** The already-filtered view one member publishes into a connection. */
+export interface StoredSharedStatus {
+  status: string | null;
+}

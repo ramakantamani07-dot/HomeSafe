@@ -4,7 +4,9 @@ import type {
   FamilyInvitation,
   FamilyPermissions,
   FamilyStatusSnapshot,
+  AskOkOutcome,
   SharedFamilyView,
+  Watcher,
 } from '../models/Family';
 
 export interface InviteMemberInput {
@@ -113,5 +115,24 @@ export interface FamilyProvider {
     connectionId: string,
     publisherUserId: string,
     onChange: (view: SharedFamilyView | null) => void,
+  ): () => void;
+
+  /** Announces (or refreshes) that the caller is watching a member, until `watcher.until`. */
+  announceWatching(connectionId: string, watcher: Watcher): Promise<void>;
+
+  /** Withdraws the caller's announcement. */
+  stopWatching(connectionId: string, watcherId: string): Promise<void>;
+
+  /**
+   * Asks the other member of a connection whether they are OK (S2c). Server
+   * side: membership, journey and rate limit are checked there. Never throws.
+   */
+  askIfOk(connectionId: string): Promise<AskOkOutcome>;
+
+  /** Who in this connection is watching `watchedId`, live. */
+  subscribeWatchers(
+    connectionId: string,
+    watchedId: string,
+    onChange: (watchers: Watcher[]) => void,
   ): () => void;
 }
