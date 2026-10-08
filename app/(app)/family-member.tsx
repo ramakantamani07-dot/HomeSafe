@@ -20,7 +20,6 @@ import { FamilyStatusBadge } from '../../src/components/family/FamilyStatusBadge
 import { Icon } from '../../src/components/ui/Icon';
 import { Button } from '../../src/components/ui/Button';
 import { Section, ListRow } from '../../src/components/ui/Section';
-import { formatCoordinates } from '../../src/models/Journey';
 import {
   SHARING_MODE_LABELS,
   type FamilyPermissions,
@@ -188,7 +187,8 @@ export default function FamilyMemberScreen() {
             <ListRow
               icon="location"
               title="Location"
-              value={`${formatCoordinates(member.location)} · Open in Maps`}
+              // Coordinates mean nothing to read; the map is what answers "where".
+              value="Open in Maps"
               onPress={() => {
                 const { latitude, longitude } = member.location!;
                 Linking.openURL(`https://maps.google.com/?q=${latitude},${longitude}`);

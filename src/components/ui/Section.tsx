@@ -161,7 +161,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.callout.fontSize,
     marginTop: 2,
   },
+  // Wraps rather than claiming the row. Without a cap, a long value took every
+  // pixel and squeezed the title to a letter per line ("Lo / ca / tio / n").
   rowValue: {
     fontSize: TYPOGRAPHY.callout.fontSize,
+    flexShrink: 1,
+    maxWidth: '60%',
+    textAlign: 'right',
   },
 });
