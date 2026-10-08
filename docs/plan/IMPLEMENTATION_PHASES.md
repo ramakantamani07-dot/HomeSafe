@@ -25,7 +25,8 @@ compound.
 | 3 · Journey | **Done bar one item** | "Open places on the way" — see D4 below |
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
-| 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · resend-consent function · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
+| 5b · Family redesign | **Planned 8 Oct** — decisions F1–F4 settled, not started | See Phase 5b below |
+| 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
 
@@ -195,7 +196,6 @@ Each divergence is principle 4 — say only what is true:
 | "EE · supported" | "UK mobile" / "Indian mobile" | No operator lookup exists until G3; "supported" would be unchecked |
 | Sam is texted "every time you look" | "at most once an hour" | The transparency text is throttled (spec §5) |
 | "Sam texted ✓" on each find | Stated once as a rule | The server does not record which find a text went with |
-| "Resend consent text" | Absent | A client may only create or revoke a consent (D17); resend needs a server function not yet written |
 | Avatar pin at the circle's centre | Circle only | The centre is not where the person is; a pin reads as a position |
 | Parent/guardian tick always shown | Shown, and required, when "under 18" is on | Spec: required for under-18s. An adult consents for themselves by text |
 | "Around Banbury town centre" | Absent | Would need reverse geocoding of an 800 m circle — a place name implies precision the circle denies |
@@ -212,6 +212,21 @@ rate limit (`nextLookupAllowedAt`).
 Member numbers are validated narrowly — UK and Indian **mobiles** only — until
 Phase 7 brings `libphonenumber-js`. A landline would pass general validation
 and fail at the first Find, after the member had already been texted.
+
+### D26 · Resending the consent request is a server call, limited
+
+`resendConsentRequest` (callable) texts the request again — only while it is
+still `PENDING_SMS`, at most once an hour and three times per request (spec §4
+step 5, "resend with rate limits"). The limit and the fresh 48-hour deadline
+are set server-side in one transaction with the check; a client trusted with
+either could reset its own limit, and the rules refuse `resendsAt` on create.
+
+Three is a judgement, recorded so it can be argued with: enough for "they
+didn't see it", few enough that resend cannot become a way to pester someone
+choosing not to answer. After the third, the screen says so and suggests a
+call. The limits live in both `config.ts` and `models/Consent.ts`, held equal
+by the parity test. S3's "Resend consent text" row is now built, shown only
+while a request is waiting.
 
 ---
 
@@ -859,6 +874,137 @@ persists through the existing storage ports.
 
 ---
 
+## Phase 5b · Family redesign — PLANNED (8 Oct 2026)
+
+**Goal:** replace the current Family page and Invite Family Member screen with
+the Option 15 family flow. Design source: `assets/imgs/family/`.
+
+| Board | File | Replaces |
+|---|---|---|
+| Flow notes | `flow.png` | — (the written brief for the boards below) |
+| S2b · Family | `Family-invite-screen.png` | `app/(app)/family.tsx` |
+| S2c · Watching Emma | `Family-member-watching.png` | new — "Watch live" |
+| Invite someone | `invite-screen.png` | `app/(app)/family-invite.tsx` |
+| Invite sent | `invite-status.png` | the `Alert` after sending |
+
+### What the boards change
+
+**S2b · Family**
+- Same glass sheet over the map as Settings: back, title, round blue **+**.
+- The illustrated hero goes. In its place, one slim summary line: avatars +
+  "1 travelling · …" + "Updated just now". Useful, not decoration.
+- **Travelling now** first. Emma's card: live progress bar to her destination,
+  "19 min · to Home · arrives 21:58", a call button and **Watch live**.
+- **Family** list in compact rows: Tom "At school · 2 min ago" + call; Sam
+  "Basic phone · consent ✓" + **Find** (already built in 6.4).
+- **Add someone** + a one-line basic-phone note.
+
+**S2c · Watching Emma ("Watch live")**
+- Map with Emma's route and position; "Live · updated 10 s ago" pill.
+- Sheet: "Emma is walking home", road · battery; progress bar, "19 min ·
+  arrives 21:58 · 0.9 mi left"; last "I'm OK" and next check-in.
+- **Call · Message · Ask "OK?"**. Ask "OK?" sends her a check-in prompt.
+- "Emma can see that you're watching."
+
+**Invite someone**
+- **Choose from contacts** first (fastest), or type the number: country
+  picker, auto-spaced, focus ring.
+- Recognises the person: "Priya Sharma · On wayLoc ✓", or "Not on wayLoc —
+  we'll text a link", or a basic phone, which hands over to the SMS consent flow.
+- **"Who is Priya to you?"** with eight chips: Daughter, Son, Parent, Partner,
+  Sibling, Grandparent, Friend, Other. This replaces the confusing "your
+  relationship to them".
+- Shows what is shared **before** sending: she sees your journeys only while
+  you share one; you see hers if she accepts.
+- The button names the person, "Send invite to Priya", and stays disabled
+  until the number is valid.
+
+**Invite sent**
+- Avatar + "Invite sent to Priya", a Pending card with its expiry (7 days —
+  already `INVITATION_EXPIRY_DAYS`), **Done** / **Invite someone else**.
+
+### What exists, and what each element needs
+
+Checked against the code on 8 Oct. Most of the redesign is presentation over
+data we already have. The rest is listed so nothing on a board is built as a
+claim the app cannot back.
+
+| Element | Status | Work |
+|---|---|---|
+| Sheet layout, rows, call buttons, Add someone | ✅ data exists | Presentation only |
+| Sam's row with Find | ✅ built (6.4) | Reuse `MemberRow` kind `basic` |
+| "arrives 21:58" | ✅ `activeJourneyEta` in shared status | — |
+| "updated 10 s ago", battery | ✅ `updatedAt`, `batteryLevel` in shared status | — |
+| 7-day pending expiry | ✅ `INVITATION_EXPIRY_DAYS = 7` | — |
+| **Live** updates | ⚠️ `FamilyContext` loads once and on pull-to-refresh | Subscribe to `sharedStatus` (`onSnapshot`) while Family or Watch live is open, and only then — battery rule |
+| Progress bar, "0.9 mi left", route on the map | ❌ not published | Publish `routeProgress` (fraction, metres left) and a simplified polyline in shared status, gated on `shareJourneyDetails` |
+| Last "I'm OK" · next check-in | ❌ not published | Add `lastCheckInAt` / `nextCheckInAt` to shared status |
+| "Emma can see that you're watching" | ❌ no presence | A watcher document under the connection, set while Watch live is open and expiring by timestamp, plus a rules entry; Emma's On the way screen shows it |
+| Ask "OK?" | ❌ no such message | Callable → push to Emma with the existing I'm Safe action category; her answer updates `lastCheckInAt`. Rate-limited |
+| Choose from contacts | ❌ `expo-contacts` not installed | Native dependency: must clear `DEPENDENCIES.md`; permission asked only on tap |
+| "On wayLoc ✓" recognition | ❌ users are owner-readable only | A rate-limited callable answering "has an account" for one number. **Decision F1** |
+| "Not on wayLoc — we'll text a link" | ❌ no SMS for invites | Server SMS, same providers as Phase 6 (G3). **Decision F2** |
+| "She'll get a notification to accept" | ❌ no invitation push | `onFamilyInvitationCreated` function → FCM to the invitee, if they have the app |
+| New relationship chips | ⚠️ list differs, meaning inverts | **Decision F3** |
+
+### Copy that must change to stay true (principle 4)
+
+| Board says | Build says | Why |
+|---|---|---|
+| "1 travelling · **2 safe**" | "1 travelling · 2 not travelling", or name the places ("Tom at school") | We know who is on a journey, not who is safe. "Safe" is the one word this app must never guess |
+| Basic phones "texted **each time**" | "texted when you look, at most once an hour" | The transparency SMS is throttled (spec §5) |
+| "She'll get a notification to accept" | Only once `onFamilyInvitationCreated` exists, and only for app users; otherwise "She'll see it when she opens wayLoc" | No invitation push exists today |
+| "Sharing stops when she arrives" | Only when her mode is `SHARE_DURING_JOURNEY` | Members on "Share always" keep sharing |
+
+### Decisions — settled 8 Oct 2026, all as recommended
+
+- **F1 · Should Invite reveal whether a number is on wayLoc?** It is
+  convenient, and it is also a lookup anyone can run against any number.
+  Options: (a) reveal, rate-limited per user per day; (b) reveal only for
+  numbers already in the inviter's contacts; (c) never reveal — always say
+  "If they're on wayLoc they'll get it in the app; if not, we'll text them".
+  **Decided: (b)** — reveal only for numbers in the inviter's contacts, which
+  matches the board's "From your contacts" path.
+- **F2 · Text a link to people not on wayLoc?** Needs an SMS provider per
+  market (shared with G3) and India DLT templates. Until then the board's
+  "we'll text a link" line is replaced by a share sheet: "Send them the link
+  yourself". **Decided:** share sheet until an SMS provider exists.
+- **F3 · Relationship wording.** The board asks "Who is Priya to you?"
+  (Daughter, Son, Parent, Partner, Sibling, Grandparent, Friend, Other). The
+  current list answers the opposite question ("your relationship to them":
+  Parent, Child, Spouse, …). Stored invitations would read backwards after
+  the change. **Decided:** store the new question in a new field
+  (`theyAreMy`), and show old records with their existing label.
+- **F4 · Watch-live presence.** Should the person being watched see *who* is
+  watching, or only *that* someone is? The board says "Emma can see that
+  you're watching". **Decided:** who, by name — it is her location.
+
+### Work, in order
+
+1. **Shared-status data.** `routeProgress`, simplified polyline, check-in
+   times, published from `FamilyService.publishStatus` behind the existing
+   permission flags, with rules tests that a non-member cannot read them.
+2. **Live subscription.** `FamilyContext` subscribes to `sharedStatus` while a
+   family screen is mounted, and unsubscribes on unmount.
+3. **S2b Family.** Rewrite `family.tsx` on the glass sheet; split it into
+   `TravellingCard`, `FamilySummary` and the existing `MemberRow`. Pending
+   invitations and sent invitations keep a place, in compact rows.
+4. **S2c Watch live.** A new screen, the watcher presence document, and the
+   indicator on the watched person's On the way screen.
+5. **Ask "OK?".** Callable + push + rate limit; the answer reuses check-ins.
+6. **Invite someone + Invite sent.** Rewrite `family-invite.tsx`; contacts
+   (after the dependency gate), recognition (per F1), relationship (per F3);
+   `onFamilyInvitationCreated` push.
+7. **Add someone (S4)** stays the basic-phone path. The smartphone path hands
+   over to the new Invite someone.
+
+**Exit:** every number on these screens comes from published data, never a
+placeholder · no "safe" claim · live updates stop when the screen closes,
+verified on device · rules tests for each new shared field and the watcher
+document · the "On wayLoc" lookup cannot be used to enumerate numbers (per F1).
+
+---
+
 ## Phase 6 · Network location for basic-phone members
 
 **Goal:** `docs/features/network-location-spec.md`, adapted to our architecture.
@@ -981,6 +1127,8 @@ whenever capacity allows.
 | 2 Oct 2026 | **G2** — use `@gorhom/bottom-sheet` | 3 native deps in Phase 1; keyboard-in-sheet handled by the library |
 | 2 Oct 2026 | **Phase 0.1** — re-wire the interval check-in, don't delete it | Becomes Settings "Check on me if late"; lock-screen actions move to safety checks regardless |
 | 2 Oct 2026 | **Phase 3** — open places behind a flag, off by default | Timeline ships without it; enable once per-journey Places cost is measured |
+| 8 Oct 2026 | **Revocation** — three layers, layer 3 a Firestore trigger | D23 |
+| 8 Oct 2026 | **F1–F4** — family redesign: contacts-only recognition, share sheet until SMS, new `theyAreMy` field, watchers shown by name | Phase 5b |
 
 ## Still open
 
