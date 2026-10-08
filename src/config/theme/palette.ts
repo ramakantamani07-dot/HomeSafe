@@ -172,6 +172,12 @@ export const FEATURE_COLORS = {
   uneasy: '#7B61FF',
   /** A basic-phone member, and their network-location circle. */
   basicPhone: '#30B0C7',
+  /**
+   * The fill of a network-location circle. The same hue as `basicPhone`, light
+   * enough that streets read through it — the circle says "somewhere in here",
+   * and hiding the map under it would undo that.
+   */
+  basicPhoneArea: 'rgba(48,176,199,0.18)',
   /** Sign-in screens and the logo. */
   brandTeal: '#0B8A74',
 } as const;

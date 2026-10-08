@@ -57,6 +57,10 @@ import { FirebaseUneasyEventProvider } from '../implementations/uneasy/FirebaseU
 import { MockUneasyEventProvider } from '../implementations/uneasy/MockUneasyEventProvider';
 import { MapKitSafePlaceProvider } from '../implementations/safePlaces/MapKitSafePlaceProvider';
 import { MockSafePlaceProvider } from '../implementations/safePlaces/MockSafePlaceProvider';
+import { FirebaseBasicPhoneMemberProvider } from '../implementations/networkLocation/FirebaseBasicPhoneMemberProvider';
+import { MockBasicPhoneMemberProvider } from '../implementations/networkLocation/MockBasicPhoneMemberProvider';
+import { FirebaseNetworkLocationProvider } from '../implementations/networkLocation/FirebaseNetworkLocationProvider';
+import { MockNetworkLocationProvider } from '../implementations/networkLocation/MockNetworkLocationProvider';
 import { isNearbyPlacesAvailable } from '../../modules/nearby-places';
 
 import { FakeCallService } from '../services/FakeCallService';
@@ -101,6 +105,7 @@ import { JourneyDraftStateProvider } from './JourneyDraftContext';
 import { SafetyCheckStateProvider } from './SafetyCheckContext';
 import { FakeCallStateProvider } from './FakeCallContext';
 import { BatteryStateProvider } from './BatteryContext';
+import { BasicPhoneStateProvider } from './BasicPhoneContext';
 
 // Mock vs real lives in one place — see src/config/dataSource.ts, and
 // docs/reference/RUNNING.md for how to flip it.
@@ -268,6 +273,22 @@ const safePlaceProvider = isNearbyPlacesAvailable
 const uneasyEventProvider = devMode
   ? new MockUneasyEventProvider()
   : new FirebaseUneasyEventProvider(firebaseApp!);
+
+// Basic-phone finding (network location). The mock pair shares one ledger so
+// mock lookups are consent-gated and rate-limited like real ones.
+//
+// Offered in mock mode, and with real backends only when
+// EXPO_PUBLIC_BASIC_PHONE_FINDING=on — the server has its own per-market flag
+// (NETWORK_LOCATION_MARKETS), and a build should not show a feature the
+// server it talks to has switched off. Off by default, like the server's.
+const mockBasicPhoneMembers = devMode ? new MockBasicPhoneMemberProvider() : null;
+const basicPhoneMemberProvider = mockBasicPhoneMembers
+  ?? new FirebaseBasicPhoneMemberProvider(firebaseApp!);
+const networkLocationProvider = mockBasicPhoneMembers
+  ? new MockNetworkLocationProvider(mockBasicPhoneMembers)
+  : new FirebaseNetworkLocationProvider(firebaseApp!);
+const basicPhoneFindingEnabled =
+  devMode || process.env.EXPO_PUBLIC_BASIC_PHONE_FINDING === 'on';
 
 const fakeCallService = new FakeCallService();
 
@@ -462,7 +483,13 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
                   and batteryLevel to publish the user's live family status.
                 */}
                 <FamilyStateProvider familyService={familyService}>
-                  {children}
+                  <BasicPhoneStateProvider
+                    memberProvider={basicPhoneMemberProvider}
+                    locationProvider={networkLocationProvider}
+                    enabled={basicPhoneFindingEnabled}
+                  >
+                    {children}
+                  </BasicPhoneStateProvider>
                 </FamilyStateProvider>
               </SOSStateProvider>
             </CheckInStateProvider>

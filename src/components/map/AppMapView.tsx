@@ -2,12 +2,13 @@ import React from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { useMapContext } from '../../context/MapContext';
-import type { MapMarker, MapRegion, RoutePolyline } from '../../models/MapModels';
+import type { MapArea, MapMarker, MapRegion, RoutePolyline } from '../../models/MapModels';
 
 interface AppMapViewProps {
   region: MapRegion;
   markers: MapMarker[];
   polyline: RoutePolyline | null;
+  areas?: MapArea[];
   style?: StyleProp<ViewStyle>;
   /** Allows pan/zoom — used by the map picker. */
   interactive?: boolean;
@@ -24,6 +25,7 @@ export function AppMapView({
   region,
   markers,
   polyline,
+  areas,
   style,
   interactive,
   onRegionChangeComplete,
@@ -35,6 +37,7 @@ export function AppMapView({
       region={region}
       markers={markers}
       polyline={polyline}
+      areas={areas}
       style={style}
       interactive={interactive}
       onRegionChangeComplete={onRegionChangeComplete}

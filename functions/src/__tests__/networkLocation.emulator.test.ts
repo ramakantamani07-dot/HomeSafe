@@ -1,0 +1,136 @@
+/**
+ * The Firestore half of network location, against the emulator: the
+ * transactions, the audit writes and the retention clean-up that the pure
+ * tests cannot reach.
+ *
+ * Skipped unless FIRESTORE_EMULATOR_HOST is set — run with
+ * `npm run test:emulator` from functions/.
+ */
+import { Timestamp } from 'firebase-admin/firestore';
+
+import { db } from '../shared/firebase';
+import { setAdaptersForTesting } from '../networkLocation/adapters';
+import { locate } from '../networkLocation/locate';
+import { MockSmsProvider, createMockAdapters } from '../networkLocation/mockAdapters';
+import { transitionConsent, consentRef } from '../networkLocation/store';
+import { clearOldNetworkFixes } from '../retention';
+
+const onEmulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
+const describeEmulator = onEmulator ? describe : describe.skip;
+
+const OWNER = 'guardian-1';
+const PHONE = '+447700900123';
+
+async function seed(memberId: string, status: string, extra: Record<string, unknown> = {}) {
+  const now = Timestamp.now();
+  await db.doc(`users/${OWNER}`).set({ name: 'Priya' });
+  await db.doc(`users/${OWNER}/basicPhoneMembers/${memberId}`).set({
+    displayName: 'Nani',
+    phoneNumber: PHONE,
+    consentStatus: status,
+  });
+  await consentRef(OWNER, memberId).set({
+    memberId,
+    status,
+    phoneNumber: PHONE,
+    requestedAt: now,
+    expiresAt: Timestamp.fromMillis(now.toMillis() + 86_400_000),
+    activatedAt: null,
+    updatedAt: now,
+    requestSms: { status: 'sent', at: now },
+    ...extra,
+  });
+}
+
+async function audits(memberId: string) {
+  const snap = await db.collection(`users/${OWNER}/locateAudits`).where('memberId', '==', memberId).get();
+  return snap.docs.map((d) => d.data()).sort((a, b) => a.at.toMillis() - b.at.toMillis());
+}
+
+describeEmulator('network location on Firestore', () => {
+  let sms: MockSmsProvider;
+
+  beforeEach(() => {
+    process.env.NETWORK_LOCATION_MARKETS = 'GB';
+    const adapters = createMockAdapters('secret');
+    sms = adapters.sms as MockSmsProvider;
+    setAdaptersForTesting(adapters);
+  });
+
+  afterAll(() => setAdaptersForTesting(undefined));
+
+  test('a permitted lookup is audited, reserves its rate-limit slot, and tells the member', async () => {
+    await seed('m-ok', 'ACTIVE');
+
+    const result = await locate(OWNER, 'm-ok', 'manual');
+    expect(result.ok).toBe(true);
+
+    const [audit] = await audits('m-ok');
+    expect(audit).toMatchObject({ outcome: 'success', reason: 'manual', hasLocation: true });
+    expect(audit.accuracyMeters).toBe(650);
+
+    const consent = (await consentRef(OWNER, 'm-ok').get()).data()!;
+    expect(consent.recentLookupsAt).toHaveLength(1);
+    expect(consent.lastNoticeAt).toBeInstanceOf(Timestamp);
+    expect(sms.outbox.map((m) => m.template)).toEqual(['transparency']);
+  });
+
+  test('a second Find within the minute is refused, audited, and sends no text', async () => {
+    await seed('m-rate', 'ACTIVE');
+    await locate(OWNER, 'm-rate', 'manual');
+    const second = await locate(OWNER, 'm-rate', 'manual');
+
+    expect(second).toEqual({ ok: false, failure: 'rate-limited' });
+    expect((await audits('m-rate')).map((a) => a.outcome)).toEqual(['success', 'denied-rate-limited']);
+    expect(sms.outbox).toHaveLength(1);
+  });
+
+  test('every status but ACTIVE is refused, and the refusal is audited', async () => {
+    for (const status of ['PENDING_SMS', 'OPERATOR_PENDING', 'REVOKED']) {
+      const id = `m-${status.toLowerCase()}`;
+      await seed(id, status);
+      expect(await locate(OWNER, id, 'manual')).toEqual({ ok: false, failure: 'no-consent' });
+      expect((await audits(id)).map((a) => a.outcome)).toEqual(['denied-no-consent']);
+    }
+    expect(sms.outbox).toHaveLength(0);
+  });
+
+  test('someone who is not the guardian is refused as such', async () => {
+    expect(await locate(OWNER, 'nobody', 'manual')).toEqual({ ok: false, failure: 'not-guardian' });
+    expect((await audits('nobody')).map((a) => a.outcome)).toEqual(['denied-not-guardian']);
+  });
+
+  test('a market that is switched off locates no one', async () => {
+    process.env.NETWORK_LOCATION_MARKETS = '';
+    await seed('m-off', 'ACTIVE');
+    expect(await locate(OWNER, 'm-off', 'manual')).toEqual({ ok: false, failure: 'operator-unavailable' });
+  });
+
+  test('a revocation records who did it, the event, and the mirror — and ends lookups', async () => {
+    await seed('m-stop', 'ACTIVE');
+    const t = await transitionConsent(consentRef(OWNER, 'm-stop'), 'revoke', 'STOP');
+    expect(t).toMatchObject({ from: 'ACTIVE', to: 'REVOKED', trigger: 'member-revoked' });
+
+    const consent = (await consentRef(OWNER, 'm-stop').get()).data()!;
+    expect(consent).toMatchObject({ status: 'REVOKED', revokedBy: 'member-revoked' });
+    const member = (await db.doc(`users/${OWNER}/basicPhoneMembers/m-stop`).get()).data()!;
+    expect(member.consentStatus).toBe('REVOKED');
+    const events = await db.collection(`users/${OWNER}/consentEvents`).where('memberId', '==', 'm-stop').get();
+    expect(events.docs.map((d) => d.data().to)).toEqual(['REVOKED']);
+
+    // Repeating it changes nothing: the state machine refuses REVOKED → REVOKED.
+    expect(await transitionConsent(consentRef(OWNER, 'm-stop'), 'revoke', 'STOP')).toBeNull();
+    expect(await locate(OWNER, 'm-stop', 'manual')).toEqual({ ok: false, failure: 'no-consent' });
+  });
+
+  test('retention clears old coordinates and keeps the audit', async () => {
+    await seed('m-old', 'ACTIVE');
+    await locate(OWNER, 'm-old', 'manual');
+
+    expect(await clearOldNetworkFixes(Timestamp.fromMillis(Date.now() - 86_400_000))).toBe(0);
+    expect(await clearOldNetworkFixes(Timestamp.fromMillis(Date.now() + 1_000))).toBeGreaterThanOrEqual(1);
+
+    const [audit] = await audits('m-old');
+    expect(audit).toMatchObject({ outcome: 'success', location: null, accuracyMeters: null, hasLocation: false });
+  });
+});

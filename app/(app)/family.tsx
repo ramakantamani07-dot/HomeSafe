@@ -19,6 +19,11 @@ import { useFamily } from '../../src/hooks/useFamily';
 import { FamilyMemberCard } from '../../src/components/family/FamilyMemberCard';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { Button } from '../../src/components/ui/Button';
+import { Section, ListRow } from '../../src/components/ui/Section';
+import { StatusBadge } from '../../src/components/ui/StatusBadge';
+import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
+import { describeConsentStatus } from '../../src/models/BasicPhoneMember';
+import { allowsLocationLookup, isTerminal } from '../../src/models/Consent';
 
 const heroImage = require('../../assets/family/bg.png');
 import { Icon } from '../../src/components/ui/Icon';
@@ -37,6 +42,8 @@ export default function FamilyScreen() {
     cancelInvitation,
     refresh,
   } = useFamily();
+
+  const { enabled: basicPhoneEnabled, members: basicMembers } = useBasicPhoneMembers();
 
   const [accepting, setAccepting] = React.useState<string | null>(null);
 
@@ -99,9 +106,9 @@ export default function FamilyScreen() {
         <Text style={[styles.title, { color: theme.textPrimary }]}>Family</Text>
         <TouchableOpacity
           style={[styles.inviteButton, { backgroundColor: theme.accent }]}
-          onPress={() => router.push('/family-invite')}
+          onPress={() => router.push('/add-someone')}
           accessibilityRole="button"
-          accessibilityLabel="Invite a family member"
+          accessibilityLabel="Add someone"
         >
           <Icon name="add" size={20} color={theme.textOnColor} />
         </TouchableOpacity>
@@ -192,26 +199,55 @@ export default function FamilyScreen() {
               ))}
             </>
           ) : (
-            !isLoading && (
+            !isLoading && basicMembers.length === 0 && (
               <EmptyState
                 icon="people"
                 title="No family members yet"
                 description="Invite family members to see their live safety status during journeys."
-                actionLabel="Invite Someone"
-                onAction={() => router.push('/family-invite')}
+                actionLabel="Add someone"
+                onAction={() => router.push('/add-someone')}
               />
             )
           )}
-          {sortedMembers.length > 0 && (
+          {basicMembers.length > 0 && (
+            <Section title={`Basic phone (${basicMembers.length})`}>
+              {basicMembers.map((m) => (
+                <ListRow
+                  key={m.id}
+                  icon="person"
+                  title={m.displayName}
+                  subtitle={describeConsentStatus(m.consentStatus)}
+                  onPress={() => router.push({ pathname: '/basic-member', params: { memberId: m.id } })}
+                  accessory={
+                    allowsLocationLookup(m.consentStatus) ? (
+                      <StatusBadge label="Consent ✓" severity="safe" />
+                    ) : isTerminal(m.consentStatus) ? undefined : (
+                      <StatusBadge label="Pending" severity="warning" />
+                    )
+                  }
+                />
+              ))}
+            </Section>
+          )}
+          {(sortedMembers.length > 0 || basicMembers.length > 0) && (
             <Button
-              label="Add a family member"
+              label="Add someone"
               icon="add"
-              onPress={() => router.push('/family-invite')}
+              onPress={() => router.push('/add-someone')}
               variant="secondary"
               style={styles.addMemberButton}
             />
           )}
         </View>
+
+        {basicPhoneEnabled && (
+          <View style={[styles.sentCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.sentRelationship, styles.sentInfo, { color: theme.textSecondary }]}>
+              People with a basic phone can be found by their mobile network — only after they
+              reply YES by text. They're texted when you look, at most once an hour.
+            </Text>
+          </View>
+        )}
 
         {/* Sent invitations */}
         {pendingSent.length > 0 && (

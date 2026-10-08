@@ -7,7 +7,8 @@
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "jest"
+    "test": "jest",
+    "test:emulator": "firebase emulators:exec --project=demo-wayloc --only firestore \"jest\""
   },
   "engines": {
     "node": "20"

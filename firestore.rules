@@ -294,6 +294,106 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      // ── Basic-phone members ────────────────────────────────────────────────
+      // Someone in the circle with no smartphone and no account. Owned by the
+      // guardian who added them; nobody else can see or touch the record.
+      //
+      // consentStatus is mirrored here so the circle list reads one document,
+      // but it is NOT authoritative — the consent document is, and the rules
+      // below are what protect it. A client that lied here would mislead its own
+      // list and change nothing about whether a lookup is permitted.
+      match /basicPhoneMembers/{memberId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.phoneNumber is string
+          && request.resource.data.displayName is string;
+        allow update: if isOwner(userId)
+          // Consent is granted for a specific number. Letting the number change
+          // under an existing consent would silently transfer permission to
+          // whoever holds the new SIM.
+          && fieldUnchanged('phoneNumber');
+        allow delete: if isOwner(userId);
+      }
+
+      // ── Consent ────────────────────────────────────────────────────────────
+      // THE security boundary for network location. Whether one person may see
+      // another person's location is decided entirely by this document.
+      //
+      // **A client may reach exactly two states: PENDING_SMS and REVOKED.**
+      //
+      //   PENDING_SMS  asking is something a guardian may do
+      //   REVOKED      stopping must always work, immediately, from any state
+      //
+      // Everything between — SMS_APPROVED, OPERATOR_PENDING, ACTIVE, DECLINED,
+      // EXPIRED — is writable only by a Cloud Function, which reaches Firestore
+      // through the Admin SDK and bypasses these rules. ACTIVE in particular
+      // represents "the member texted YES *and* their operator authorised it",
+      // and neither fact is one the requesting device is in any position to
+      // assert about somebody else.
+      //
+      // Revocation is deliberately allowed client-side rather than routed
+      // through a function: the spec requires STOP to work "any time", and
+      // "stop sharing my location" must not depend on a backend being
+      // reachable. Permission is the thing that should fail closed.
+      match /consents/{memberId} {
+        allow read: if isOwner(userId);
+
+        // Only the client model's fields. The server keeps its own state on
+        // this document — the rate-limit window, the transparency-SMS throttle,
+        // delivery of the request — and a guardian able to pre-set those could,
+        // say, stamp lastNoticeAt in 2099 and never have the member told they
+        // were being located.
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly([
+               'memberId', 'status', 'phoneNumber', 'requestedAt',
+               'expiresAt', 'activatedAt', 'updatedAt'])
+          && incomingHasField('status', 'PENDING_SMS')
+          && request.resource.data.memberId == memberId
+          && request.resource.data.phoneNumber is string
+          && request.resource.data.expiresAt is timestamp;
+
+        // The only transition a client may make.
+        allow update: if isOwner(userId)
+          && incomingHasField('status', 'REVOKED')
+          && resource.data.status != 'REVOKED'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'updatedAt'])
+          && fieldUnchanged('memberId')
+          && fieldUnchanged('phoneNumber')
+          && fieldUnchanged('requestedAt');
+
+        // Never deleted. A consent record is the evidence that permission was
+        // given or withdrawn, and evidence that can be erased proves nothing.
+        allow delete: if false;
+      }
+
+      // ── Consent events ─────────────────────────────────────────────────────
+      // Append-only audit of every transition (spec §4).
+      //
+      // The client may write only the revocation it is allowed to perform above,
+      // so the two cannot disagree. Updates and deletes are refused outright:
+      // a history that can be rewritten is not an audit trail.
+      match /consentEvents/{eventId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && incomingHasField('to', 'REVOKED')
+          && request.resource.data.memberId is string
+          && request.resource.data.at is timestamp;
+        allow update, delete: if false;
+      }
+
+      // ── Locate audits ──────────────────────────────────────────────────────
+      // Every lookup attempt, including refused ones — an audit that recorded
+      // only successes could not answer "did anyone try to find me without my
+      // consent?", which is the question it exists for.
+      //
+      // Written exclusively by the Cloud Function that performs lookups: a
+      // client that could write its own audit entries could also omit them.
+      match /locateAudits/{auditId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       // ── Uneasy events ──────────────────────────────────────────────────────
       // "Feeling uneasy?" (AI5). Owner-only, like walkFeedback and for the same
       // reason: these are notes about how someone felt, and a guardian able to

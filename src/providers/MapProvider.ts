@@ -1,13 +1,15 @@
 import type React from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import type { MapMarker, MapRegion, RoutePolyline } from '../models/MapModels';
+import type { MapArea, MapMarker, MapRegion, RoutePolyline } from '../models/MapModels';
 
 export interface AppMapViewProps {
   region: MapRegion;
   markers: MapMarker[];
   /** Null when no route data exists (routing not yet implemented). */
   polyline: RoutePolyline | null;
+  /** Approximate locations, drawn as circles. Network location's only shape. */
+  areas?: MapArea[];
   style?: StyleProp<ViewStyle>;
   /**
    * Lets the user pan/zoom.

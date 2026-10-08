@@ -18,6 +18,10 @@ Last updated: 2026-09-01
 | SOS event records | Firestore `users/{uid}/sosEvents` | 90 days after resolution (unresolved records are never auto-deleted) | Account deletion; scheduled `enforceDataRetention` Cloud Function |
 | Offline operation queue | Device AsyncStorage | 7 days for failed items; cleared on account deletion | `DataRetentionService.cleanupExpiredLocalData()`; account deletion |
 | Fake call settings | Device AsyncStorage | Until app uninstalled or account deleted | Account deletion clears AsyncStorage entries |
+| Consent records + consent events (network location) | Firestore `users/{uid}/consents`, `consentEvents` | Kept as evidence; never client-deletable. Revoked (not deleted) when the guardian's account is deleted | Retention period **not yet defined** — needs the Phase 6 legal review (G3) |
+| Basic-phone members | Firestore `users/{uid}/basicPhoneMembers` | Until the guardian removes them or deletes their account | Manual removal; `onUserAccountDeleted` |
+| Locate audits, incl. operator-reported location | Firestore `users/{uid}/locateAudits` | Location: 30 days. The audit record itself: kept | `enforceDataRetention` clears `location` / `accuracyMeters` |
+| Inbound SMS de-duplication marks (message-id hash only, no number or text) | Firestore `smsInbound` | 7 days | `expireAt` field — needs a Firestore TTL policy configured on the collection |
 
 ---
 
@@ -29,6 +33,7 @@ DATA_RETENTION_DAYS = {
   cancelledJourneyLocationHistory: 7,    // GPS trail for cancelled / missed journeys
   sosRecords: 90,                        // SOS event records (safety audit trail)
   failedOfflineQueueItems: 7,            // Failed offline-queue items
+  networkLocationFixes: 30,              // Operator location on locate audits
 }
 ```
 

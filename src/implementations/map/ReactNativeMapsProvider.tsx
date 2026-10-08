@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 
 import { useTheme } from '../../context/ThemeContext';
+import { FEATURE_COLORS } from '../../config/theme';
 import type { MarkerRole } from '../../models/MapModels';
 import type { AppMapViewProps, MapProvider } from '../../providers/MapProvider';
 
@@ -16,6 +17,7 @@ function ReactNativeMapView({
   region,
   markers,
   polyline,
+  areas = [],
   style,
   interactive = false,
   onRegionChangeComplete,
@@ -83,6 +85,16 @@ function ReactNativeMapView({
       {polyline && (
         <Polyline coordinates={polyline.coordinates} strokeColor={theme.accent} strokeWidth={4} />
       )}
+      {areas.map((a) => (
+        <Circle
+          key={a.id}
+          center={a.centre}
+          radius={a.radiusMeters}
+          fillColor={FEATURE_COLORS.basicPhoneArea}
+          strokeColor={FEATURE_COLORS.basicPhone}
+          strokeWidth={2}
+        />
+      ))}
     </MapView>
   );
 }

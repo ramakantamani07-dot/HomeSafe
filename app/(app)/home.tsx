@@ -10,6 +10,7 @@ import { useJourney } from '../../src/hooks/useJourney';
 import { useSOS } from '../../src/hooks/useSOS';
 import { useFakeCall } from '../../src/hooks/useFakeCall';
 import { useFamily } from '../../src/hooks/useFamily';
+import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
 import { useCurrentPosition } from '../../src/hooks/useCurrentPosition';
 import { usePlaceSearch } from '../../src/hooks/usePlaceSearch';
 import { usePrivacy } from '../../src/hooks/usePrivacy';
@@ -64,6 +65,7 @@ export default function HomeScreen() {
   const { activeSOS, isSOSLoading } = useSOS();
   const { startFakeCall } = useFakeCall();
   const { members } = useFamily();
+  const { members: basicMembers, find } = useBasicPhoneMembers();
   const { savedPlaces } = usePlaces();
   const { position } = useCurrentPosition();
   const { locationStatus } = usePrivacy();
@@ -333,6 +335,14 @@ export default function HomeScreen() {
               params: { connectionId: member.connectionId },
             })
           }
+          basicMembers={basicMembers}
+          onOpenBasicMember={(member) =>
+            router.push({ pathname: '/(app)/basic-member', params: { memberId: member.id } })
+          }
+          onFind={(member) => {
+            find(member.id);
+            router.push({ pathname: '/(app)/find-result', params: { memberId: member.id } });
+          }}
         />
           </>
         )}

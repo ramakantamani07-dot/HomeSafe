@@ -15,6 +15,7 @@
  *   safety/     server-side safety-check escalation backstop
  *   retention/  data retention and account deletion
  *   sharing/    public guardian tracking link
+ *   networkLocation/  basic-phone members: consent SMS, STOP webhook, locate
  *
  * Side-effect import order matters only in that `shared/firebase` must be
  * initialised before anything touches Firestore; every module imports it, and
@@ -26,3 +27,9 @@ export { detectMissedCheckIns } from './checkins';
 export { escalateOverdueSafetyChecks } from './safety';
 export { enforceDataRetention, onUserAccountDeleted } from './retention';
 export { getSharedJourney } from './sharing';
+export {
+  requestConsentSms,
+  inboundConsentSms,
+  locateMember,
+  onConsentRevoked,
+} from './networkLocation';

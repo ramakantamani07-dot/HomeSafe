@@ -15,7 +15,7 @@ compound.
 
 ---
 
-## Status at 5 Oct 2026
+## Status at 8 Oct 2026
 
 | Phase | State | What is left |
 |---|---|---|
@@ -23,9 +23,9 @@ compound.
 | 1 · Design system | **Done** | — |
 | 2 · Home as map + sheet | **Done** | — |
 | 3 · Journey | **Done bar one item** | "Open places on the way" — see D4 below |
-| 4 · Safety | **Started** | `AI5` has 2 of 4 tiles; SOS tiers, uneasy boost, emergency number untouched |
-| 5 · Settings | Not started | |
-| 6 · Network location | Not started | G3 still open |
+| 4 · Safety | **Done** | — |
+| 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
+| 6 · Network location | **6.1–6.4 done, against mocks** | CIBA operator callback (G3) · resend-consent function · 6.5 safe zones · 6.6 SOS by SMS / missed call · device verification |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
 
@@ -38,13 +38,463 @@ call** — and simply omits the other two rather than rendering them inert.
 
 | Gap | Where | Note |
 |---|---|---|
-| Emergency number hard-coded `999` | `app/(app)/sos.tsx` | Phase 4 requires market config — India is 112 |
 | Notification icon is the full-colour logo | `app.config.ts` | Android needs a monochrome silhouette or it renders a white blob |
 | `BiometricGate` still uses shield + wordmark | `src/components/security/` | Everything else now uses the real logo |
 | `otp.tsx` has no brand lockup | `app/(auth)/` | Decide whether branding carries through the flow |
 | Support email is `hello@homesafeapp.com` | Terms, Privacy | Survived the rename — the domain is a real-world decision, not ours to invent |
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
+
+---
+
+## Revocation design (6 Oct 2026) — ACCEPTED 8 Oct, all three layers built
+
+> **Status: accepted and built.** Three layers, with layer 3 as a Firestore
+> trigger rather than a callable — see **D23**. Two follow-up questions below
+> are still open; neither blocks anything.
+
+### The question
+
+How should "stop sharing this person's location" work, given it must never fail
+in a way that leaves sharing switched on?
+
+### What is built today
+
+The Firestore rules let a client write `REVOKED` directly (**D17**). That makes
+revocation immediate and offline-capable: tapping "Stop finding" never waits on
+a backend, and "I stopped sharing" is not a promise that depends on signal.
+
+### The gap this does not close
+
+If the guardian's phone is **offline**, the write is queued locally and the
+server does not see it. Lookups are gated server-side on the consent document,
+so until that write syncs, a lookup could still succeed. Client-side revocation
+gives immediate *local* effect, not immediate *server* effect.
+
+So the client write is necessary but not sufficient.
+
+### Proposed: three layers, not one
+
+**1 · The member's own STOP text — the layer that always works**
+
+They text STOP to our number: carrier → our webhook → server. This path does not
+touch the guardian's phone, app or connectivity at all. If the person being
+located wants it stopped, nothing on the guardian's side can prevent it. This is
+the strongest layer, and why STOP appears in every message we send.
+
+**2 · Guardian taps "Stop finding" — the client write (built)**
+
+Instant, offline-safe, never blocks.
+
+**3 · A companion server call — not yet built**
+
+```
+tap "Stop finding"
+  → write REVOKED locally        (instant, offline-safe, never blocks)
+  → call revokeConsent function  (propagation + operator cleanup)
+       └ fails? queue it          (reuse the existing offlineQueue adapter)
+```
+
+The function does what the client cannot: revoke the operator token, delete
+operator-side geofences, cancel in-flight lookups, send the member a
+confirmation SMS.
+
+### The principle behind the split
+
+The local write is the **permission change** and must never wait on anything.
+The function call is the **side effects**, and side effects may retry — they are
+not what decides whether a lookup is permitted.
+
+Put another way: granting permission should fail closed, so `ACTIVE` is
+unreachable from a client. Removing permission must never fail in a way that
+leaves sharing on. The same asymmetry already governs the SMS keywords — a
+missed YES costs a resend, a missed STOP means locating someone who asked us not
+to.
+
+### What this still would not fix
+
+A guardian who goes offline *immediately* after revoking leaves a window where
+the server still believes consent is active. Closing that entirely means
+short-lived operator grants that must be continuously renewed — real, but a much
+larger change, and it trades a rare window for constant renewal traffic.
+
+Layer 1 is the practical mitigation: the member can always stop it themselves,
+independent of the guardian.
+
+### Layer 1 is now built (7 Oct)
+
+`inboundConsentSms` revokes every consent for the number on STOP, server-side,
+without touching the guardian's device — see **D18**. Only layer 3 remains open.
+
+### Suggested refinement to layer 3 — a trigger, not a callable
+
+The proposal above calls a `revokeConsent` function and queues the call when it
+fails. A Firestore `onDocumentUpdated` trigger on `consents/{memberId}` reaching
+`REVOKED` would do the same side effects with less machinery: Firestore's own
+offline persistence already queues the write, and the trigger fires the moment
+it syncs. It needs no second queue, cannot be skipped by a client that writes
+REVOKED without calling the function, and follows ARCHITECTURE §6 — *"a
+Firestore write is the interface."* It also fires for revocations the server
+makes itself (STOP), so the cleanup lives in one place. It does not narrow the
+offline window; nothing short of short-lived operator grants does.
+
+### To decide
+
+- [x] Accept the three-layer design — **accepted 8 Oct**
+- [x] Layer 3 as a Firestore trigger — **accepted 8 Oct** (D23)
+- [ ] Is the offline window acceptable, mitigated by layer 1?
+- [ ] Should short-lived operator grants go on the Phase 8 hardening list rather than being dismissed?
+
+---
+
+## Decisions settled 8 Oct 2026 — revocation layer 3, retention, Phase 6.4
+
+### D23 · Revocation layer 3 is `onConsentRevoked`, a Firestore trigger
+
+Fires on any consent reaching `REVOKED`, whoever wrote it, and runs once
+(claimed through `revocationHandledAt`). It writes the audit event and the
+circle mirror when the guardian's own device revoked — the one path where the
+server did not make the change — and texts the member "*X* can no longer see
+your location" unless they stopped it themselves (STOP is already confirmed by
+the webhook) or were never told about the request.
+
+To tell those apart, every server revocation records `revokedBy`. A client
+cannot forge it: the rules let a revoke change only `status` and `updatedAt`.
+
+Operator-token revocation and geofence deletion have a marked place in it and
+nothing to do yet (G3, 6.5). In-flight lookups need nothing — `locate`
+re-checks consent after the operator answers (D21).
+
+**Deleting a guardian's account now revokes their consents** (trigger
+`guardian-removed`) and removes their basic-phone members. The consent and its
+events are kept as evidence. Before this, a deleted guardian's consents stayed
+`ACTIVE` indefinitely.
+
+### D24 · Lookup locations are cleared after 30 days; the audit is kept
+
+Added to the existing daily `enforceDataRetention`, not as another schedule.
+Only `location` and `accuracyMeters` are removed: "who looked me up, and when"
+has to outlive "where I was". Paged, since this collection grows with every
+Find. Audits carry `hasLocation` so the job uses one equality filter.
+
+Covered by seven Firestore-emulator tests in `functions/` (`npm run
+test:emulator` there) — locate's audit, rate-limit reservation, refusals,
+market flag, revocation, and this clean-up — alongside the pure tests.
+
+### D25 · Phase 6.4 screens, and where they differ from the boards
+
+Built: Add someone (`add-someone`, S4), member detail (`basic-member`, S3),
+find result (`find-result`, AI13); basic-phone members in the Settings circle
+(S2) and in Home's "Your circle" with **Find**. Behind
+`EXPO_PUBLIC_BASIC_PHONE_FINDING` (always on with mock data).
+
+Each divergence is principle 4 — say only what is true:
+
+| Board | Built | Why |
+|---|---|---|
+| "EE · supported" | "UK mobile" / "Indian mobile" | No operator lookup exists until G3; "supported" would be unchecked |
+| Sam is texted "every time you look" | "at most once an hour" | The transparency text is throttled (spec §5) |
+| "Sam texted ✓" on each find | Stated once as a rule | The server does not record which find a text went with |
+| "Resend consent text" | Absent | A client may only create or revoke a consent (D17); resend needs a server function not yet written |
+| Avatar pin at the circle's centre | Circle only | The centre is not where the person is; a pin reads as a position |
+| Parent/guardian tick always shown | Shown, and required, when "under 18" is on | Spec: required for under-18s. An adult consents for themselves by text |
+| "Around Banbury town centre" | Absent | Would need reverse geocoding of an 800 m circle — a place name implies precision the circle denies |
+
+A failed Find shows the last known area **only** when the phone could not be
+reached. After a STOP or before a YES, an old location is exactly what the
+member refused.
+
+"Find" never runs on opening the result screen — the button that opened it
+already asked — so returning from History never spends one of the hour's
+finds. "Find again in N min" is computed from the same rule as the server's
+rate limit (`nextLookupAllowedAt`).
+
+Member numbers are validated narrowly — UK and Indian **mobiles** only — until
+Phase 7 brings `libphonenumber-js`. A landline would pass general validation
+and fail at the first Find, after the member had already been texted.
+
+---
+
+## Decisions settled 7 Oct 2026 — Phase 6.3
+
+Three functions, in `functions/src/networkLocation/`, all running against mock
+adapters only (G3):
+
+| Function | Trigger | Does |
+|---|---|---|
+| `requestConsentSms` | consent created in `PENDING_SMS` | Sends the layer-1 request text; records delivery on the consent |
+| `inboundConsentSms` | HTTPS webhook | Signature check → YES / NO / STOP → state transitions → reply text |
+| `locateMember` | callable | guardian → ACTIVE → rate limit → operator → audit → transparency SMS |
+
+The feature is off unless `NETWORK_LOCATION_MARKETS` names a market **and**
+`NETWORK_LOCATION_ADAPTER` names an adapter; see `functions/.env.example`. No
+real operator or SMS adapter exists — `ports.ts` lists the docs each must be
+built against, per the spec's "no invented endpoints".
+
+### D18 · What a reply means, server side
+
+- **STOP revokes every consent for the number**, for every guardian who asked,
+  in any non-terminal state. It is confirmed by text even when nothing was live.
+- **YES approves only when exactly one delivered request is waiting.** Two
+  guardians waiting on one number cannot be told apart by a bare YES, so neither
+  is approved and the member is told nothing was shared. A request whose text
+  never left us (market off, send failed) cannot be approved at all — the member
+  would be agreeing to someone they were never told about.
+- **NO declines every waiting request, and revokes any already answered.** A NO
+  after approval is someone who no longer wants to be found; reading it as less
+  than STOP would put the keyword list ahead of the person.
+- **Unknown numbers get no reply**, per spec §7.
+
+The webhook runs its transitions *before* recording the message as seen. They
+are safe to repeat — the state machine refuses one that already happened — so a
+failure midway lets the provider's retry finish the job. A STOP is never lost
+to a de-duplication record written ahead of the work it stood for. The mark
+guards only the reply text.
+
+### D19 · No scheduled functions for expiry or token refresh
+
+The 48-hour request deadline is applied **lazily**, when a reply arrives: an
+expired request can only matter when someone answers it, which is exactly when
+the webhook runs. A cron sweeping for them would spend invocations changing
+nothing anyone can observe — the rule in §1 that a schedule needs a stated
+reason. The guardian's screen can derive "they didn't reply" from `expiresAt`.
+
+**Operator token refresh is not built**, because no operator tokens exist: the
+mock strategy is `RECORDED_CONSENT`, which needs none. When a CIBA adapter
+lands, refresh belongs inside it, on use, rather than on a schedule. CIBA's
+`pending` outcome leaves the consent in `OPERATOR_PENDING` — not locatable, and
+truthfully described as "setting up with their network" — until a callback or
+`/token` poll exists for a real aggregator.
+
+### D20 · The server's fields on the consent are locked twice
+
+`locateMember` keeps the rate-limit window and the transparency throttle on the
+consent document. A guardian who could create that document with `lastNoticeAt`
+in 2099 would locate the member without their ever being told. So:
+
+1. The rules now allow a client create with **only** the client model's keys
+   (`hasOnly`), and a revoke that changes only `status` / `updatedAt`. Two rules
+   tests, run against the emulator.
+2. `requestConsentSms` resets `requestedAt`, `expiresAt`, `recentLookupsAt` and
+   `lastNoticeAt` from server values whatever was written.
+
+### D21 · How `locateMember` keeps its order honest
+
+- The gate and the rate-limit reservation are **one transaction**, so two racing
+  taps of Find cannot both pass a limit only one should.
+- Consent is **checked again after the operator answers**. A STOP landing in
+  the seconds a lookup takes discards the fix, and it is audited as refused.
+  Stopping means the guardian does not see where they are, not merely that the
+  next lookup fails.
+- The callable always records `reason: 'manual'`. A client cannot claim `sos` to
+  get past the rate limit; SOS lookups start server-side from the member's own
+  text or call (6.6) and call `locate()` directly.
+- The transparency throttle is claimed before sending and **released if the send
+  fails**, so a provider outage means the next lookup tells them — not an hour
+  of being found without knowing.
+
+### D22 · The consent rules exist twice, and a test holds them together
+
+`functions/` shares no module graph with the app, so `consent.ts` mirrors the
+client's state machine, keyword lists and rate limit. Drift there would be a
+security defect, not an inconsistency, so `src/__tests__/consentParity.test.ts`
+imports both copies and compares every state × event, every keyword, a corpus of
+replies and the rate limit. Checked by mutation: making ACTIVE expirable on the
+server alone fails it.
+
+---
+
+## Decisions settled 6 Oct 2026
+
+### D7 · Emergency numbers come from market config — RESOLVED
+
+`999` was hard-coded at **four** sites, not the three first counted — the fourth
+told guardians they could "call 999 for you" from the safety-check overlay.
+`src/config/markets.ts` now resolves it: configured market → device region (via
+`Intl`, so no new native module) → fallback.
+
+**112 is the fallback, deliberately.** It is the GSM standard: handsets route it
+to local emergency services across the UK, the EU and India, usually even with
+no SIM or credit. When we cannot establish where someone is, that is the number
+most likely to reach help, and guessing a national one from weak evidence would
+be worse. North America is listed explicitly because 112 is *not* reliably
+routed there — the one place being wrong is least recoverable.
+
+Known limitation, recorded rather than solved badly: this reads the device
+*region*, not where the user physically is, so a traveller abroad is offered
+their home number. Doing better means reverse-geocoding during an emergency,
+needing network and a fix exactly when both are least reliable.
+
+### D8 · The SOS tier is decided by the hold, not by a pre-selected mode
+
+`AI8`'s two tiers ride on one continuous gesture — 3 s alerts guardians, 6 s
+also offers emergency services — because an emergency is the worst moment to ask
+someone to choose between buttons first. Tier 2 pre-selects the emergency mode
+on the SOS screen: a person who held for six seconds has already said what they
+want. The hold fill resets at the tier boundary, so reaching tier 1 reads as an
+arrival rather than as the halfway point of something unfinished.
+
+**One deliberate divergence.** The alert fires when the gesture *completes* — on
+release, or at tier 2 — not the instant 3 s is crossed, so a six-second hold
+alerts guardians up to ~3 s later than a literal reading. That is the price of
+one gesture carrying two intents, and it buys the ability to escalate without
+lifting and pressing again. Commented at the call site.
+
+### D9 · The uneasy boost ends by arithmetic, not by a callback — RESOLVED
+
+Phase 4's exit criterion is "test the timer, not the UI". A countdown is the
+obvious implementation and the wrong one: it can be frozen by backgrounding,
+killed with the screen that started it, or simply lost — and a location boost
+that silently never ends is a battery drain the user cannot see.
+
+`isUneasyBoostActive(startedAt, now)` is a timestamp comparison, re-evaluated on
+every tracking-config resolution. Losing the timer degrades to "the next
+resolution fixes it". The timer exists only to re-apply the sampling rate at
+expiry, and is armed from the deadline on tracking start and released on stop,
+so it survives restarts without outliving a tracking session.
+
+`UNEASY` sits between `JOURNEY` and `SOS`, and outranks the low-battery
+downgrade — the user knows their battery is low and asked anyway.
+
+### D11 · Haptics are named by meaning, not by feel
+
+`src/utils/haptics.ts` exposes `checkIn()`, `sosTierReached()`, `arrived()` and
+`nonEmergencySent()` rather than letting screens call `impactAsync` directly, so
+how something feels is one edit instead of a search. Every call is
+fire-and-forget and swallows errors: haptics are absent on the simulator, on
+many Android devices, and whenever the user has turned them off, and an SOS that
+threw because the phone could not buzz would be an absurd way to fail.
+
+The SOS step is the one that matters. The hold has two thresholds and the user's
+eyes may be anywhere, so the pulse at 3 s is how they learn their guardians have
+been told without looking — Medium at tier 1, Heavy at tier 2, so the two are
+distinguishable through a pocket. It fires once per crossing, guarded by a ref,
+because the progress tick runs every 50 ms.
+
+Arrival's success pulse is suppressed when the journey was ended early: nothing
+was achieved, and congratulating someone for stopping would read as mockery.
+
+### D10 · "Nearest open" is a separate port, and never says "open"
+
+The phase plan called for `PlacesProvider.searchOpenNearby`. That was written
+before we established that CLGeocoder — the free tier backing address search —
+cannot do point-of-interest lookup at all. Adding the method there would force
+`PlatformGeocoderPlacesProvider` to implement something it has no way to answer,
+and returning `[]` from it would leave the feature silently dead on the default
+configuration. It is `SafePlaceProvider` instead.
+
+The search is a local Swift module (`modules/nearby-places`) wrapping
+`MKLocalSearch` — free, keyless, no account. Per **D4**, Apple publishes no
+opening hours, so the categories are restricted to places staffed around the
+clock (police, hospital, fire, pharmacy, fuel, hotel) and the heading reads
+"Open around the clock", never "open now". Cafés and shops are absent by design:
+a café at 2am is exactly the guess that sends someone to a locked door.
+
+Results rank by **kind first, then distance** — a police station 600m away beats
+a hotel 200m away, and distance alone would bury it. Tapping one opens
+directions rather than rerouting the journey: changing the destination would
+silently change where guardians believe this person is going, and they may want
+the police station *and* still be expected home.
+
+### D12 · Alert rules moved to Settings — RESOLVED
+
+§10's acceptance criterion is *"All setup lives in Settings; nothing on the
+journey screens asks the user to configure anything."* An audit of every journey
+screen found exactly one violation: Review's "Edit" on the alert rules.
+
+The rules now live in `JourneyPreferences` — which its own comment already
+anticipated ("These are the defaults those rules are seeded from") — and Review
+displays them read-only. The capability moved rather than vanishing: **If I'm
+late by** and **If I stop for** are Settings rows.
+
+`alertRules` was removed from `JourneyDraft` entirely rather than seeded into it,
+so there is one source of truth instead of two that could drift. The three
+journey-start sites read preferences directly. `AlertRulesSheet.tsx` (176 lines)
+became orphaned and was deleted.
+
+Two switches survived the audit and should: Review's "Save as a place" is an
+action about that destination, and Route's guardian toggle is specified
+explicitly ("with a toggle, default on, using the defaults from Settings").
+
+### D13 · Two screens existed but were unreachable
+
+`family.tsx` — 390 lines of working screen — lost its only entrance when Phase 2
+removed the four-tab bar, and nothing replaced it. `JourneyPreferences` was fully
+modelled, validated and persisted, but no control ever set it, so "Check on me"
+silently used the 10-minute default forever.
+
+Both are now connected from Settings. Worth recording because neither was
+visible as a bug: the code was correct, tested and dead.
+
+### D14 · Pocket mode — OPEN, deliberately not guessed
+
+The spec names "Pocket mode" once, in the Settings list, and defines it nowhere.
+Plausible readings differ enough to matter — suppress accidental touches, dim the
+screen, keep tracking with the UI locked — and the most obvious one is already
+handled: SOS is press-and-hold *precisely* so a pocket tap cannot raise an alarm.
+
+Left unimplemented rather than invented. Needs a product decision about what it
+should do.
+
+### D15 · Consent is a pure state machine, and ACTIVE has one door
+
+`src/services/ConsentStateMachine.ts` decides whether one person may see
+another's location, so it is a pure module — no context, no Firestore, no
+network. It has to be exhaustively testable, and it has to read identically on
+the client and in Cloud Functions: the server enforces it, and the client must
+predict the server's answer to show honest UI.
+
+The transition table is narrow on purpose. A test enumerates **every** state
+crossed with **every** event and asserts that exactly one route reaches `ACTIVE`
+— `OPERATOR_PENDING` via `operator-approved`. A member who replied YES but whose
+operator has not authorised is not locatable; if any other path existed, consent
+would be a formality.
+
+Two asymmetries, both deliberate:
+
+- **`ACTIVE` cannot expire.** It ends because somebody ended it, never because a
+  clock ran out while the member believed they were still sharing.
+- **STOP is read far more loosely than YES.** It matches anywhere in the message
+  and beats an approval in the same text, while approval must be the entire
+  message. A missed YES costs a resend; a missed STOP means locating someone who
+  asked us not to.
+
+### D17 · A client may reach exactly two consent states
+
+The Firestore rules are the enforcement boundary for network location, and they
+allow a client to write only `PENDING_SMS` and `REVOKED`:
+
+```
+PENDING_SMS   asking is something a guardian may do
+REVOKED       stopping must always work, immediately, from any state
+```
+
+`SMS_APPROVED`, `OPERATOR_PENDING`, `ACTIVE`, `DECLINED` and `EXPIRED` are
+writable only through the Admin SDK, which bypasses rules. `ACTIVE` means "the
+member texted YES *and* their operator authorised it" — neither fact the
+requesting device is in any position to assert about somebody else.
+
+Ten rules tests, all run against the emulator rather than skipped. They cover the
+negative cases that matter: ACTIVE cannot be written by update *or* by creating
+a document already in that state, no intermediate state is reachable, a consent
+record can never be deleted, another user cannot read or create one, locate
+audits refuse all client writes, consent events are append-only and cannot claim
+ACTIVE, and a member's phone number is immutable — changing it would silently
+transfer permission to whoever holds the new SIM.
+
+**Revocation is deliberately client-side** rather than routed through a function.
+The spec requires STOP to work "any time", and stopping must not depend on a
+backend being reachable. Permission is the thing that should fail closed.
+
+### D16 · Mock network location is deliberately imprecise
+
+`MockNetworkLocationProvider` reports ~650m accuracy, because network location
+genuinely is that coarse. A mock returning GPS-grade precision would let us
+build screens that promise more than the real thing can deliver, and the gap
+would only surface after the commercial agreements landed.
+
+It also exposes `denyConsentFor()`, so refusal paths are exercisable — the
+failure cases are the ones that matter in a consent system.
 
 ---
 
@@ -370,7 +820,7 @@ feedback unreadable by guardians (enforced in Firestore rules, with a rules test
 
 ---
 
-## Phase 4 · Safety — uneasy, fake call, SOS tiers — STARTED
+## Phase 4 · Safety — uneasy, fake call, SOS tiers — DONE
 
 **Goal:** `AI5`, `AI7`, `AI8`.
 
@@ -390,7 +840,7 @@ distinct and both cancellable · emergency number from config · no new SOS back
 
 ---
 
-## Phase 5 · Settings
+## Phase 5 · Settings — DONE (bar pocket mode)
 
 **Goal:** `AI9`–`AI12`. Everything configurable moves here; journey screens
 configure nothing (spec §10).

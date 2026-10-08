@@ -8,6 +8,9 @@ import * as functionsV1 from 'firebase-functions/v1';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
+import type { StoredConsent } from '../shared/types';
+import { isTerminal } from '../networkLocation/consent';
+import { transitionConsent } from '../networkLocation/store';
 import {
   FIRESTORE_BATCH_LIMIT,
   deleteAllDocsInCollection,
@@ -28,7 +31,10 @@ const RETENTION_DAYS = {
   completedJourneyLocationHistory: 30,
   cancelledJourneyLocationHistory: 7,
   sosRecords: 90,
+  networkLocationFixes: 30,
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 
 /**
@@ -92,7 +98,43 @@ export const enforceDataRetention = onSchedule('every 24 hours', async () => {
   await deleteRefsInBatches(oldResolvedSos.docs.map((d) => d.ref));
 
   logger.info(`enforceDataRetention: deleted ${oldResolvedSos.size} resolved SOS record(s)`);
+
+  const fixesCleared = await clearOldNetworkFixes(
+    Timestamp.fromMillis(now - RETENTION_DAYS.networkLocationFixes * DAY_MS),
+  );
+  logger.info(`enforceDataRetention: cleared location from ${fixesCleared} locate audit(s)`);
 });
+
+/**
+ * Removes the operator-reported location from locate audits past retention.
+ *
+ * The audit stays and only the coordinates go. "Who looked me up, and when" is
+ * what the member or a regulator will ask about, long after "where was I" has
+ * stopped being worth keeping.
+ *
+ * Paged, because unlike the journey queries above this collection grows with
+ * every Find, and one unbounded read would eventually exceed a function's
+ * memory.
+ */
+export async function clearOldNetworkFixes(cutoff: Timestamp): Promise<number> {
+  let cleared = 0;
+  for (;;) {
+    const page = await db
+      .collectionGroup('locateAudits')
+      .where('hasLocation', '==', true)
+      .where('at', '<=', cutoff)
+      .limit(FIRESTORE_BATCH_LIMIT)
+      .get();
+    if (page.empty) return cleared;
+
+    const batch = db.batch();
+    for (const doc of page.docs) {
+      batch.update(doc.ref, { location: null, accuracyMeters: null, hasLocation: false });
+    }
+    await batch.commit();
+    cleared += page.size;
+  }
+}
 
 /**
  * Server-side safety net for account deletion.
@@ -129,6 +171,22 @@ export const onUserAccountDeleted = functionsV1.auth.user().onDelete(async (user
   }
   await deleteRefsInBatches(journeyRefs);
 
+  // Consent is a permission granted *to this guardian*. With the guardian gone,
+  // nothing should remain that would let it be exercised, so every live
+  // consent is revoked — through the state machine, so the audit trail says
+  // why. The consent and its events are kept as evidence; the members are not.
+  const consents = await userRef.collection('consents').get();
+  let consentsRevoked = 0;
+  for (const doc of consents.docs) {
+    if (isTerminal((doc.data() as StoredConsent).status)) continue;
+    if (await transitionConsent(doc.ref, 'revoke', 'account deleted', 'guardian-removed')) {
+      consentsRevoked++;
+    }
+  }
+  const basicMembersDeleted = await deleteAllDocsInCollection(
+    userRef.collection('basicPhoneMembers'),
+  );
+
   const contactsDeleted = await deleteAllDocsInCollection(userRef.collection('contacts'));
   const sosEventsDeleted = await deleteAllDocsInCollection(userRef.collection('sosEvents'));
   await deleteAllDocsInCollection(userRef.collection('familyStatus'));
@@ -164,6 +222,7 @@ export const onUserAccountDeleted = functionsV1.auth.user().onDelete(async (user
     `onUserAccountDeleted: swept ${uid} — ${journeyRefs.length} journey(s) ` +
       `(${locationUpdatesDeleted} location update(s), ${checkInsDeleted} check-in(s)), ` +
       `${contactsDeleted} contact(s), ${sosEventsDeleted} SOS record(s), ` +
-      `${connections.length} connection(s) cancelled, ${sentInvitations.size} invitation(s) removed`,
+      `${connections.length} connection(s) cancelled, ${sentInvitations.size} invitation(s) removed, ` +
+      `${consentsRevoked} consent(s) revoked, ${basicMembersDeleted} basic-phone member(s) removed`,
   );
 });

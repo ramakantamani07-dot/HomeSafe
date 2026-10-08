@@ -8,6 +8,12 @@ export const DATA_RETENTION_DAYS = {
   sosRecords: 90,
   /** Failed offline-queue items that could not be synced. */
   failedOfflineQueueItems: 7,
+  /**
+   * Operator-reported location on a locate audit (network-location spec §10).
+   * Only the coordinates go — the audit itself stays, because "who looked me
+   * up, and when" must outlive "where I was".
+   */
+  networkLocationFixes: 30,
 } as const;
 
 export interface DataRetentionPolicy {

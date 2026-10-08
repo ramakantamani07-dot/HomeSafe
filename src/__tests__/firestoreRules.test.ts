@@ -734,6 +734,346 @@ describeWithEmulator('Firestore security rules', () => {
     );
   });
 
+  test('uneasy events are readable only by their owner', async () => {
+    // Same promise as walk feedback: a guardian who could read these would
+    // change what people are willing to record about feeling unsafe.
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = require('firebase/firestore');
+    const owner = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const other = testEnv.authenticatedContext('user-b').firestore() as import('firebase/firestore').Firestore;
+
+    await assertSucceeds(
+      setDoc(doc(owner, 'users', 'user-a', 'uneasyEvents', 'e-1'), {
+        journeyId: 'j-1',
+        action: 'told-circle',
+        latitude: 51.5,
+        longitude: -0.13,
+        at: new Date(),
+      }),
+    );
+    await assertSucceeds(getDoc(doc(owner, 'users', 'user-a', 'uneasyEvents', 'e-1')));
+    await assertFails(getDoc(doc(other, 'users', 'user-a', 'uneasyEvents', 'e-1')));
+  });
+
+  test('uneasy events cannot be edited or deleted, even by their owner', async () => {
+    // Append-only: an uneasy moment happened. Letting it be erased would make
+    // the log worthless for route safety, and would let someone be pressured
+    // into removing it.
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, deleteDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'user-a', 'uneasyEvents', 'e-2'), {
+        journeyId: null,
+        action: 'opened',
+        latitude: null,
+        longitude: null,
+        at: new Date(),
+      }),
+    );
+    await assertFails(updateDoc(doc(db, 'users', 'user-a', 'uneasyEvents', 'e-2'), { action: 'dismissed' }));
+    await assertFails(deleteDoc(doc(db, 'users', 'user-a', 'uneasyEvents', 'e-2')));
+  });
+
+  test('uneasy events reject an action outside the known set', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    await assertFails(
+      setDoc(doc(db, 'users', 'user-a', 'uneasyEvents', 'e-3'), {
+        journeyId: null,
+        action: 'panic',
+        latitude: null,
+        longitude: null,
+        at: new Date(),
+      }),
+    );
+  });
+
+  test('a client can never write consent to ACTIVE', async () => {
+    // The single most important rule in network location. ACTIVE means "they
+    // texted YES *and* their operator authorised it" — neither of which the
+    // requesting device is in any position to assert about somebody else.
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'user-a', 'consents', 'm-1'), {
+        memberId: 'm-1',
+        status: 'PENDING_SMS',
+        phoneNumber: '+447700900000',
+        requestedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      }),
+    );
+
+    await assertFails(updateDoc(doc(db, 'users', 'user-a', 'consents', 'm-1'), { status: 'ACTIVE' }));
+  });
+
+  test('a client cannot create a consent that is already ACTIVE', async () => {
+    // Blocking the update path alone would be pointless if the document could
+    // simply be born active.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertFails(
+      setDoc(doc(db, 'users', 'user-a', 'consents', 'm-2'), {
+        memberId: 'm-2',
+        status: 'ACTIVE',
+        phoneNumber: '+447700900001',
+        requestedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      }),
+    );
+  });
+
+  test('a client cannot write any intermediate consent state', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(db, 'users', 'user-a', 'consents', 'm-3'), {
+      memberId: 'm-3',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900002',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    for (const status of ['SMS_APPROVED', 'OPERATOR_PENDING', 'DECLINED', 'EXPIRED']) {
+      await assertFails(updateDoc(doc(db, 'users', 'user-a', 'consents', 'm-3'), { status }));
+    }
+  });
+
+  test('revocation always works, and is the one transition a client may make', async () => {
+    // STOP must work "any time" and must not depend on a backend being
+    // reachable — permission is the thing that should fail closed.
+    const { assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(db, 'users', 'user-a', 'consents', 'm-4'), {
+      memberId: 'm-4',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900003',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'user-a', 'consents', 'm-4'), { status: 'REVOKED' }),
+    );
+  });
+
+  test("a client cannot pre-set the server's own consent fields", async () => {
+    // The server keeps the rate-limit window and the transparency-SMS throttle
+    // on this document. A guardian who could create it with lastNoticeAt far
+    // in the future would locate the member without them ever being told.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    const base = {
+      memberId: 'm-8',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900008',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    };
+    for (const extra of [
+      { lastNoticeAt: new Date('2099-01-01') },
+      { recentLookupsAt: [] },
+      { requestSms: { status: 'sent', at: new Date() } },
+    ]) {
+      await assertFails(setDoc(doc(db, 'users', 'user-a', 'consents', 'm-8'), { ...base, ...extra }));
+    }
+  });
+
+  test("the app's own add-someone and stop-finding writes are accepted", async () => {
+    // Mirrors FirebaseBasicPhoneMemberProvider field for field. The consent
+    // create rule allows only listed keys, so a field added to the app's write
+    // and not to the rule would silently break Add someone — this catches it.
+    const { assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, writeBatch, serverTimestamp, Timestamp } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    const now = Timestamp.now();
+    const add = writeBatch(db);
+    add.set(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-10'), {
+      displayName: 'Sam',
+      phoneNumber: '+447700900010',
+      operator: null,
+      consentStatus: 'PENDING_SMS',
+      minor: true,
+      guardianAttestedAt: now,
+      createdAt: now,
+    });
+    add.set(doc(db, 'users', 'user-a', 'consents', 'm-10'), {
+      memberId: 'm-10',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900010',
+      requestedAt: now,
+      expiresAt: Timestamp.fromMillis(now.toMillis() + 86_400_000),
+      activatedAt: null,
+      updatedAt: now,
+    });
+    await assertSucceeds(add.commit());
+
+    const stop = writeBatch(db);
+    stop.update(doc(db, 'users', 'user-a', 'consents', 'm-10'), {
+      status: 'REVOKED',
+      updatedAt: serverTimestamp(),
+    });
+    stop.update(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-10'), { consentStatus: 'REVOKED' });
+    await assertSucceeds(stop.commit());
+  });
+
+  test('a revocation may change nothing but the status', async () => {
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(db, 'users', 'user-a', 'consents', 'm-9'), {
+      memberId: 'm-9',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900009',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await assertFails(
+      updateDoc(doc(db, 'users', 'user-a', 'consents', 'm-9'), { status: 'REVOKED', lastNoticeAt: null }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'user-a', 'consents', 'm-9'), { status: 'REVOKED', updatedAt: new Date() }),
+    );
+  });
+
+  test('a consent record can never be deleted', async () => {
+    // Evidence that permission was given or withdrawn. Evidence that can be
+    // erased proves nothing.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, deleteDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(db, 'users', 'user-a', 'consents', 'm-5'), {
+      memberId: 'm-5',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900004',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await assertFails(deleteDoc(doc(db, 'users', 'user-a', 'consents', 'm-5')));
+  });
+
+  test('another user cannot read or touch a consent', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, getDoc, setDoc } = require('firebase/firestore');
+    const owner = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const other = testEnv.authenticatedContext('user-b').firestore() as import('firebase/firestore').Firestore;
+
+    await setDoc(doc(owner, 'users', 'user-a', 'consents', 'm-6'), {
+      memberId: 'm-6',
+      status: 'PENDING_SMS',
+      phoneNumber: '+447700900005',
+      requestedAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await assertFails(getDoc(doc(other, 'users', 'user-a', 'consents', 'm-6')));
+    await assertFails(
+      setDoc(doc(other, 'users', 'user-a', 'consents', 'm-7'), {
+        memberId: 'm-7',
+        status: 'PENDING_SMS',
+        phoneNumber: '+447700900006',
+        requestedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      }),
+    );
+  });
+
+  test('locate audits are server-written and client-readable only', async () => {
+    // A client that could write its own audit entries could also omit them.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertFails(
+      setDoc(doc(db, 'users', 'user-a', 'locateAudits', 'a-1'), {
+        memberId: 'm-1',
+        requestedBy: 'user-a',
+        outcome: 'success',
+        at: new Date(),
+      }),
+    );
+  });
+
+  test('consent events are append-only', async () => {
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, deleteDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'user-a', 'consentEvents', 'e-1'), {
+        memberId: 'm-1',
+        from: 'PENDING_SMS',
+        to: 'REVOKED',
+        trigger: 'member-revoked',
+        at: new Date(),
+      }),
+    );
+    await assertFails(updateDoc(doc(db, 'users', 'user-a', 'consentEvents', 'e-1'), { to: 'ACTIVE' }));
+    await assertFails(deleteDoc(doc(db, 'users', 'user-a', 'consentEvents', 'e-1')));
+  });
+
+  test('a client cannot forge a consent event claiming ACTIVE', async () => {
+    // The audit trail must not be able to assert something the consent document
+    // itself refuses.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertFails(
+      setDoc(doc(db, 'users', 'user-a', 'consentEvents', 'e-2'), {
+        memberId: 'm-1',
+        from: 'OPERATOR_PENDING',
+        to: 'ACTIVE',
+        trigger: 'operator-responded',
+        at: new Date(),
+      }),
+    );
+  });
+
+  test("a basic-phone member's number cannot be changed under an existing consent", async () => {
+    // Consent is granted for a specific number. Changing it would silently
+    // transfer permission to whoever holds the new SIM.
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-8'), {
+        ownerId: 'user-a',
+        displayName: 'Sam',
+        phoneNumber: '+447700900007',
+        consentStatus: 'PENDING_SMS',
+        createdAt: new Date(),
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-8'), { displayName: 'Sammy' }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', 'user-a', 'basicPhoneMembers', 'm-8'), {
+        phoneNumber: '+447700900999',
+      }),
+    );
+  });
+
   test('another user cannot read or raise a safety check on a journey', async () => {
     const { assertFails } = require('@firebase/rules-unit-testing');
     const { doc, getDoc, setDoc } = require('firebase/firestore');

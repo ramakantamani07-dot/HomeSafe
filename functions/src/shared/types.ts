@@ -56,3 +56,44 @@ export interface AlertData {
   /** Present only on SAFETY_CHECK_ESCALATED. "" when the battery is unknown. */
   battery?: string;
 }
+
+// ── Network location (mirrors src/models/Consent.ts, LocateAudit.ts) ────────
+
+export interface StoredConsent {
+  memberId: string;
+  status:
+    | 'PENDING_SMS'
+    | 'SMS_APPROVED'
+    | 'OPERATOR_PENDING'
+    | 'ACTIVE'
+    | 'DECLINED'
+    | 'EXPIRED'
+    | 'REVOKED';
+  phoneNumber: string;
+  requestedAt: Timestamp;
+  expiresAt: Timestamp;
+  activatedAt: Timestamp | null;
+  updatedAt: Timestamp;
+  // Server-only fields below. The rules refuse them on a client create, so a
+  // guardian cannot pre-set the throttle or the rate-limit history.
+  /** Delivery of the consent-request text. */
+  requestSms?: { status: 'sending' | 'sent' | 'failed' | 'unavailable'; at: Timestamp };
+  /** Permitted lookups in the last hour — the rate-limit window, kept bounded. */
+  recentLookupsAt?: Timestamp[];
+  /** When the member was last told someone looked them up. */
+  lastNoticeAt?: Timestamp | null;
+  /**
+   * Who revoked, when the server did. Absent on a REVOKED consent means the
+   * guardian's own device wrote it — the rules let a client change nothing but
+   * `status` and `updatedAt`, so a client cannot claim to be anyone else.
+   */
+  revokedBy?: string;
+  /** Set once the revocation's side effects have run, so they run once. */
+  revocationHandledAt?: Timestamp;
+}
+
+export interface StoredBasicPhoneMember {
+  displayName: string;
+  phoneNumber: string;
+  consentStatus: StoredConsent['status'];
+}

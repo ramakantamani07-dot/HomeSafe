@@ -20,7 +20,7 @@ const ROLE_LABEL: Record<MarkerRole, string> = {
   destination: 'Destination',
 };
 
-function MockMapView({ region, markers, polyline, style }: AppMapViewProps) {
+function MockMapView({ region, markers, polyline, areas = [], style }: AppMapViewProps) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const ROLE_COLOR = roleColors(theme);
@@ -54,6 +54,17 @@ function MockMapView({ region, markers, polyline, style }: AppMapViewProps) {
           ))
         )}
       </View>
+
+      {areas.map((a) => (
+        <View key={a.id} style={styles.markerRow}>
+          <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+          <View style={styles.markerBody}>
+            <Text style={styles.markerRole}>Approximate area</Text>
+            <Text style={styles.markerTitle}>Within {a.radiusMeters} m</Text>
+            <Text style={styles.markerCoords}>{formatCoordinates(a.centre)}</Text>
+          </View>
+        </View>
+      ))}
 
       {/* Route footer */}
       <View style={styles.footer}>
