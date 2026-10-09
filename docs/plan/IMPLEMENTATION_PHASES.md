@@ -66,9 +66,12 @@ suite cannot see. Each was fixed at its cause, not at the screen:
 | Sign-in background a 2.3 MB PNG with no transparency | `bg3.jpg`, 499 KB |
 | Sign-in logo drawn at 132 pt from a 1234 px source (973 KB) | `logo-signin.png`, 400 px (3× the display size), 158 KB |
 
-The installed debug app is ~98 MB, but most of that is the dev client and a
-33 MB debug library that a release build does not contain; release size can
-only be measured from an archive build.
+**Release build, measured 9 Oct** (`xcodebuild -configuration Release`):
+**38 MB installed, ~13 MB download** (zipped IPA). Of the 38 MB, 17 MB is
+React Native + Hermes, 11 MB the native binary, 7.1 MB the JS bundle and
+3.1 MB images and fonts. The ~98 MB debug install is the dev client plus a
+33 MB debug library, neither of which ships. Unused source images in `assets/`
+(`bg1`, `bg2`, `sj1`–`sj4`, ~9 MB) are not bundled and do not affect app size.
 
 **Memory.** Swept every timer, listener and subscription:
 
