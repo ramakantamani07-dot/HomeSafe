@@ -32,7 +32,7 @@ export function LegalDocumentScreen({ title, lastUpdated, intro, sections }: Leg
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/phone'))}
           style={styles.backButton}
         >

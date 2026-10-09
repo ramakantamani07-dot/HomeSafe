@@ -133,10 +133,10 @@ export default function FamilyScreen() {
                   <Text style={styles.inviteName}>{inv.fromDisplayName}</Text>
                   <Text style={styles.inviteDetail}>Wants you in their family</Text>
                 </View>
-                <TouchableOpacity style={styles.pillSecondary} onPress={() => declineInvitation(inv.id)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.pillSecondary} onPress={() => declineInvitation(inv.id)}>
                   <Text style={styles.pillSecondaryText}>Decline</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.pillPrimary} onPress={() => accept(inv.id, inv.fromDisplayName)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.pillPrimary} onPress={() => accept(inv.id, inv.fromDisplayName)}>
                   <Text style={styles.pillPrimaryText}>Accept</Text>
                 </TouchableOpacity>
               </View>
@@ -233,7 +233,7 @@ export default function FamilyScreen() {
           </Text>
         )}
 
-        <TouchableOpacity style={styles.addSomeone} onPress={() => router.push('/add-someone')}>
+        <TouchableOpacity accessibilityRole="button" style={styles.addSomeone} onPress={() => router.push('/add-someone')}>
           <Icon name="add" size={20} color={theme.accent} />
           <Text style={styles.addSomeoneText}>Add someone</Text>
         </TouchableOpacity>

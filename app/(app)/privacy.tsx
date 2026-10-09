@@ -229,7 +229,7 @@ export default function PrivacyScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={[styles.headerRow, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={[styles.backText, { color: theme.accent }]}>← Back</Text>
         </TouchableOpacity>
         <Text style={[styles.screenTitle, { color: theme.textPrimary }]}>Privacy & Security</Text>
@@ -365,7 +365,7 @@ export default function PrivacyScreen() {
           />
         </Section>
         {duressCodeSet && (
-          <TouchableOpacity onPress={handleRemoveDuressCode} style={styles.removeLinkWrap}>
+          <TouchableOpacity accessibilityRole="button" onPress={handleRemoveDuressCode} style={styles.removeLinkWrap}>
             <Text style={[styles.removeLink, { color: theme.critical.fg }]}>Remove Duress Code</Text>
           </TouchableOpacity>
         )}

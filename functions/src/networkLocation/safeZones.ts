@@ -13,6 +13,7 @@ import { writeAudit } from './locate';
 import { guardianNameFor, sendMemberSms } from './memberSms';
 import { OperatorError, type NetworkLocationAdapters } from './ports';
 import { consentRef } from './store';
+import { metric } from '../shared/metrics';
 import { ZONES_PER_MEMBER, applyZoneReading, type ZoneEvent } from './zones';
 
 /**
@@ -74,9 +75,11 @@ export async function checkZone(adapters: NetworkLocationAdapters, doc: QueryDoc
   if (!isMarketEnabled(marketForNumber(consent.phoneNumber))) return;
 
   let inside: boolean;
+  const startedAt = Date.now();
   try {
     inside = await adapters.operator.verify(consent.phoneNumber, zone.centre, zone.radiusMeters);
   } catch (err) {
+    metric('zone_check', { outcome: 'provider-error', latencyMs: Date.now() - startedAt, event: null, billedUnits: 1 });
     logger.warn('Zone verification failed', { failure: err instanceof OperatorError ? err.failure : 'unknown' });
     await writeAudit(ownerId, zone.memberId, 'geofence', 'provider-error', null);
     return;
@@ -119,6 +122,7 @@ export async function checkZone(adapters: NetworkLocationAdapters, doc: QueryDoc
     return next.event;
   });
 
+  metric('zone_check', { outcome: 'success', latencyMs: Date.now() - startedAt, event: event ?? null, billedUnits: 1 });
   if (event) {
     await tellGuardian(ownerId, (member.data() as StoredBasicPhoneMember).displayName, zone.name, event);
   }

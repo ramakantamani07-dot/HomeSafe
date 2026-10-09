@@ -56,7 +56,7 @@ export default function FakeCallSettingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => goBack()} style={styles.headerSide}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => goBack()} style={styles.headerSide}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Fake Call Settings</Text>
@@ -90,7 +90,7 @@ export default function FakeCallSettingsScreen() {
         <Text style={styles.sectionLabel}>CALLER LABEL (OPTIONAL)</Text>
         <Text style={styles.sectionHint}>Shown below the name on the incoming call screen.</Text>
         <View style={styles.chipRow}>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: callerLabel === null }}
             style={[styles.chip, callerLabel === null && styles.chipSelected]}
             onPress={() => setCallerLabel(null)}
             activeOpacity={0.75}
@@ -100,7 +100,7 @@ export default function FakeCallSettingsScreen() {
             </Text>
           </TouchableOpacity>
           {CALLER_LABELS.map((label) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: callerLabel === label }}
               key={label}
               style={[styles.chip, callerLabel === label && styles.chipSelected]}
               onPress={() => setCallerLabel(label)}
@@ -120,7 +120,7 @@ export default function FakeCallSettingsScreen() {
         </Text>
         <View style={styles.delayGrid}>
           {DELAY_OPTIONS.map((opt) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: delaySeconds === opt.value }}
               key={opt.value}
               style={[styles.delayChip, delaySeconds === opt.value && styles.chipSelected]}
               onPress={() => setDelaySeconds(opt.value)}

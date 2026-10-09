@@ -51,7 +51,12 @@ export function MemberEventsSection({
               </View>
             );
             return sos ? (
-              <TouchableOpacity key={event.id} onPress={() => onOpenSos(event)} accessibilityRole="button">
+              <TouchableOpacity
+                key={event.id}
+                onPress={() => onOpenSos(event)}
+                accessibilityRole="button"
+                accessibilityLabel={`${title}, ${formatFindTime(event.at, now)}. ${detail}. Opens their location.`}
+              >
                 {row}
               </TouchableOpacity>
             ) : (

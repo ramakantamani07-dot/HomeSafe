@@ -135,7 +135,7 @@ export default function PhoneScreen() {
               </View>
 
               {!isDevMode && (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageConfirmed }}
                   style={styles.ageRow}
                   onPress={() => setAgeConfirmed((v) => !v)}
                   activeOpacity={0.7}

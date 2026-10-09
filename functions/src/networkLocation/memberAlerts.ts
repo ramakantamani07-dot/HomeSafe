@@ -8,6 +8,7 @@ import { dltTemplateId, isMarketEnabled, localTime, marketForNumber, renderGuard
 import { locate } from './locate';
 import type { CheckInLabel } from './memberMessages';
 import type { NetworkLocationAdapters } from './ports';
+import { metric } from '../shared/metrics';
 
 /** A guardian whose consent for this number was ACTIVE when the member wrote. */
 export interface GuardianTarget {
@@ -39,6 +40,7 @@ export async function raiseMemberSos(
   source: SosSource,
   withLocation: boolean,
 ): Promise<number> {
+  const receivedAt = Date.now();
   const results = await Promise.allSettled(
     targets.map(async ({ ownerId, memberId }) => {
       const result = withLocation ? await locate(ownerId, memberId, 'sos') : null;
@@ -91,7 +93,11 @@ export async function raiseMemberSos(
       return pushed || texted;
     }),
   );
-  return results.filter((r) => r.status === 'fulfilled' && r.value).length;
+  const reached = results.filter((r) => r.status === 'fulfilled' && r.value).length;
+  // Time from the member's message reaching us to every guardian alert being
+  // handed over — the number that matters most in this whole feature.
+  metric('member_sos', { source, guardians: targets.length, reached, deliveryMs: Date.now() - receivedAt });
+  return reached;
 }
 
 /**
@@ -128,6 +134,7 @@ export async function recordMemberCheckIn(targets: GuardianTarget[], label: Chec
       });
     }),
   );
+  metric('member_checkin', { guardians: targets.length });
   return results.filter((r) => r.status === 'fulfilled').length;
 }
 
@@ -153,6 +160,7 @@ async function pushTo(
   } catch (err) {
     const code = (err as { code?: string }).code;
     if (isDeadTokenError(code)) await ownerRef.update({ fcmToken: '' }).catch(() => {});
+    metric('push_failed', { kind: message.data.type ?? 'unknown', code: code ?? null });
     logger.warn('Member alert push failed', { code });
     return false;
   }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { useTheme } from '../../context/ThemeContext';
 import { FEATURE_COLORS } from '../../config/theme';
@@ -24,6 +25,8 @@ function ReactNativeMapView({
 }: AppMapViewProps) {
   const theme = useTheme();
   const mapRef = useRef<MapView>(null);
+  // With Reduce Motion on, the camera jumps to a new fix instead of gliding.
+  const reduceMotion = useReducedMotion();
 
   /**
    * "Follow until touched."
@@ -42,10 +45,10 @@ function ReactNativeMapView({
 
   useEffect(() => {
     if (!interactive || userHasPanned.current) return;
-    mapRef.current?.animateToRegion(region, CAMERA_SETTLE_MS);
+    mapRef.current?.animateToRegion(region, reduceMotion ? 0 : CAMERA_SETTLE_MS);
     // Keyed on the coordinates rather than the object: callers rebuild the
     // region literal every render, which would otherwise re-animate constantly.
-  }, [interactive, region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta]);
+  }, [interactive, reduceMotion, region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta]);
 
   const roleColor: Record<MarkerRole, string> = {
     start: theme.accent,

@@ -78,7 +78,7 @@ export default function FakeIncomingCallScreen() {
               ) : null}
             </View>
 
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               style={styles.cancelCountdownBtn}
               onPress={handleCancelCountdown}
               activeOpacity={0.8}
@@ -113,7 +113,7 @@ export default function FakeIncomingCallScreen() {
         <View style={styles.actionRow}>
           {/* Decline */}
           <View style={styles.actionItem}>
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               style={[styles.callBtn, styles.declineBtn]}
               onPress={handleDecline}
               activeOpacity={0.8}
@@ -125,7 +125,7 @@ export default function FakeIncomingCallScreen() {
 
           {/* Accept */}
           <View style={styles.actionItem}>
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               style={[styles.callBtn, styles.acceptBtn]}
               onPress={handleAccept}
               activeOpacity={0.8}

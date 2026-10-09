@@ -96,3 +96,19 @@ export function sosHoldProgress(heldMs: number, tier1Ms: number = SOS_TIER_1_MS)
   if (heldMs >= tier1Ms) return (heldMs - tier1Ms) / (tier2Ms - tier1Ms);
   return heldMs / tier1Ms;
 }
+
+/**
+ * The text a person can send their contacts themselves when the app has no
+ * data connection (Phase 8: SMS fallback for SOS). SMS often still works
+ * when data does not — weak signal, no data plan abroad — and is the one
+ * channel the phone's own Messages app owns. A map link, never just
+ * coordinates, because the person reading it may be stressed too.
+ */
+export function sosFallbackText(location: { latitude: number; longitude: number } | null): string {
+  const where = location
+    ? ` I'm near https://maps.google.com/?q=${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`
+    : '';
+  // Sign-off on its own line, so no punctuation touches the end of the link —
+  // some phones would make it part of the URL.
+  return `I need help.${where}\n(Sent from wayLoc — it couldn't reach the internet.)`;
+}

@@ -12,6 +12,10 @@ import { Icon } from '../../src/components/ui/Icon';
 import { Button } from '../../src/components/ui/Button';
 import { Section, ListRow } from '../../src/components/ui/Section';
 import { formatCoordinates } from '../../src/models/Journey';
+import { sosFallbackText } from '../../src/models/SOS';
+import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
+import { useContacts } from '../../src/hooks/useContacts';
+import { textMany } from '../../src/utils/deviceLinks';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -26,6 +30,8 @@ export default function EmergencyModeScreen() {
   const router = useRouter();
   const { activeSOS, isSOSLoading, resolveSOSWithAuth, resolveStage, triggerDuress } = useSOS();
   const { verifyDuressCode } = usePrivacy();
+  const { isOffline } = useNetworkStatus();
+  const { contacts } = useContacts();
   const resolving = resolveStage === 'authenticating' || resolveStage === 'resolving';
   const [showCodeEntry, setShowCodeEntry] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -89,9 +95,25 @@ export default function EmergencyModeScreen() {
         </View>
 
         <Text style={[styles.title, { color: theme.critical.fg }]}>SOS Active</Text>
+        {/* Offline, the alert is queued on this phone, not delivered — saying
+            "notified" then would be the most dangerous untrue sentence in
+            the app. It goes the moment a connection returns. */}
         <Text style={[styles.subtitle, { color: theme.textPrimary }]}>
-          Your trusted contacts have been notified.{'\n'}Your location is being shared.
+          {isOffline
+            ? "No data signal — wayLoc will alert your contacts the moment it reconnects. Text them now as well."
+            : 'Your trusted contacts have been notified.\nYour location is being shared.'}
         </Text>
+
+        {contacts.length > 0 && (
+          <Button
+            label={isOffline ? 'Text my contacts now' : 'Also text my contacts'}
+            icon="message"
+            variant={isOffline ? 'destructive' : 'secondary'}
+            onPress={() => textMany(contacts.map((c) => c.phone), sosFallbackText(activeSOS.location))}
+            style={styles.resolveButton}
+            accessibilityHint="Opens Messages with your emergency contacts and your location filled in"
+          />
+        )}
 
         <Section>
           <ListRow

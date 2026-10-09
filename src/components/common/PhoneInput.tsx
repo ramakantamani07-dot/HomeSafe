@@ -66,7 +66,7 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
   return (
     <View>
       <View style={[styles.row, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={[styles.countryButton, { borderRightColor: theme.border }]}
           onPress={() => setPickerOpen((v: boolean) => !v)}
           disabled={disabled}
@@ -100,7 +100,7 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
           ]}
         >
           {COUNTRY_CODES.map((c) => (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: c.code === selectedCountry.code }}
               key={c.code}
               style={[
                 styles.pickerItem,

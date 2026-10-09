@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
@@ -58,6 +59,8 @@ export function MapSheet({
   const styles = getStyles(theme);
   const { height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // iOS "Reduce Motion": the sheet moves to its height without the spring.
+  const reduceMotion = useReducedMotion();
 
   // The highest the sheet's top edge may go: below the status bar, with a
   // sliver of map showing, the way iOS's own sheets stop. A full-height sheet
@@ -89,10 +92,10 @@ export function MapSheet({
   const snapTo = useCallback(
     (detent: SheetDetentIndex) => {
       currentDetent.value = detent;
-      translateY.value = withSpring(offsets[detent], SPRING);
+      translateY.value = reduceMotion ? offsets[detent] : withSpring(offsets[detent], SPRING);
       notifyDetent(detent);
     },
-    [offsets, translateY, currentDetent, notifyDetent],
+    [offsets, translateY, currentDetent, notifyDetent, reduceMotion],
   );
 
   useImperativeHandle(handleRef, () => ({ snapTo }), [snapTo]);
@@ -133,7 +136,7 @@ export function MapSheet({
         }
       }
 
-      translateY.value = withSpring(offsets[nearest], SPRING);
+      translateY.value = reduceMotion ? offsets[nearest] : withSpring(offsets[nearest], SPRING);
       if (nearest !== currentDetent.value) {
         currentDetent.value = nearest;
         runOnJS(notifyDetent)(nearest);

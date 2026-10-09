@@ -88,7 +88,7 @@ export default function FakeActiveCallScreen() {
           </View>
 
           {/* End call */}
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             style={styles.endCallBtn}
             onPress={handleEnd}
             activeOpacity={0.8}

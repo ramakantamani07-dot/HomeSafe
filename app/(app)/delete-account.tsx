@@ -70,7 +70,7 @@ export default function DeleteAccountScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           onPress={() => router.back()}
           style={styles.backButton}
           disabled={isWorking}

@@ -5,6 +5,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { db, messaging } from '../shared/firebase';
 import { isDeadTokenError } from '../shared/messaging';
 import type { StoredFamilyConnection, StoredSharedStatus, StoredUser } from '../shared/types';
+import { metric } from '../shared/metrics';
 
 /**
  * Must match `ASK_OK_CATEGORY` in the app's notification setup: iOS shows the
@@ -104,7 +105,10 @@ export const askMemberOk = onCall(async (request) => {
     db.doc(`users/${askerId}`).get(),
   ]);
   const token = (member.data() as StoredUser | undefined)?.fcmToken?.trim();
-  if (!token) return { delivered: false };
+  if (!token) {
+    metric('ask_ok', { delivered: false });
+    return { delivered: false };
+  }
 
   const askerName = (asker.data() as StoredUser | undefined)?.name?.trim() || 'Someone in your family';
   try {
@@ -122,7 +126,9 @@ export const askMemberOk = onCall(async (request) => {
     const code = (err as { code?: string }).code;
     if (isDeadTokenError(code)) await member.ref.update({ fcmToken: '' }).catch(() => {});
     logger.warn('Ask OK push failed', { code });
+    metric('ask_ok', { delivered: false });
     return { delivered: false };
   }
+  metric('ask_ok', { delivered: true });
   return { delivered: true };
 });

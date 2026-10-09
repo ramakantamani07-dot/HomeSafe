@@ -86,16 +86,18 @@ export default function ContactsScreen() {
       </View>
 
       <View style={styles.cardActions}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.actionButton}
           onPress={() => openEdit(item)}
+          accessibilityLabel={`Edit ${item.name}`}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon name="edit" size={19} color={theme.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.actionButton}
           onPress={() => handleDelete(item)}
+          accessibilityLabel={`Delete ${item.name}`}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon name="trash" size={19} color={theme.critical.fg} />
@@ -114,7 +116,7 @@ export default function ContactsScreen() {
             {contacts.length} of {MAX_CONTACTS} contacts
           </Text>
         </View>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={[styles.addButton, atMax && styles.addButtonDisabled]}
           onPress={openAdd}
           disabled={atMax || isLoading}

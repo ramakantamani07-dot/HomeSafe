@@ -16,6 +16,7 @@ import {
 } from './planning';
 import { OperatorError, type OperatorFailure, type OperatorFix } from './ports';
 import { consentRef } from './store';
+import { metric } from '../shared/metrics';
 
 /**
  * Mirrors `NetworkLocationFailure` in `src/providers/NetworkLocationProvider.ts`
@@ -92,6 +93,7 @@ export async function locate(
 
   if (gate.denial || !gate.consent) {
     const denial = gate.denial ?? 'denied-no-consent';
+    metric('locate', { outcome: denial, reason, latencyMs: null, failure: null, billedUnits: 0 });
     await writeAudit(ownerId, memberId, reason, denial, null);
     return { ok: false, failure: DENIAL_FAILURE[denial] };
   }
@@ -104,10 +106,12 @@ export async function locate(
   }
 
   let fix: OperatorFix;
+  const startedAt = Date.now();
   try {
     fix = await adapters.operator.retrieve(phone, LOCATE_MAX_AGE_SECONDS);
   } catch (err) {
     const failure = err instanceof OperatorError ? err.failure : 'unknown';
+    metric('locate', { outcome: 'provider-error', reason, latencyMs: Date.now() - startedAt, failure, billedUnits: 1 });
     logger.warn('Operator lookup failed', { failure, reason });
     await writeAudit(ownerId, memberId, reason, 'provider-error', null);
     return { ok: false, failure };
@@ -119,6 +123,7 @@ export async function locate(
     return { ok: false, failure: 'no-consent' };
   }
 
+  metric('locate', { outcome: 'success', reason, latencyMs: Date.now() - startedAt, failure: null, billedUnits: 1 });
   await writeAudit(ownerId, memberId, reason, 'success', fix);
   await notifyMember(ownerId, ref, phone);
   return { ok: true, fix };

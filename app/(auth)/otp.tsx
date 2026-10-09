@@ -134,7 +134,7 @@ export default function OTPScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <SafeAreaView style={styles.flex} edges={['top']}>
-          <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+          <TouchableOpacity accessibilityRole="button" style={styles.back} onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
@@ -180,7 +180,7 @@ export default function OTPScreen() {
 
             <View style={styles.resendRow}>
               {canResend ? (
-                <TouchableOpacity onPress={handleResend} disabled={loading}>
+                <TouchableOpacity accessibilityRole="button" onPress={handleResend} disabled={loading}>
                   <Text style={styles.resendLink}>Resend code</Text>
                 </TouchableOpacity>
               ) : (

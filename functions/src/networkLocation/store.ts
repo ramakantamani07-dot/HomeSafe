@@ -1,6 +1,7 @@
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
+import { metric } from '../shared/metrics';
 import type { StoredConsent } from '../shared/types';
 import {
   applyConsentEvent,
@@ -62,6 +63,10 @@ export async function transitionConsent(
     // here would bring a deleted person back into their circle.
     if (member.exists) tx.update(memberRef, { consentStatus: transition.to });
 
+    return transition;
+  }).then((transition) => {
+    // Counted after the commit, so a retried transaction is counted once.
+    if (transition) metric('consent_transition', { from: transition.from, to: transition.to, trigger: transition.trigger });
     return transition;
   });
 }

@@ -11,7 +11,8 @@
     "test:emulator": "firebase emulators:exec --project=demo-wayloc --only firestore \"npm test\"",
     "check:tokens": "bash scripts/check-design-tokens.sh",
     "check:arch": "bash scripts/check-architecture.sh",
-    "check": "npm run check:tokens && npm run check:arch && npx tsc --noEmit && npm test"
+    "check": "npm run check:tokens && npm run check:arch && npm run check:a11y && npx tsc --noEmit && npm test",
+    "check:a11y": "node scripts/check-accessibility.js"
   },
   "dependencies": {
     "@expo-google-fonts/bricolage-grotesque": "^0.4.1",

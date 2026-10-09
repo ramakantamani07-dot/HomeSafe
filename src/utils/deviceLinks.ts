@@ -55,3 +55,19 @@ export function openDirections(latitude: number, longitude: number, label: strin
       : `geo:${latitude},${longitude}?q=${encodeURIComponent(label)}`;
   Linking.openURL(url).catch(() => {});
 }
+
+/**
+ * Opens Messages addressed to several people, with the text filled in. The
+ * person still presses Send — iOS allows nothing else, and for an SOS that is
+ * right: it is their message. Unreachable placeholder numbers are left out.
+ */
+export function textMany(phoneNumbers: string[], body: string): void {
+  const to = phoneNumbers.filter((n) => !isUnreachableNumber(n));
+  // iOS separates recipients with commas and starts the body with '&';
+  // Android uses ';' and '?'.
+  const url =
+    Platform.OS === 'ios'
+      ? `sms:${to.join(',')}&body=${encodeURIComponent(body)}`
+      : `sms:${to.join(';')}?body=${encodeURIComponent(body)}`;
+  Linking.openURL(url).catch(() => {});
+}

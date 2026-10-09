@@ -26,7 +26,7 @@ export default function DataVisibilityScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Who Can See My Data</Text>
@@ -54,7 +54,7 @@ export default function DataVisibilityScreen() {
           const duringJourneyOnly = perms.sharingMode === 'SHARE_DURING_JOURNEY';
 
           return (
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               key={member.connectionId}
               style={styles.card}
               onPress={() =>

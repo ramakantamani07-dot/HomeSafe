@@ -28,7 +28,7 @@ compound.
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
 | 6 · Network location | **6.1–6.6 done, against mocks** (resend D26, safe zones D27, SOS and check-ins by text or missed call D28) | Real operator, SMS and voice providers (G3) · device verification on Firebase |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
-| 8 · Hardening | Not started | |
+| 8 · Hardening | **Desk work done (9 Oct)** | Battery walk on a release build (`docs/reference/OPERATIONS.md`) · log-based metrics and alerts set up once Firebase is live |
 
 `AI5` was started early and deliberately: `AI4`'s "Feeling uneasy?" pill needs a
 destination, and a button that goes nowhere is worse than no button. It ships
@@ -91,6 +91,89 @@ React Native + Hermes, 11 MB the native binary, 7.1 MB the JS bundle and
 - Not fixed, mock-only: the mock basic-phone auto-reply timer is not
   cancelled if the app closes within six seconds of adding someone.
 
+### Phase 8 hardening, desk work (9 Oct 2026)
+
+- **Accessibility.** Swept every tappable: 28 had no `accessibilityRole`
+  (VoiceOver read their text but never said they could be tapped) and 3 had
+  no name at all (icon-only Edit/Delete on Contacts read as just "button").
+  Choice chips are now radios with a selected state, the sign-in age row a
+  checkbox. A dead "Change photo" button with no action was removed.
+  `scripts/check-accessibility.js` now runs in `npm run check` and fails on
+  any tappable without a role or a name. Nothing disables font scaling.
+- **Reduce Motion** was required in Phase 1 and never honoured. The Home
+  sheet and the map camera now move without animation when it is on.
+- **Offline.** Check-ins, location points and SOS were already queued
+  (`OfflineSyncService`, capped at 500, high priority kept). Missing was the
+  SOS SMS fallback — and Emergency mode said "Your trusted contacts have been
+  notified" while the alert was still queued on the phone. It now says
+  there is no data signal and that wayLoc will alert them on reconnect, and
+  leads with **Text my contacts now** (Messages, contacts and a map link
+  filled in; the person presses Send). Online, the same button is a backup.
+- **Metrics.** `metric()` in `functions/src/shared/metrics.ts` writes
+  structured lines for lookups (outcome, latency, billed units), zone checks,
+  SOS delivery time and reach, consent transitions, Ask "OK?" and push
+  failures — no personal data. What to alert on is in `OPERATIONS.md`.
+- **Runbooks** for operator outage, SMS failure, operator revocation, push
+  failure, and "found after STOP" — `docs/reference/OPERATIONS.md`.
+- **Battery** needs a walk on a release build; the procedure and pass mark
+  are in `OPERATIONS.md`.
+
+### Firebase test plan (agreed 9 Oct 2026)
+
+Everything server-side has run only in tests and the emulator. This is the
+order for making it real, with who does what.
+
+**0 · Blocker first: phone sign-in.** The Firebase JS SDK cannot do phone
+auth in React Native — it needs a browser reCAPTCHA — so
+`FirebaseAuthProvider.sendOTP` deliberately throws. Swap in
+`@react-native-firebase/auth` (native verification: silent APNs on iOS, no
+puzzle), behind the existing `AuthProvider` port. Needs
+`GoogleService-Info.plist`, so it follows step 1. *(me, ~half a day, native
+rebuild)*
+
+**1 · Project setup** *(you, ~15 minutes in the Firebase console)*
+- Create the project; upgrade to the **Blaze** plan (Cloud Functions need it;
+  usage at test scale is pennies).
+- Authentication → enable **Phone**; add two **test phone numbers** with fixed
+  codes, so two accounts can sign in without real SMS.
+- Add an **iOS app** with bundle id `com.ramasatish.wayLoc`; download
+  `GoogleService-Info.plist`.
+- Cloud Messaging → upload an **APNs key** from the Apple Developer account.
+- Send me the web config values (Project settings → Your apps).
+
+**2 · Wire and deploy** *(me)*
+- `.env` with the Firebase values and `EXPO_PUBLIC_DATA_SOURCE=real`, so a
+  missing value fails loudly instead of falling back to mocks.
+- `npx firebase deploy --only firestore:rules,firestore:indexes` and
+  `npm --prefix functions run deploy`.
+- `functions/.env`: `NETWORK_LOCATION_ADAPTER=mock`, a
+  `MOCK_SMS_WEBHOOK_SECRET`, `NETWORK_LOCATION_MARKETS=GB,IN` — the real
+  backend with the mock operator and SMS, since G3 is still open.
+- Firestore TTL policy on `smsInbound.expireAt`.
+- Register the app's FCM token path; rebuild and install.
+
+**3 · Test on devices** — needs **two phones** (or one phone plus a second
+account): the guardian and the traveller.
+
+| Area | Test | Pass |
+|---|---|---|
+| Sign-in | Test number + fixed code on both phones | Signed in; profile saved |
+| Journey | Start, answer a check-in from the lock screen, arrive | Location stops on arrival |
+| Escalation | Leave a safety check unanswered | Guardian gets the push even with the traveller's app killed |
+| SOS | 3 s hold; then 6 s | Guardian push; emergency number offered; cancel works |
+| Family | Invite by contact, accept on phone 2 | Invite push; both see each other with the right relationship |
+| Live | Traveller walks; guardian opens Watch live | Progress moves; "Mum is watching" appears on the traveller |
+| Ask "OK?" | Guardian asks; traveller taps I'm OK on the push | Answer appears on Watch live |
+| Basic phone | Add someone; simulate YES with a signed `curl` to `inboundConsentSms` | ACTIVE; Find shows a circle; audit written |
+| STOP | Simulate STOP | Guardian sees "They stopped sharing" at once; Find refused |
+| Zones | Add a zone; wait two checks | State appears; "reached" push on a flip |
+| SOS by text | Simulate HELP; simulate a missed call to `inboundMemberCall` | Guardian push and SMS; Messages section shows it |
+| Offline SOS | Airplane mode, then SOS | Emergency mode says no signal; Text my contacts opens Messages; alert sends on reconnect |
+| Metrics | After the above | `metric:*` lines in Cloud Logging, none with a number or coordinate |
+
+**4 · Afterwards** — record results here; fix what failed; then the battery
+walk on a release build.
+
 ### What is left
 
 **Not yet proven against a real backend.** Everything below works against
@@ -106,7 +189,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 
 | Work | Phase |
 |---|---|
-| Battery profile over a real journey, memory pass, offline queue, accessibility pass, runbooks | 8 |
+| Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
 
 **Waiting on a decision or an input**
 

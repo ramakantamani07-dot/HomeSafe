@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -60,11 +59,7 @@ export default function ProfileScreen() {
                 {name?.[0]?.toUpperCase() ?? '?'}
               </Text>
             </View>
-            <TouchableOpacity>
-              <Text style={[styles.changePhoto, { color: theme.accent }]}>
-                Change photo (Phase 1-B)
-              </Text>
-            </TouchableOpacity>
+            {/* No "Change photo" until photos exist: a button that does nothing is worse than none. */}
           </View>
 
           {/* Fields */}
@@ -137,10 +132,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 36,
     fontWeight: '700',
-  },
-  changePhoto: {
-    fontSize: TYPOGRAPHY.body.fontSize,
-    fontWeight: '600',
   },
   field: { marginBottom: SPACING.xl },
   label: {

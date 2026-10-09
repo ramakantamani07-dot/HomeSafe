@@ -96,7 +96,7 @@ export function ContactFormModal({
             <Text style={[styles.title, { color: theme.textPrimary }]}>
               {isEdit ? 'Edit contact' : 'Add contact'}
             </Text>
-            <TouchableOpacity onPress={onClose} disabled={saving}>
+            <TouchableOpacity accessibilityRole="button" onPress={onClose} disabled={saving}>
               <Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -137,7 +137,7 @@ export function ContactFormModal({
               {CONTACT_RELATIONSHIPS.map((rel) => {
                 const selected = relationship === rel;
                 return (
-                  <TouchableOpacity
+                  <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected }}
                     key={rel}
                     style={[
                       styles.chip,
