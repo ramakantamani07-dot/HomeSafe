@@ -23,7 +23,14 @@
  * Node's module cache makes that a single `initializeApp()`.
  */
 
-export { onSOSTriggered, onMissedCheckIn, onSafetyCheckEscalated } from './alerts';
+export {
+  onSOSTriggered,
+  onMissedCheckIn,
+  onSafetyCheckEscalated,
+  onJourneyStarted,
+  onTrustedContactAdded,
+  sendTestAlert,
+} from './alerts';
 export { detectMissedCheckIns } from './checkins';
 export { escalateOverdueSafetyChecks } from './safety';
 export { enforceDataRetention, onUserAccountDeleted } from './retention';

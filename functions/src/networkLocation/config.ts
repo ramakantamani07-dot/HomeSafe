@@ -101,6 +101,11 @@ export type SmsTemplate =
   | 'help-none'
   | 'checkin-sent'
   | 'sos-guardian'
+  | 'contact-sos'
+  | 'contact-missed'
+  | 'contact-journey'
+  | 'contact-added'
+  | 'contact-test'
   | 'transparency';
 
 /**
@@ -155,6 +160,14 @@ export function renderSms(template: SmsTemplate, guardianName: string, details: 
       // Body is built by renderGuardianSosSms; this keeps the template key
       // (and its DLT id) in the same registry as every other message.
       return `wayLoc SOS: ${guardianName} asked for help.`;
+    // Trusted-contact texts (Phase 5c). Bodies are built by alerts/; these
+    // keep each template key and its DLT id in the one registry.
+    case 'contact-sos':
+    case 'contact-missed':
+    case 'contact-journey':
+    case 'contact-added':
+    case 'contact-test':
+      return `wayLoc: a message about ${guardianName}.`;
     case 'transparency':
       return `${guardianName} checked your approximate location via wayLoc. Reply STOP to stop.`;
   }

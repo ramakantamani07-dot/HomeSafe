@@ -12,15 +12,19 @@ import {
   orderBy,
   Firestore,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
-import type { ContactProvider, NewContact, ContactUpdates } from '../../providers/ContactProvider';
-import type { Contact, ContactRelationship } from '../../models/Contact';
+import type { ContactProvider, NewContact, ContactUpdates, TestAlertOutcome } from '../../providers/ContactProvider';
+import type { Contact, ContactAlerts } from '../../models/Contact';
+import { DEFAULT_CONTACT_ALERTS, normaliseRelationship } from '../../models/Contact';
 
 type StoredContact = {
   name: string;
   phone: string;
   relationship: string;
+  order?: number;
+  alerts?: ContactAlerts;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
@@ -38,7 +42,11 @@ function fromFirestore(id: string, data: StoredContact): Contact {
     id,
     name: data.name,
     phone: data.phone,
-    relationship: data.relationship as ContactRelationship,
+    relationship: normaliseRelationship(data.relationship),
+    // Older records have neither: they sort by age and keep today's
+    // behaviour — told about everything except journey starts.
+    order: data.order ?? 0,
+    alerts: { ...DEFAULT_CONTACT_ALERTS, ...data.alerts },
     createdAt: data.createdAt.toDate(),
     updatedAt: data.updatedAt.toDate(),
   };
@@ -46,9 +54,22 @@ function fromFirestore(id: string, data: StoredContact): Contact {
 
 export class FirebaseContactProvider implements ContactProvider {
   private readonly db: Firestore;
+  private readonly functions: Functions;
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
+    this.functions = getFunctions(app);
+  }
+
+  async sendTestAlert(): Promise<TestAlertOutcome> {
+    try {
+      const call = httpsCallable<void, { pushed: number; texted: number }>(this.functions, 'sendTestAlert');
+      const { data } = await call();
+      return { status: 'sent', pushed: data.pushed, texted: data.texted };
+    } catch (err) {
+      const refusal = (err as { details?: { refusal?: string } }).details?.refusal;
+      return refusal === 'too-soon' ? { status: 'too-soon' } : { status: 'failed' };
+    }
   }
 
   async getContacts(userId: string): Promise<Contact[]> {
@@ -63,6 +84,8 @@ export class FirebaseContactProvider implements ContactProvider {
       name: contact.name,
       phone: contact.phone,
       relationship: contact.relationship,
+      order: contact.order ?? 0,
+      alerts: contact.alerts ?? DEFAULT_CONTACT_ALERTS,
       createdAt: now,
       updatedAt: now,
     };

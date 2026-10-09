@@ -15,7 +15,7 @@ import { formatCoordinates } from '../../src/models/Journey';
 import { sosFallbackText } from '../../src/models/SOS';
 import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 import { useContacts } from '../../src/hooks/useContacts';
-import { textMany } from '../../src/utils/deviceLinks';
+import { callNumber, textMany } from '../../src/utils/deviceLinks';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -103,6 +103,19 @@ export default function EmergencyModeScreen() {
             ? "No data signal — wayLoc will alert your contacts the moment it reconnects. Text them now as well."
             : 'Your trusted contacts have been notified.\nYour location is being shared.'}
         </Text>
+
+        {/* The first trusted contact — the order on the contacts screen
+            exists for exactly this button. A phone call needs no data. */}
+        {contacts.length > 0 && (
+          <Button
+            label={`Call ${contacts[0].name.split(' ')[0]}`}
+            icon="call"
+            variant="safe"
+            onPress={() => callNumber(contacts[0].phone)}
+            style={styles.resolveButton}
+            accessibilityHint="Calls your first trusted contact"
+          />
+        )}
 
         {contacts.length > 0 && (
           <Button

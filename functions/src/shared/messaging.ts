@@ -17,47 +17,64 @@ export interface ContactToken {
   token: string;
 }
 
+/** What a trusted contact can be alerted about (their switches; SOS is always on). */
+export type ContactAlertKind = 'sos' | 'missedCheckIn' | 'journeyStart';
+
+/** Whether a contact wants this kind of alert. SOS cannot be switched off. */
+export function wantsAlert(contact: StoredContact, kind: ContactAlertKind): boolean {
+  if (kind === 'sos') return true;
+  if (kind === 'missedCheckIn') return contact.alerts?.missedCheckIn ?? true;
+  return contact.alerts?.journeyStart ?? false;
+}
+
+export interface AlertRecipients {
+  /** Contacts with wayLoc and a registered device — told by push. */
+  tokens: ContactToken[];
+  /** Everyone else — told by SMS ("a text, even without the app"). */
+  sms: string[];
+}
+
 /**
- * Looks up FCM tokens for all of a user's trusted contacts who have the app.
+ * Who to alert, and how, for one kind of alert.
  *
- * Flow:
- *   1. Read contact phone numbers from users/{userId}/contacts.
- *   2. Query the top-level users collection by phone number in batches.
- *   3. Return any non-empty fcmToken values found, paired with the owning
- *      user's uid so a later delivery failure can be pruned from the right doc.
- *
- * Contacts without the app simply won't have a matching user document and are
- * silently skipped. SMS alerts for non-app contacts are out of scope here.
+ * Contacts are matched to wayLoc accounts by phone number. Those with a
+ * device get a push; those without an account — or with one but no device
+ * registered — get an SMS instead, so nobody who asked to be told is silently
+ * skipped because they do not use the app. (Before Phase 5c they were.)
  */
-export async function getContactFcmTokens(userId: string): Promise<ContactToken[]> {
-  const contactsSnap = await db
-    .collection(`users/${userId}/contacts`)
-    .get();
-
+export async function getAlertRecipients(userId: string, kind: ContactAlertKind): Promise<AlertRecipients> {
+  const contactsSnap = await db.collection(`users/${userId}/contacts`).get();
   const phones = contactsSnap.docs
-    .map((d: QueryDocumentSnapshot) => (d.data() as StoredContact).phone)
-    .filter(Boolean);
+    .map((d: QueryDocumentSnapshot) => d.data() as StoredContact)
+    .filter((c) => c.phone && wantsAlert(c, kind))
+    .map((c) => c.phone);
 
-  if (phones.length === 0) return [];
+  if (phones.length === 0) return { tokens: [], sms: [] };
 
-  const contactTokens: ContactToken[] = [];
+  const tokens: ContactToken[] = [];
+  const reachedByPush = new Set<string>();
 
   // Firestore 'in' supports up to 30 values per query.
   const BATCH = 30;
   for (let i = 0; i < phones.length; i += BATCH) {
     const batch = phones.slice(i, i + BATCH);
-    const snap = await db
-      .collection('users')
-      .where('phone', 'in', batch)
-      .get();
-
+    const snap = await db.collection('users').where('phone', 'in', batch).get();
     snap.docs.forEach((d: QueryDocumentSnapshot) => {
-      const token = (d.data() as StoredUser).fcmToken;
-      if (token?.trim()) contactTokens.push({ userId: d.id, token });
+      const user = d.data() as StoredUser;
+      const token = user.fcmToken;
+      if (token?.trim() && user.phone) {
+        tokens.push({ userId: d.id, token });
+        reachedByPush.add(user.phone);
+      }
     });
   }
 
-  return contactTokens;
+  return { tokens, sms: phones.filter((p) => !reachedByPush.has(p)) };
+}
+
+/** Push tokens only — kept for callers that do not text. */
+export async function getContactFcmTokens(userId: string, kind: ContactAlertKind = 'sos'): Promise<ContactToken[]> {
+  return (await getAlertRecipients(userId, kind)).tokens;
 }
 
 /**

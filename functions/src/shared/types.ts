@@ -27,6 +27,8 @@ export interface StoredJourney {
 export interface StoredContact {
   name: string;
   phone: string;
+  /** Absent on older records: they get SOS and missed check-ins, not journey starts. */
+  alerts?: { missedCheckIn?: boolean; journeyStart?: boolean };
 }
 
 export interface StoredUser {
@@ -47,7 +49,7 @@ export interface StoredSafetyCheck {
 
 // FCM data values must all be strings.
 export interface AlertData {
-  type: 'SOS_TRIGGERED' | 'MISSED_CHECKIN' | 'SAFETY_CHECK_ESCALATED';
+  type: 'SOS_TRIGGERED' | 'MISSED_CHECKIN' | 'SAFETY_CHECK_ESCALATED' | 'JOURNEY_STARTED' | 'TEST_ALERT';
   userId: string;
   userName: string;
   journeyId: string;

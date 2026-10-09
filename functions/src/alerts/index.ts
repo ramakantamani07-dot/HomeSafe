@@ -9,7 +9,8 @@ import {
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
-import { getContactFcmTokens, sendAlerts } from '../shared/messaging';
+import { getAlertRecipients, sendAlerts } from '../shared/messaging';
+import { mapLink, textContacts } from './contactSms';
 import type {
   StoredJourney,
   StoredSOS,
@@ -53,11 +54,15 @@ export const onSOSTriggered = onDocumentCreated(
       ? `${sos.location.latitude.toFixed(5)},${sos.location.longitude.toFixed(5)}`
       : '';
 
-    const tokens = await getContactFcmTokens(userId);
+    const { tokens, sms } = await getAlertRecipients(userId, 'sos');
 
-    logger.info(
-      `SOS triggered by user ${userId} (${userName}); notifying ${tokens.length} contacts`,
-      { sosId },
+    logger.info(`SOS triggered; notifying ${tokens.length} by push, ${sms.length} by text`, { sosId });
+
+    const link = mapLink(sos.location);
+    await textContacts(
+      sms,
+      'contact-sos',
+      `wayLoc SOS: ${userName} needs help.${link ? ` Last location: ${link}` : ''} Call them now — if you can't reach them, call the emergency services.`,
     );
 
     await sendAlerts(
@@ -107,10 +112,14 @@ export const onMissedCheckIn = onDocumentUpdated(
     const user = userDoc.data() as StoredUser | undefined;
     const userName = user?.name?.trim() || 'A contact';
 
-    const tokens = await getContactFcmTokens(userId);
+    const { tokens, sms } = await getAlertRecipients(userId, 'missedCheckIn');
 
-    logger.info(
-      `Missed check-in for user ${userId} on journey ${journeyId}; notifying ${tokens.length} contacts`,
+    logger.info(`Missed check-in; notifying ${tokens.length} by push, ${sms.length} by text`, { journeyId });
+
+    await textContacts(
+      sms,
+      'contact-missed',
+      `wayLoc: ${userName} didn't answer a check-in on the way to ${after.destinationLabel}. Please try calling them.`,
     );
 
     await sendAlerts(
@@ -186,11 +195,18 @@ export const onSafetyCheckEscalated = onDocumentUpdated(
           ? 'running late'
           : 'moved off their route';
 
-    const tokens = await getContactFcmTokens(userId);
+    const { tokens, sms } = await getAlertRecipients(userId, 'missedCheckIn');
 
-    logger.info(
-      `Safety check escalated for user ${userId} on journey ${journeyId}; notifying ${tokens.length} contacts`,
-      { safetyCheckId, reason: after.reason },
+    logger.info(`Safety check escalated; notifying ${tokens.length} by push, ${sms.length} by text`, {
+      safetyCheckId,
+      reason: after.reason,
+    });
+
+    const link = mapLink(after.location);
+    await textContacts(
+      sms,
+      'contact-missed',
+      `wayLoc: ${userName} is ${reasonText} on the way to ${destination} and hasn't replied.${link ? ` Last location: ${link}` : ''} Please try calling them.`,
     );
 
     await sendAlerts(
@@ -211,3 +227,5 @@ export const onSafetyCheckEscalated = onDocumentUpdated(
     );
   },
 );
+
+export { onJourneyStarted, onTrustedContactAdded, sendTestAlert } from './contacts';

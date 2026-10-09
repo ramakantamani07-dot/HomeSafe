@@ -26,6 +26,7 @@ compound.
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
+| 5c · Trusted contacts + Profile | **Done, against mocks (9 Oct)** | SMS to contacts needs an SMS provider (G3) |
 | 6 · Network location | **6.1–6.6 done, against mocks** (resend D26, safe zones D27, SOS and check-ins by text or missed call D28) | Real operator, SMS and voice providers (G3) · device verification on Firebase |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | **Desk work done (9 Oct)** | Battery walk on a release build (`docs/reference/OPERATIONS.md`) · log-based metrics and alerts set up once Firebase is live |
@@ -178,7 +179,7 @@ walk on a release build.
 
 **Not yet proven against a real backend.** Everything below works against
 mocks and the Firestore emulator, and has never run on Firebase or between two
-real phones: consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, SOS and check-ins by text or missed call, revocation
+real phones: trusted-contact SMS and test alerts, consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, SOS and check-ins by text or missed call, revocation
 layer 3, retention clean-up, live family status, watch presence, Ask "OK?",
 the invitation push, and the "On wayLoc" lookup. Getting there needs a
 Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
@@ -1110,6 +1111,51 @@ configure nothing (spec §10).
 persists through the existing storage ports.
 
 ---
+
+## Phase 5c · Trusted contacts and Profile — DONE against mocks (9 Oct 2026)
+
+Boards in `assets/trust/`: trusted contacts empty and list, add trusted
+contact, profile, and `flow.png`.
+
+### What changed
+
+- **Trusted contacts** (`contacts.tsx`): "Who should we call if you need
+  help?", one-tap suggestions from your family, what contacts get, From
+  contacts / Type number; once filled, a numbered list with badges, a menu to
+  change alerts or order, and **Send a test alert**.
+- **Add / edit** (`contact-edit.tsx`, replaces `ContactFormModal`): choose from
+  contacts, name, number, "Who is Anita to you?" (British spelling;
+  `Neighbor` still read), **Alert Anita when…** with SOS locked on.
+- **Profile**: avatar, name and verified number shown once; rows for Name
+  (saves when editing ends), Home address, Medical ID, Trusted contacts,
+  Notifications; Sign out and Delete account apart at the bottom.
+- **Emergency mode** gains **Call Mum** — the first trusted contact.
+
+### Decisions T1–T6
+
+- **T1 · "A text, even without the app" is now true.** Contacts without
+  wayLoc used to get *nothing*. `getAlertRecipients` sends a push to contacts
+  with the app and a device, and an SMS to everyone else, for SOS, missed
+  check-ins and escalated safety checks — through the same SMS adapter as
+  network location. The app shows the line only where SMS is live
+  (`EXPO_PUBLIC_SMS_ALERTS`; always in mock mode).
+- **T2 · Nobody is called automatically**, so "a call, straight away" reads
+  "an alert". The order is real instead: Emergency mode offers to call the
+  first person, and the subtitle says so.
+- **T3 · Reorder by menu, not drag.** Long-press or ⋯ → Move up / Move down.
+  The board's drag handles can replace the menu later without changing what
+  the order means.
+- **T4 · Per-contact alerts are honoured server-side.** SOS always;
+  missed check-ins on by default; journey start off by default, sent by the
+  new `onJourneyStarted`. Older contacts keep today's behaviour.
+- **T5 · New contacts are texted** (`onTrustedContactAdded`) so an SOS is not
+  the first they hear of wayLoc; **Send a test alert** (`sendTestAlert`) goes
+  by the same routes, marked TEST, once an hour. In mock mode the screen says
+  nothing was sent.
+- **T6 · Left out of the boards:** "On wayLoc / SMS only" badges (would need
+  the account lookup, which F1 limits to picked contacts — rows show what each
+  person is told about instead); the profile camera badge (no photo support);
+  "Change" on the verified number (needs re-verification, not built).
 
 ## Phase 5b · Family redesign — PLANNED (8 Oct 2026)
 

@@ -192,7 +192,9 @@ service cloud.firestore {
         allow read:   if isOwner(userId);
         allow create: if isOwner(userId)
           && isReasonableString(request.resource.data.get('name', ''), 100)
-          && isReasonableString(request.resource.data.get('phone', ''), 20);
+          && isReasonableString(request.resource.data.get('phone', ''), 20)
+          && request.resource.data.get('order', 0) is int
+          && request.resource.data.get('alerts', {}) is map;
         allow update: if isOwner(userId)
           // Contact creation timestamp is immutable after first write.
           && fieldUnchanged('createdAt')

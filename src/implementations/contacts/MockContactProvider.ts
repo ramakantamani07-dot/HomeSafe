@@ -1,5 +1,6 @@
-import type { ContactProvider, NewContact, ContactUpdates } from '../../providers/ContactProvider';
+import type { ContactProvider, NewContact, ContactUpdates, TestAlertOutcome } from '../../providers/ContactProvider';
 import type { Contact } from '../../models/Contact';
+import { DEFAULT_CONTACT_ALERTS } from '../../models/Contact';
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -27,7 +28,14 @@ export class MockContactProvider implements ContactProvider {
     await delay(300);
     const now = new Date();
     const id = `mock-contact-${this.nextId++}`;
-    const newContact: Contact = { ...contact, id, createdAt: now, updatedAt: now };
+    const newContact: Contact = {
+      ...contact,
+      order: contact.order ?? 0,
+      alerts: contact.alerts ?? DEFAULT_CONTACT_ALERTS,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
     this.userStore(userId).set(id, newContact);
     return newContact;
   }
@@ -51,5 +59,10 @@ export class MockContactProvider implements ContactProvider {
   async deleteContact(userId: string, contactId: string): Promise<void> {
     await delay(300);
     this.userStore(userId).delete(contactId);
+  }
+
+  /** No server in mock mode: nothing can be sent, and the screen says so. */
+  async sendTestAlert(): Promise<TestAlertOutcome> {
+    return { status: 'demo' };
   }
 }

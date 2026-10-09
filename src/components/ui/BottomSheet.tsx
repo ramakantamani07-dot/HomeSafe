@@ -12,7 +12,7 @@ interface BottomSheetProps {
 
 /**
  * The shell (overlay + rounded-top surface + drag handle) that
- * PermissionExplainerModal, PinEntryModal, and ContactFormModal each
+ * PermissionExplainerModal and PinEntryModal each
  * hand-rolled separately. Content (title/description/form/buttons) stays as
  * children rather than a fixed prop API — those three use cases are shaped
  * too differently to force into one rigid template. See the redesign audit

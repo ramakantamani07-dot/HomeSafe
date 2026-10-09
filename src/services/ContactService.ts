@@ -1,6 +1,7 @@
+import type { TestAlertOutcome } from '../providers/ContactProvider';
 import type { ContactProvider, NewContact, ContactUpdates } from '../providers/ContactProvider';
 import type { Contact } from '../models/Contact';
-import { MAX_CONTACTS } from '../models/Contact';
+import { DEFAULT_CONTACT_ALERTS, MAX_CONTACTS, sortContacts } from '../models/Contact';
 
 // E.164: + followed by 7–15 digits (country code + subscriber number)
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
@@ -22,7 +23,7 @@ export class ContactService {
   constructor(private readonly provider: ContactProvider) {}
 
   async getContacts(userId: string): Promise<Contact[]> {
-    return this.provider.getContacts(userId);
+    return sortContacts(await this.provider.getContacts(userId));
   }
 
   async addContact(userId: string, input: NewContact): Promise<Contact> {
@@ -42,7 +43,16 @@ export class ContactService {
       throw new Error('A contact with this phone number already exists.');
     }
 
-    return this.provider.addContact(userId, { name, phone, relationship: input.relationship });
+    // New contacts join the end of the order: adding someone never silently
+    // changes who Emergency mode offers to call first.
+    const order = existing.reduce((max, c) => Math.max(max, c.order + 1), 0);
+    return this.provider.addContact(userId, {
+      name,
+      phone,
+      relationship: input.relationship,
+      alerts: input.alerts ?? DEFAULT_CONTACT_ALERTS,
+      order,
+    });
   }
 
   async updateContact(
@@ -68,6 +78,27 @@ export class ContactService {
     }
 
     return this.provider.updateContact(userId, contactId, updates);
+  }
+
+  /**
+   * Moves a contact one place up or down. Rewrites every position from the
+   * sorted list, so gaps left by deletions and ties from older records
+   * (which all had order 0) are repaired by the first move.
+   */
+  async moveContact(userId: string, contactId: string, direction: 'up' | 'down'): Promise<Contact[]> {
+    const list = sortContacts(await this.provider.getContacts(userId));
+    const from = list.findIndex((c) => c.id === contactId);
+    const to = direction === 'up' ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= list.length) return list;
+    [list[from], list[to]] = [list[to], list[from]];
+    await Promise.all(
+      list.map((c, i) => (c.order === i ? null : this.provider.updateContact(userId, c.id, { order: i }))),
+    );
+    return list.map((c, i) => ({ ...c, order: i }));
+  }
+
+  sendTestAlert(): Promise<TestAlertOutcome> {
+    return this.provider.sendTestAlert();
   }
 
   async deleteContact(userId: string, contactId: string): Promise<void> {

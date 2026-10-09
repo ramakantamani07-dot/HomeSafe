@@ -69,6 +69,7 @@ export default function AppLayout() {
 
         {/* Settings destinations and other pushed screens. */}
         <Stack.Screen name="contacts" />
+        <Stack.Screen name="contact-edit" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="data-visibility" />

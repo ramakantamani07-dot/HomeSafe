@@ -292,6 +292,11 @@ const networkLocationProvider = mockBasicPhoneMembers
 const basicPhoneFindingEnabled =
   devMode || process.env.EXPO_PUBLIC_BASIC_PHONE_FINDING === 'on';
 
+// Texts to trusted contacts without the app go through the same SMS stack, so
+// they are promised only where it is live: always in mock mode, and with real
+// backends once EXPO_PUBLIC_SMS_ALERTS=on (an SMS provider exists — G3).
+const smsAlertsEnabled = devMode || process.env.EXPO_PUBLIC_SMS_ALERTS === 'on';
+
 const fakeCallService = new FakeCallService();
 
 const batteryProvider = devMode ? new MockBatteryProvider() : new ExpoBatteryProvider();
@@ -425,7 +430,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
       fakeCallService={fakeCallService}
       settingsStore={FakeCallSettingsStore}
     >
-    <ContactStateProvider contactService={contactService}>
+    <ContactStateProvider contactService={contactService} smsAlertsEnabled={smsAlertsEnabled}>
     {/*
       PlacesStateProvider only needs auth, but sits above the journey tree so
       the review/arrived screens can save a destination as a place without

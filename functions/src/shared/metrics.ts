@@ -18,7 +18,8 @@ export type MetricName =
   | 'member_checkin'       // guardians
   | 'consent_transition'   // from, to, trigger
   | 'ask_ok'               // delivered
-  | 'push_failed';         // kind, code
+  | 'push_failed'          // kind, code
+  | 'contact_sms';         // template, requested, sent, failed
 
 export function metric(name: MetricName, fields: Record<string, string | number | boolean | null>): void {
   logger.info(`metric:${name}`, { metric: name, ...fields });

@@ -927,6 +927,23 @@ describeWithEmulator('Firestore security rules', () => {
     }
   });
 
+  test("the app's trusted-contact write, with order and alerts, is accepted", async () => {
+    const { assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, Timestamp } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const contact = {
+      name: 'Anita Rao',
+      phone: '+919845012345',
+      relationship: 'Neighbour',
+      order: 2,
+      alerts: { missedCheckIn: true, journeyStart: false },
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    await assertSucceeds(setDoc(doc(db, 'users', 'user-a', 'contacts', 'c-1'), contact));
+    await assertFails(setDoc(doc(db, 'users', 'user-a', 'contacts', 'c-2'), { ...contact, order: 'first' }));
+  });
+
   test("the app's own add-someone and stop-finding writes are accepted", async () => {
     // Mirrors FirebaseBasicPhoneMemberProvider field for field. The consent
     // create rule allows only listed keys, so a field added to the app's write
