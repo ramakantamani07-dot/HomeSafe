@@ -13,6 +13,7 @@ import * as server from '../../functions/src/networkLocation/consent';
 import * as serverConfig from '../../functions/src/networkLocation/config';
 import * as serverZones from '../../functions/src/networkLocation/zones';
 import { ZONES_PER_MEMBER, ZONE_MAX_RADIUS_M, ZONE_MIN_RADIUS_M } from '../models/SafeZone';
+import { emergencyNumberFor } from '../config/markets';
 import { applyConsentEvent, type ConsentEventKind } from '../services/ConsentStateMachine';
 import { CONSENT_KEYWORDS, parseConsentReply } from '../models/ConsentKeywords';
 import { LOCATE_LIMIT_PER_HOUR, LOCATE_MIN_INTERVAL_MS, isRateLimited } from '../models/LocateAudit';
@@ -86,5 +87,11 @@ describe('consent rules: client and server agree', () => {
     expect(serverZones.ZONE_MIN_RADIUS_M).toBe(ZONE_MIN_RADIUS_M);
     expect(serverZones.ZONE_MAX_RADIUS_M).toBe(ZONE_MAX_RADIUS_M);
     expect(serverZones.ZONES_PER_MEMBER).toBe(ZONES_PER_MEMBER);
+  });
+
+  it('on the emergency number a member is told to call', () => {
+    for (const market of ['GB', 'IN'] as const) {
+      expect(serverConfig.EMERGENCY_NUMBER[market]).toBe(emergencyNumberFor(market));
+    }
   });
 });

@@ -8,6 +8,7 @@ import {
   isMarketEnabled,
   marketForNumber,
   renderSms,
+  type SmsDetails,
   type SmsTemplate,
 } from './config';
 import type { NetworkLocationAdapters } from './ports';
@@ -31,7 +32,7 @@ export async function sendMemberSms(
   to: string,
   template: SmsTemplate,
   guardianName: string,
-  place?: string,
+  details?: SmsDetails,
 ): Promise<boolean> {
   const market = marketForNumber(to);
   if (!market || !isMarketEnabled(market)) {
@@ -42,7 +43,7 @@ export async function sendMemberSms(
     to,
     market,
     template,
-    body: renderSms(template, guardianName, place),
+    body: renderSms(template, guardianName, details),
     dltTemplateId: dltTemplateId(template, market),
   });
   return true;

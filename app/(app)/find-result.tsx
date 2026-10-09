@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
-import { SPACING, type ThemeColors } from '../../src/config/theme';
+import { FONTS, SPACING, type ThemeColors } from '../../src/config/theme';
+import { formatEta } from '../../src/models/RouteResult';
 import {
   useBasicPhoneMember,
   useBasicPhoneMembers,
@@ -41,7 +42,7 @@ export default function FindResultScreen() {
   const router = useRouter();
   const goBack = useGoBack();
   const insets = useSafeAreaInsets();
-  const { memberId } = useLocalSearchParams<{ memberId: string }>();
+  const { memberId, sosAt } = useLocalSearchParams<{ memberId: string; sosAt?: string }>();
 
   const member = useBasicPhoneMember(memberId);
   const { finds, find } = useBasicPhoneMembers();
@@ -98,6 +99,13 @@ export default function FindResultScreen() {
       </GlassPill>
 
       <View style={[styles.sheet, { paddingBottom: insets.bottom }]}>
+        {sosAt && (
+          <View style={styles.sosBanner} accessibilityRole="alert">
+            <Text style={styles.sosText}>
+              SOS from {member.displayName} at {formatEta(new Date(sosAt))} — call them now.
+            </Text>
+          </View>
+        )}
         <FindResultCard
           name={member.displayName}
           state={state}
@@ -124,5 +132,7 @@ function getStyles(theme: ThemeColors) {
     noMap: { flex: 1, backgroundColor: theme.background },
     back: { position: 'absolute', left: SPACING.lg, minWidth: 44, minHeight: 44 },
     sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: theme.surface },
+    sosBanner: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, backgroundColor: theme.critical.bg },
+    sosText: { fontSize: 15, fontFamily: FONTS.bodySemibold, color: theme.critical.fg },
   });
 }

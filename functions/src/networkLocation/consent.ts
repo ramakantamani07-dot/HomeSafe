@@ -142,7 +142,8 @@ export const CONSENT_KEYWORDS: Readonly<
   stop: ['STOP', 'END', 'CANCEL', 'QUIT', 'UNSUBSCRIBE', 'बंद', 'BAND', 'ROKO', 'ROKEN'],
 };
 
-function normalise(raw: string): string {
+/** Strips what phones and people add around a keyword. Shared with member messages. */
+export function normalise(raw: string): string {
   return raw
     .trim()
     .toUpperCase()

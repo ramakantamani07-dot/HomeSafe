@@ -997,6 +997,8 @@ describeWithEmulator('Firestore security rules', () => {
     // Nobody else reads it; events are server-only.
     await assertFails(getDoc(ref(other, 'z1')));
     await assertFails(setDoc(doc(db, 'users', 'user-a', 'zoneEvents', 'e1'), { event: 'arrived' }));
+    // SOS and check-in records are server-written too.
+    await assertFails(setDoc(doc(db, 'users', 'user-a', 'memberEvents', 'e1'), { kind: 'sos' }));
   });
 
   test('a revocation may change nothing but the status', async () => {

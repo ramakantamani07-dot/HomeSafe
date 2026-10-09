@@ -7,7 +7,7 @@ import { db, messaging } from '../shared/firebase';
 import { isDeadTokenError } from '../shared/messaging';
 import type { StoredBasicPhoneMember, StoredConsent, StoredSafeZone, StoredUser } from '../shared/types';
 import { getAdapters } from './adapters';
-import { ZONE_CHECK_SCHEDULE, isMarketEnabled, marketForNumber } from './config';
+import { ZONE_CHECK_SCHEDULE, isMarketEnabled, localTime, marketForNumber } from './config';
 import { allowsLocationLookup } from './consent';
 import { writeAudit } from './locate';
 import { guardianNameFor, sendMemberSms } from './memberSms';
@@ -128,7 +128,9 @@ async function tellGuardian(ownerId: string, memberName: string, zoneName: strin
   const owner = await db.doc(`users/${ownerId}`).get();
   const token = (owner.data() as StoredUser | undefined)?.fcmToken?.trim();
   if (!token) return;
-  const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  // The guardian's own time zone — functions run in UTC, which would be an
+  // hour wrong in a British summer and five and a half in India.
+  const time = localTime(new Date(), marketForNumber((owner.data() as StoredUser | undefined)?.phone ?? ''));
   try {
     await messaging.send({
       token,
@@ -161,7 +163,7 @@ export const onSafeZoneCreated = onDocumentCreated('users/{userId}/safeZones/{zo
       consent.phoneNumber,
       'zone-created',
       await guardianNameFor(event.params.userId),
-      zone.name,
+      { place: zone.name },
     );
   } catch (err) {
     logger.error('Zone-created SMS failed', { error: (err as Error).message });

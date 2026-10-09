@@ -14,6 +14,7 @@ import {
   type LocateReason,
 } from '../../models/LocateAudit';
 import type { NewSafeZone, SafeZone } from '../../models/SafeZone';
+import type { MemberEvent } from '../../models/MemberEvent';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
 import type { Unsubscribe } from '../../providers/types';
 import type { MockLocateLedger } from './MockNetworkLocationProvider';
@@ -41,6 +42,8 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
   private audits: LocateAudit[] = [];
   private resends = new Map<string, Date[]>();
   private zones: SafeZone[] = [];
+  private events: MemberEvent[] = [];
+  private eventListeners = new Set<() => void>();
   private zoneListeners = new Set<() => void>();
   private memberListeners = new Set<() => void>();
   private consentListeners = new Set<() => void>();
@@ -169,6 +172,31 @@ export class MockBasicPhoneMemberProvider implements BasicPhoneMemberProvider, M
   async deleteZone(_ownerId: string, zoneId: string): Promise<void> {
     this.zones = this.zones.filter((z) => z.id !== zoneId);
     this.zoneListeners.forEach((l) => l());
+  }
+
+  // ── SOS and check-ins ─────────────────────────────────────────────────────
+
+  subscribeEvents(_ownerId: string, memberId: string, onChange: (events: MemberEvent[]) => void): Unsubscribe {
+    const emit = () => onChange([...this.events].reverse().filter((e) => e.memberId === memberId));
+    this.eventListeners.add(emit);
+    emit();
+    return () => this.eventListeners.delete(emit);
+  }
+
+  /** Test and demo seam: the member texting HELP, HOME, SCHOOL or OK. */
+  simulateMessage(memberId: string, kind: 'sos' | 'checkin', label: string | null = null): void {
+    this.events.push({
+      id: `event-${this.events.length + 1}`,
+      memberId,
+      kind,
+      source: 'sms',
+      label,
+      at: new Date(),
+      location: null,
+      accuracyMeters: null,
+      failure: kind === 'sos' ? 'operator-unavailable' : null,
+    });
+    this.eventListeners.forEach((l) => l());
   }
 
   // ── MockLocateLedger ──────────────────────────────────────────────────────

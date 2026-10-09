@@ -46,12 +46,24 @@ export interface WebhookRequest {
   body: unknown;
 }
 
+/** A call the provider reports — for a basic phone, a missed call to our number. */
+export interface InboundCall {
+  providerCallId: string;
+  from: string;
+}
+
 export interface SmsProvider {
   send(sms: OutboundSms): Promise<void>;
   /** Whether the request really came from the provider. Must fail closed. */
   verifyWebhook(req: WebhookRequest): boolean;
   /** Null when the payload is not an inbound text this flow handles. */
   parseInbound(req: WebhookRequest): InboundSms | null;
+  /**
+   * A missed call, from the provider's voice webhook (spec §7: "missed call or
+   * SMS HELP"). TODO(G3): real providers sign voice webhooks differently from
+   * SMS ones; verify per provider.
+   */
+  parseInboundCall(req: WebhookRequest): InboundCall | null;
 }
 
 // ── Operator location ───────────────────────────────────────────────────────

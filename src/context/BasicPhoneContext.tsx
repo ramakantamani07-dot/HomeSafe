@@ -4,6 +4,7 @@ import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhone
 import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 import type { NewSafeZone, SafeZone } from '../models/SafeZone';
+import type { MemberEvent } from '../models/MemberEvent';
 import type { BasicPhoneMemberProvider } from '../providers/BasicPhoneMemberProvider';
 import {
   NetworkLocationError,
@@ -34,6 +35,7 @@ interface BasicPhoneContextValue {
   subscribeZones(memberId: string, onChange: (zones: SafeZone[]) => void): Unsubscribe;
   addZone(zone: NewSafeZone): Promise<void>;
   deleteZone(zoneId: string): Promise<void>;
+  subscribeEvents(memberId: string, onChange: (events: MemberEvent[]) => void): Unsubscribe;
 }
 
 const noop = () => {};
@@ -53,6 +55,7 @@ const BasicPhoneContext = createContext<BasicPhoneContextValue>({
   subscribeZones: () => noop,
   addZone: async () => {},
   deleteZone: async () => {},
+  subscribeEvents: () => noop,
 });
 
 /**
@@ -164,6 +167,12 @@ export function BasicPhoneStateProvider({
     [userId, memberProvider],
   );
 
+  const subscribeEvents = useCallback(
+    (memberId: string, onChange: (events: MemberEvent[]) => void) =>
+      userId ? memberProvider.subscribeEvents(userId, memberId, onChange) : noop,
+    [userId, memberProvider],
+  );
+
   const value = useMemo(
     () => ({
       enabled,
@@ -178,6 +187,7 @@ export function BasicPhoneStateProvider({
       subscribeZones,
       addZone,
       deleteZone,
+      subscribeEvents,
     }),
     [
       enabled,
@@ -192,6 +202,7 @@ export function BasicPhoneStateProvider({
       subscribeZones,
       addZone,
       deleteZone,
+      subscribeEvents,
     ],
   );
 

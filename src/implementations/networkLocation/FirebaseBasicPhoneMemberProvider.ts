@@ -28,6 +28,7 @@ import {
 } from '../../models/Consent';
 import type { LocateAudit, LocateOutcome, LocateReason } from '../../models/LocateAudit';
 import type { NewSafeZone, SafeZone, ZoneState } from '../../models/SafeZone';
+import type { MemberEvent } from '../../models/MemberEvent';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
 import type { Unsubscribe } from '../../providers/types';
 
@@ -72,6 +73,9 @@ type StoredZone = {
   lastCheckedAt?: Timestamp | null;
   lastEventAt?: Timestamp | null;
 };
+
+/** How many of a member's SOS and check-ins the screen lists. */
+const MEMBER_EVENTS_SHOWN = 20;
 
 /**
  * Basic-phone members on Firestore, under `users/{uid}/` — see firestore.rules
@@ -237,6 +241,35 @@ export class FirebaseBasicPhoneMemberProvider implements BasicPhoneMemberProvide
 
   async deleteZone(ownerId: string, zoneId: string): Promise<void> {
     await deleteDoc(doc(this.db, 'users', ownerId, 'safeZones', zoneId));
+  }
+
+  subscribeEvents(ownerId: string, memberId: string, onChange: (events: MemberEvent[]) => void): Unsubscribe {
+    return onSnapshot(
+      query(
+        collection(this.db, 'users', ownerId, 'memberEvents'),
+        where('memberId', '==', memberId),
+        orderBy('at', 'desc'),
+        limitTo(MEMBER_EVENTS_SHOWN),
+      ),
+      (snap) =>
+        onChange(
+          snap.docs.map((d) => {
+            const e = d.data() as Omit<MemberEvent, 'id' | 'at'> & { at: Timestamp };
+            return {
+              id: d.id,
+              memberId: e.memberId,
+              kind: e.kind,
+              source: e.source,
+              label: e.label ?? null,
+              at: e.at.toDate(),
+              location: e.location ?? null,
+              accuracyMeters: e.accuracyMeters ?? null,
+              failure: e.failure ?? null,
+            };
+          }),
+        ),
+      () => {},
+    );
   }
 }
 

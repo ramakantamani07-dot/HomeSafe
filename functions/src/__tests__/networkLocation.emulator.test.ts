@@ -186,3 +186,54 @@ describeEmulator('safe zones on Firestore', () => {
     expect(audits.size).toBe(0);
   });
 });
+
+describeEmulator('SOS and check-ins by text (6.6) on Firestore', () => {
+  const { raiseMemberSos, recordMemberCheckIn } = require('../networkLocation/memberAlerts');
+  let adapters: ReturnType<typeof createMockAdapters>;
+
+  beforeEach(() => {
+    process.env.NETWORK_LOCATION_MARKETS = 'GB';
+    adapters = createMockAdapters('secret');
+    setAdaptersForTesting(adapters);
+  });
+
+  const events = async (memberId: string) =>
+    (await db.collection(`users/${OWNER}/memberEvents`).where('memberId', '==', memberId).get()).docs.map((d) => d.data());
+
+  test('HELP locates even when Find is rate-limited, audits it, and records the event', async () => {
+    await seed('m-sos', 'ACTIVE');
+    await locate(OWNER, 'm-sos', 'manual'); // uses the minute's allowance
+    expect(await locate(OWNER, 'm-sos', 'manual')).toEqual({ ok: false, failure: 'rate-limited' });
+
+    await raiseMemberSos(adapters, [{ ownerId: OWNER, memberId: 'm-sos' }], 'sms', true);
+
+    const [event] = await events('m-sos');
+    expect(event).toMatchObject({ kind: 'sos', source: 'sms', failure: null });
+    expect(event.location).not.toBeNull();
+    expect((await audits('m-sos')).map((a) => [a.reason, a.outcome])).toContainEqual(['sos', 'success']);
+  });
+
+  test('a failed lookup still raises the alert, saying why there is no location', async () => {
+    await seed('m-sos-off', 'ACTIVE');
+    (adapters.operator as InstanceType<typeof import('../networkLocation/mockAdapters').MockOperatorLocationProvider>).failFor(
+      PHONE,
+      'device-unreachable',
+    );
+    await raiseMemberSos(adapters, [{ ownerId: OWNER, memberId: 'm-sos-off' }], 'call', true);
+    expect((await events('m-sos-off'))[0]).toMatchObject({ kind: 'sos', source: 'call', location: null, failure: 'device-unreachable' });
+  });
+
+  test('HELP with STOP alerts without looking anyone up', async () => {
+    await seed('m-sos-stop', 'ACTIVE');
+    await raiseMemberSos(adapters, [{ ownerId: OWNER, memberId: 'm-sos-stop' }], 'sms', false);
+    expect((await events('m-sos-stop'))[0]).toMatchObject({ location: null, failure: 'not-requested' });
+    expect(await audits('m-sos-stop')).toHaveLength(0);
+  });
+
+  test('a check-in is recorded and never looks anyone up', async () => {
+    await seed('m-home', 'ACTIVE');
+    await recordMemberCheckIn([{ ownerId: OWNER, memberId: 'm-home' }], 'Home');
+    expect((await events('m-home'))[0]).toMatchObject({ kind: 'checkin', label: 'Home', location: null });
+    expect(await audits('m-home')).toHaveLength(0);
+  });
+});

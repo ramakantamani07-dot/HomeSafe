@@ -433,6 +433,14 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // SOS and check-ins sent by a basic-phone member, by text or missed call
+      // (Phase 6.6). Server-written: a guardian's app must not be able to
+      // invent an SOS, or erase one.
+      match /memberEvents/{eventId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       // ── Locate audits ──────────────────────────────────────────────────────
       // Every lookup attempt, including refused ones — an audit that recorded
       // only successes could not answer "did anyone try to find me without my

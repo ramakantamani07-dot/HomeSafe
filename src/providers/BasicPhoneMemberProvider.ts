@@ -2,6 +2,7 @@ import type { BasicPhoneMember, NewBasicPhoneMember } from '../models/BasicPhone
 import type { Consent, ResendOutcome } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 import type { NewSafeZone, SafeZone } from '../models/SafeZone';
+import type { MemberEvent } from '../models/MemberEvent';
 
 /**
  * The guardian's side of basic-phone members: the people, their consent, and
@@ -58,4 +59,7 @@ export interface BasicPhoneMemberProvider {
   addZone(ownerId: string, zone: NewSafeZone): Promise<void>;
 
   deleteZone(ownerId: string, zoneId: string): Promise<void>;
+
+  /** SOS and check-ins the member sent, newest first, live. */
+  subscribeEvents(ownerId: string, memberId: string, onChange: (events: MemberEvent[]) => void): () => void;
 }

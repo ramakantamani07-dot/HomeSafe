@@ -10,6 +10,7 @@ import {
   useBasicPhoneMembers,
   useMemberConsent,
   useMemberFinds,
+  useMemberEvents,
   useMemberZones,
 } from '../../src/hooks/useBasicPhoneMembers';
 import { useGoBack } from '../../src/hooks/useGoBack';
@@ -22,6 +23,7 @@ import { StatusBadge, type Severity } from '../../src/components/ui/StatusBadge'
 import { Button } from '../../src/components/ui/Button';
 import { LastFinds } from '../../src/components/circle/LastFinds';
 import { SafeZonesSection } from '../../src/components/circle/SafeZonesSection';
+import { MemberEventsSection } from '../../src/components/circle/MemberEventsSection';
 import { describeResendOutcome } from '../../src/components/circle/findCopy';
 
 /**
@@ -47,6 +49,7 @@ export default function BasicMemberScreen() {
   const consent = useMemberConsent(memberId);
   const audits = useMemberFinds(memberId);
   const zones = useMemberZones(memberId);
+  const events = useMemberEvents(memberId);
   const { find, stopFinding, resendRequest, deleteZone } = useBasicPhoneMembers();
   const [resending, setResending] = useState(false);
   const [now] = useState(() => new Date());
@@ -110,6 +113,17 @@ export default function BasicMemberScreen() {
 
         {allowsLocationLookup(status) && (
           <Button label={`Find ${name}`} icon="gps" variant="primary" onPress={findNow} />
+        )}
+
+        {allowsLocationLookup(status) && (
+          <MemberEventsSection
+            name={name}
+            events={events}
+            now={now}
+            onOpenSos={(event) =>
+              router.push({ pathname: '/find-result', params: { memberId: member.id, sosAt: event.at.toISOString() } })
+            }
+          />
         )}
 
         <Text style={styles.sectionLabel}>LAST FINDS</Text>

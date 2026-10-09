@@ -1,12 +1,15 @@
 import { createHash } from 'crypto';
 import * as logger from 'firebase-functions/logger';
 import { onRequest } from 'firebase-functions/v2/https';
-import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentReference, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
 import type { StoredConsent } from '../shared/types';
 import { getAdapters } from './adapters';
-import { INBOUND_DEDUPE_TTL_MS } from './config';
+import { EMERGENCY_NUMBER, INBOUND_DEDUPE_TTL_MS, marketForNumber } from './config';
+import { allowsLocationLookup } from './consent';
+import { raiseMemberSos, recordMemberCheckIn, type GuardianTarget } from './memberAlerts';
+import { classifyMemberMessage, mayBeConsentReply } from './memberMessages';
 import { guardianNameFor, sendMemberSms } from './memberSms';
 import { planReply } from './planning';
 import type { NetworkLocationAdapters } from './ports';
@@ -70,8 +73,29 @@ export const inboundConsentSms = onRequest(async (req, res) => {
     .where('phoneNumber', '==', message.from)
     .get();
 
+  // Who could act on HELP or a check-in, read *before* any transition — so a
+  // member who writes "help, stop" still reaches the guardians they had.
+  const active = activeGuardians(snap.docs);
+  const meaning = classifyMemberMessage(message.body);
+
+  // HELP and check-ins alert people, which is not safe to repeat on a
+  // provider retry, so they claim the message before acting. Consent changes
+  // alone are safe to repeat and keep the act-then-mark order (D18).
+  const alerts = snap.size > 0 && (meaning.help || (meaning.checkIn !== null && active.length > 0));
+  if (alerts) {
+    try {
+      await seenRef.create({
+        processedAt: Timestamp.now(),
+        expireAt: Timestamp.fromMillis(Date.now() + INBOUND_DEDUPE_TTL_MS),
+      });
+    } catch {
+      res.status(200).end();
+      return;
+    }
+  }
+
   const plan = planReply(
-    message.body,
+    mayBeConsentReply(meaning, active.length > 0) ? message.body : '',
     snap.docs.map((d) => {
       const c = d.data() as StoredConsent;
       return {
@@ -91,30 +115,55 @@ export const inboundConsentSms = onRequest(async (req, res) => {
     await takeToOperator(adapters, db.doc(plan.approvedPath), message.from);
   }
 
-  try {
-    // Holds no number and no text — only that this message id was handled.
-    // `expireAt` is for a Firestore TTL policy on this collection.
-    await seenRef.create({
-      processedAt: Timestamp.now(),
-      expireAt: Timestamp.fromMillis(Date.now() + INBOUND_DEDUPE_TTL_MS),
-    });
-  } catch {
-    // A concurrent delivery of the same message got here first and will reply.
-    res.status(200).end();
-    return;
+  // HELP and check-ins, for a number we know. Unknown numbers have no
+  // consents at all and get nothing (spec §7) — a reply would confirm the
+  // number means something to us.
+  const revoked = plan.transitions.some((t) => t.event === 'revoke');
+  let reply = plan.reply;
+  let replyCount = 0;
+  if (meaning.help && snap.size > 0) {
+    replyCount = active.length > 0 ? await raiseMemberSos(adapters, active, 'sms', !revoked) : 0;
+    reply = replyCount > 0 ? 'help-sent' : 'help-none';
+  } else if (meaning.checkIn && active.length > 0) {
+    replyCount = await recordMemberCheckIn(active, meaning.checkIn);
+    reply = 'checkin-sent';
   }
 
-  if (plan.reply) {
+  if (!alerts) {
     try {
-      await sendMemberSms(adapters, message.from, plan.reply, 'wayLoc');
-    } catch (err) {
-      logger.error('Consent reply SMS failed', { template: plan.reply, error: (err as Error).message });
+      // Holds no number and no text — only that this message id was handled.
+      // `expireAt` is for a Firestore TTL policy on this collection.
+      await seenRef.create({
+        processedAt: Timestamp.now(),
+        expireAt: Timestamp.fromMillis(Date.now() + INBOUND_DEDUPE_TTL_MS),
+      });
+    } catch {
+      // A concurrent delivery of the same message got here first and will reply.
+      res.status(200).end();
+      return;
     }
   }
 
-  logger.info('Inbound consent SMS handled', {
+  if (reply) {
+    const market = marketForNumber(message.from);
+    try {
+      await sendMemberSms(
+        adapters,
+        message.from,
+        reply,
+        active.length === 1 ? await guardianNameFor(active[0].ownerId) : 'wayLoc',
+        { count: replyCount, emergencyNumber: market ? EMERGENCY_NUMBER[market] : undefined },
+      );
+    } catch (err) {
+      logger.error('Member reply SMS failed', { template: reply, error: (err as Error).message });
+    }
+  }
+
+  logger.info('Inbound member SMS handled', {
     transitions: plan.transitions.length,
-    reply: plan.reply,
+    help: meaning.help,
+    checkIn: meaning.checkIn,
+    reply,
   });
   res.status(200).end();
 });
@@ -162,3 +211,81 @@ async function takeToOperator(
     logger.error('Consent-active SMS failed', { error: (err as Error).message });
   }
 }
+
+/** The guardians whose consent for this number is ACTIVE. */
+function activeGuardians(docs: QueryDocumentSnapshot[]): GuardianTarget[] {
+  return docs
+    .filter((d) => allowsLocationLookup((d.data() as StoredConsent).status))
+    .map((d) => ({ ownerId: d.ref.parent.parent!.id, memberId: (d.data() as StoredConsent).memberId }));
+}
+
+/**
+ * A missed call from a member (spec §7) — the SOS for someone who cannot type,
+ * or cannot afford to be seen typing. Treated exactly as HELP: every ACTIVE
+ * guardian alerted, with a lookup, and a text back saying who was told.
+ *
+ * Same webhook discipline as SMS: signature first, fail closed when not
+ * configured, de-duplicated by the provider's call id, and silent for numbers
+ * we do not know.
+ */
+export const inboundMemberCall = onRequest(async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).end();
+    return;
+  }
+  const adapters = getAdapters();
+  if (!adapters) {
+    res.status(503).end();
+    return;
+  }
+  const webhook = { headers: req.headers, rawBody: req.rawBody, body: req.body };
+  if (!adapters.sms.verifyWebhook(webhook)) {
+    logger.warn('Inbound call rejected: bad signature');
+    res.status(403).end();
+    return;
+  }
+  const call = adapters.sms.parseInboundCall(webhook);
+  if (!call) {
+    res.status(200).end();
+    return;
+  }
+
+  const seenRef = db
+    .collection('smsInbound')
+    .doc(createHash('sha256').update(`call:${call.providerCallId}`).digest('hex'));
+  try {
+    // Claimed before acting, unlike texts: an SOS alert repeated on a provider
+    // retry would tell guardians twice that someone needs help, and the second
+    // alert could read as a second emergency.
+    await seenRef.create({
+      processedAt: Timestamp.now(),
+      expireAt: Timestamp.fromMillis(Date.now() + INBOUND_DEDUPE_TTL_MS),
+    });
+  } catch {
+    res.status(200).end();
+    return;
+  }
+
+  const snap = await db.collectionGroup('consents').where('phoneNumber', '==', call.from).get();
+  if (snap.empty) {
+    res.status(200).end();
+    return;
+  }
+  const active = activeGuardians(snap.docs);
+  const count = active.length > 0 ? await raiseMemberSos(adapters, active, 'call', true) : 0;
+
+  const market = marketForNumber(call.from);
+  try {
+    await sendMemberSms(
+      adapters,
+      call.from,
+      count > 0 ? 'help-sent' : 'help-none',
+      active.length === 1 ? await guardianNameFor(active[0].ownerId) : 'wayLoc',
+      { count, emergencyNumber: market ? EMERGENCY_NUMBER[market] : undefined },
+    );
+  } catch (err) {
+    logger.error('Missed-call reply SMS failed', { error: (err as Error).message });
+  }
+  logger.info('Inbound member call handled', { guardians: count });
+  res.status(200).end();
+});

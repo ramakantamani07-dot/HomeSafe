@@ -3,6 +3,7 @@ import * as logger from 'firebase-functions/logger';
 
 import type {
   ConsentStrategy,
+  InboundCall,
   InboundSms,
   NetworkLocationAdapters,
   OperatorConsentOutcome,
@@ -69,6 +70,12 @@ export class MockSmsProvider implements SmsProvider {
       from: b.from,
       body: typeof b.body === 'string' ? b.body : '',
     };
+  }
+
+  parseInboundCall(req: WebhookRequest): InboundCall | null {
+    const b = req.body as { callId?: unknown; from?: unknown } | null;
+    if (!b || typeof b.callId !== 'string' || typeof b.from !== 'string') return null;
+    return { providerCallId: b.callId, from: b.from };
   }
 }
 

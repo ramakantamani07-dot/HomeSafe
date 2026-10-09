@@ -10,7 +10,7 @@
  *   zones.ts           safe-zone hysteresis — pure
  */
 export { requestConsentSms, resendConsentRequest } from './requestConsent';
-export { inboundConsentSms } from './inboundSms';
+export { inboundConsentSms, inboundMemberCall } from './inboundSms';
 export { locateMember } from './locate';
 export { onConsentRevoked } from './revocation';
 export { checkSafeZones, onSafeZoneCreated } from './safeZones';

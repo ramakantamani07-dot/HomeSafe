@@ -97,6 +97,7 @@ function SafetyPromptNotificationBridge() {
   const { confirmOk } = useSafetyCheck();
   const { triggerSOS } = useSOS();
   const { recordOk } = useFamily();
+  const router = useRouter();
   const prevPhaseRef = React.useRef(phase);
 
   useEffect(() => {
@@ -126,6 +127,7 @@ function SafetyPromptNotificationBridge() {
     const handleResponse = (response: Notifications.NotificationResponse) => {
       const id = response.notification.request.identifier;
       const action = response.actionIdentifier;
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
 
       // Two prompts, same two actions — routed to whichever subsystem raised
       // the notification so an answer resolves the right record.
@@ -135,7 +137,15 @@ function SafetyPromptNotificationBridge() {
       } else if (id === SAFETY_CHECK_NOTIFICATION_ID) {
         if (action === CONFIRM_SAFE_ACTION) void confirmOk();
         else if (action === SOS_ACTION) void triggerSOS();
-      } else if (response.notification.request.content.data?.type === ASK_OK_TYPE) {
+      } else if (data?.type === 'MEMBER_SOS' && typeof data.memberId === 'string') {
+        // A basic-phone member asked for help: straight to where they are.
+        router.push({
+          pathname: '/(app)/find-result',
+          params: { memberId: data.memberId, sosAt: String(data.at ?? new Date().toISOString()) },
+        });
+      } else if (data?.type === 'MEMBER_CHECKIN' && typeof data.memberId === 'string') {
+        router.push({ pathname: '/(app)/basic-member', params: { memberId: data.memberId } });
+      } else if (data?.type === ASK_OK_TYPE) {
         // Only the button is an answer. Opening the push is not "I'm OK" —
         // the person asking would be told something nobody said.
         if (action === ANSWER_OK_ACTION) recordOk();
@@ -146,7 +156,7 @@ function SafetyPromptNotificationBridge() {
     };
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => subscription.remove();
-  }, [confirmSafe, confirmOk, triggerSOS, recordOk]);
+  }, [confirmSafe, confirmOk, triggerSOS, recordOk, router]);
 
   return null;
 }

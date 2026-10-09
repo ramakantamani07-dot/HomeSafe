@@ -26,7 +26,7 @@ compound.
 | 4 · Safety | **Done** | — |
 | 5 · Settings | **Done bar one item** | "Pocket mode" — named in the spec, never defined; see D14 |
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
-| 6 · Network location | **6.1–6.5 done, against mocks** (incl. resend consent D26, safe zones D27) | CIBA operator callback and geofence subscriptions (G3) · 6.6 SOS by SMS / missed call · device verification |
+| 6 · Network location | **6.1–6.6 done, against mocks** (resend D26, safe zones D27, SOS and check-ins by text or missed call D28) | Real operator, SMS and voice providers (G3) · device verification on Firebase |
 | 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
 | 8 · Hardening | Not started | |
 
@@ -95,7 +95,7 @@ React Native + Hermes, 11 MB the native binary, 7.1 MB the JS bundle and
 
 **Not yet proven against a real backend.** Everything below works against
 mocks and the Firestore emulator, and has never run on Firebase or between two
-real phones: consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, revocation
+real phones: consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, SOS and check-ins by text or missed call, revocation
 layer 3, retention clean-up, live family status, watch presence, Ask "OK?",
 the invitation push, and the "On wayLoc" lookup. Getting there needs a
 Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
@@ -106,7 +106,6 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 
 | Work | Phase |
 |---|---|
-| SOS and check-in by SMS / missed call for basic-phone members | 6.6 |
 | Battery profile over a real journey, memory pass, offline queue, accessibility pass, runbooks | 8 |
 
 **Waiting on a decision or an input**
@@ -230,6 +229,43 @@ offline window; nothing short of short-lived operator grants does.
 - [x] Layer 3 as a Firestore trigger — **accepted 8 Oct** (D23)
 - [ ] Is the offline window acceptable, mitigated by layer 1?
 - [ ] Should short-lived operator grants go on the Phase 8 hardening list rather than being dismissed?
+
+---
+
+## Decisions settled 9 Oct 2026 — Phase 6.6 SOS and check-ins by text
+
+### D28 · HELP, a missed call, or a check-in word from a basic phone
+
+- **HELP** (SOS, EMERGENCY, मदद, बचाओ, BACHAO, MADAD) anywhere in a text, or a
+  **missed call** to the voice webhook (`inboundMemberCall`), alerts every
+  guardian whose consent is ACTIVE: a lookup through the one guarded `locate`
+  with reason `sos` (bypasses the hourly limit, nothing else; audited), an
+  event in `memberEvents`, a time-sensitive push and an SMS with a map link.
+  **If the lookup fails, the alert still goes**, saying why there is no
+  location.
+- **Check-ins** — HOME, SCHOOL, OK, घर, GHAR, स्कूल, ठीक, THEEK — as the whole
+  message: a normal push and an event, no lookup.
+- **"OK" is both a YES and a check-in.** Once the number has an ACTIVE consent
+  it is a check-in and is not passed to the consent reader, so it can never
+  silently approve a second guardian (D18's rule that approving must be
+  unambiguous).
+- **HELP with STOP** — sharing stops, and the guardians the member had are
+  still told, without a lookup. Read before the transition, so a STOP in the
+  same message cannot drop the request for help.
+- **The member is told who was told**, and always pointed at emergency
+  services: "we've told Priya you asked for help. If you're in danger, call
+  999 now" (112 in India; parity-tested against `src/config/markets.ts`). No
+  guardian ACTIVE → "no one is set up to get your help messages yet. Call…".
+  Unknown numbers get nothing.
+- **Alerts are claimed before acting.** Consent changes keep act-then-mark,
+  because repeating them is harmless; an SOS repeated on a provider retry
+  would read as a second emergency.
+- **Times are local.** Functions run in UTC; alerts and zone pushes now use
+  the guardian's market time zone (this also fixes D27's zone pushes).
+- **App:** "Messages from Sam" on the member screen; an SOS push or row opens
+  the find result with an SOS banner and the area that lookup found.
+- **Not built (G3):** the virtual numbers themselves, and voice-webhook
+  signature schemes per provider.
 
 ---
 

@@ -32,6 +32,7 @@ export {
   requestConsentSms,
   resendConsentRequest,
   inboundConsentSms,
+  inboundMemberCall,
   locateMember,
   onConsentRevoked,
   checkSafeZones,

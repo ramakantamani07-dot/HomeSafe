@@ -4,6 +4,7 @@ import { useBasicPhoneContext } from '../context/BasicPhoneContext';
 import type { Consent } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 import type { SafeZone } from '../models/SafeZone';
+import type { MemberEvent } from '../models/MemberEvent';
 
 /** Basic-phone members and their Find state (Option 15 S2–S4, AI13). */
 export function useBasicPhoneMembers() {
@@ -68,4 +69,17 @@ export function useMemberZones(memberId: string | undefined): SafeZone[] {
   }, [memberId, subscribeZones]);
 
   return zones;
+}
+
+/** SOS and check-ins the member sent by text or missed call, newest first, live. */
+export function useMemberEvents(memberId: string | undefined): MemberEvent[] {
+  const { subscribeEvents } = useBasicPhoneContext();
+  const [events, setEvents] = useState<MemberEvent[]>([]);
+
+  useEffect(() => {
+    if (!memberId) return;
+    return subscribeEvents(memberId, setEvents);
+  }, [memberId, subscribeEvents]);
+
+  return events;
 }

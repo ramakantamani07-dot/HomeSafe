@@ -63,6 +63,24 @@ export const TRANSPARENCY_NOTICE_INTERVAL_MS = 60 * 60 * 1_000;
  */
 export const ZONE_CHECK_SCHEDULE = 'every 15 minutes';
 
+/**
+ * Emergency numbers for the markets served. Mirrors `MARKETS` in
+ * src/config/markets.ts (parity-tested): 999 in the UK, 112 in India.
+ */
+export const EMERGENCY_NUMBER: Readonly<Record<MarketCode, string>> = { GB: '999', IN: '112' };
+
+/** Wall-clock time zone per market, so "at 08:42" is the time the guardian lives in. */
+export const MARKET_TIMEZONE: Readonly<Record<MarketCode, string>> = { GB: 'Europe/London', IN: 'Asia/Kolkata' };
+
+/** "08:42" in the market's own time zone; UK time when the market is unknown. */
+export function localTime(at: Date, market: MarketCode | null): string {
+  return at.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: MARKET_TIMEZONE[market ?? 'GB'],
+  });
+}
+
 /** How stale an operator fix may be and still be worth showing (CAMARA `maxAge`). */
 export const LOCATE_MAX_AGE_SECONDS = 60;
 
@@ -79,6 +97,10 @@ export type SmsTemplate =
   | 'stop-confirmed'
   | 'guardian-stopped'
   | 'zone-created'
+  | 'help-sent'
+  | 'help-none'
+  | 'checkin-sent'
+  | 'sos-guardian'
   | 'transparency';
 
 /**
@@ -89,7 +111,18 @@ export type SmsTemplate =
  * English only for now. Hindi templates need a native speaker's review before
  * they are sent to anyone, and India's need DLT registration first anyway.
  */
-export function renderSms(template: SmsTemplate, guardianName: string, place = 'a place'): string {
+/** What some templates need beyond the guardian's name. */
+export interface SmsDetails {
+  place?: string;
+  /** How many guardians were told. */
+  count?: number;
+  emergencyNumber?: string;
+}
+
+export function renderSms(template: SmsTemplate, guardianName: string, details: SmsDetails = {}): string {
+  const place = details.place ?? 'a place';
+  const people = details.count === 1 ? guardianName : `${details.count ?? 0} people`;
+  const emergency = details.emergencyNumber ?? '112';
   switch (template) {
     case 'consent-request':
       return `${guardianName} wants to see your approximate location using wayLoc. Reply YES to allow or NO to refuse. Reply STOP anytime to stop.`;
@@ -110,6 +143,18 @@ export function renderSms(template: SmsTemplate, guardianName: string, place = '
       // fifteen minutes; texting each one would be noise, and a member told
       // once what is being watched knows what they agreed to.
       return `wayLoc: ${guardianName} will be told when you arrive at or leave ${place}. Reply STOP anytime to stop.`;
+    case 'help-sent':
+      // Points at emergency services every time: wayLoc reaching a guardian
+      // is not help arriving, and someone in danger must not wait on us.
+      return `wayLoc: we've told ${people} you asked for help. If you're in danger, call ${emergency} now.`;
+    case 'help-none':
+      return `wayLoc: no one is set up to get your help messages yet. If you're in danger, call ${emergency} now.`;
+    case 'checkin-sent':
+      return `wayLoc: sent — ${people} ${details.count === 1 ? 'has' : 'have'} been told.`;
+    case 'sos-guardian':
+      // Body is built by renderGuardianSosSms; this keeps the template key
+      // (and its DLT id) in the same registry as every other message.
+      return `wayLoc SOS: ${guardianName} asked for help.`;
     case 'transparency':
       return `${guardianName} checked your approximate location via wayLoc. Reply STOP to stop.`;
   }
@@ -134,4 +179,21 @@ export function dltTemplateId(template: SmsTemplate, market: MarketCode): string
 export function guardianDisplayName(name: string | undefined): string {
   // "Someone" is unhelpful but true; inventing a relationship would not be.
   return name?.trim() || 'Someone';
+}
+
+/**
+ * The SMS a guardian gets when a basic-phone member asks for help (spec §7:
+ * "push + SMS to all guardians with map link and time"). The link carries
+ * coordinates, which this guardian is entitled to: the member's consent is
+ * ACTIVE for them, or there is no link.
+ */
+export function renderGuardianSosSms(
+  memberName: string,
+  time: string,
+  fix: { latitude: number; longitude: number; radiusMeters: number } | null,
+): string {
+  const where = fix
+    ? `Approximate area (within ${Math.round(fix.radiusMeters)} m): https://maps.google.com/?q=${fix.latitude.toFixed(5)},${fix.longitude.toFixed(5)}`
+    : 'Their location could not be found.';
+  return `wayLoc SOS: ${memberName} asked for help at ${time}. ${where} Call them now.`;
 }
