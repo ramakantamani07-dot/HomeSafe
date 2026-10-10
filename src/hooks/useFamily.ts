@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { useInterval } from './useInterval';
+import { useIdentityGuard } from './useIdentityGuard';
 
 import { useFamilyContext } from '../context/FamilyContext';
 import type {
@@ -40,7 +41,24 @@ export interface UseFamilyReturn {
 }
 
 export function useFamily(): UseFamilyReturn {
-  return useFamilyContext();
+  return useGuardedFamily(useFamilyContext());
+}
+
+/**
+ * Inviting someone and accepting an invitation both widen who can see you,
+ * so both ask the phone's owner to confirm it is them first.
+ */
+function useGuardedFamily(family: UseFamilyReturn): UseFamilyReturn {
+  const guard = useIdentityGuard();
+  const { inviteMember, acceptInvitation } = family;
+  const guarded = useMemo(
+    () => ({
+      inviteMember: guard('invite-family', inviteMember),
+      acceptInvitation: guard('accept-family', acceptInvitation),
+    }),
+    [guard, inviteMember, acceptInvitation],
+  );
+  return useMemo(() => ({ ...family, ...guarded }), [family, guarded]);
 }
 
 /**
@@ -49,7 +67,7 @@ export function useFamily(): UseFamilyReturn {
  * `useFamily`, which does not hold listeners open.
  */
 export function useLiveFamily(): UseFamilyReturn {
-  const family = useFamilyContext();
+  const family = useGuardedFamily(useFamilyContext());
   const { startLiveUpdates } = family;
   useEffect(() => startLiveUpdates(), [startLiveUpdates]);
   return family;

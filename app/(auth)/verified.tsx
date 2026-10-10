@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -11,6 +11,8 @@ import { Button } from '../../src/components/ui/Button';
 import { Icon } from '../../src/components/ui/Icon';
 
 const C = FIXED_PALETTES.signIn;
+/** What the phone's own biometric is called, for the lock offer. */
+const BIOMETRIC_NAME = Platform.OS === 'ios' ? 'Face ID or Touch ID' : 'your fingerprint';
 const STORY_HEIGHT = 230;
 const CHECK_SIZE = 92;
 
@@ -21,19 +23,36 @@ const CHECK_SIZE = 92;
  * is asked when the first journey starts (allow-location), where the reason
  * for it is in front of the person (spec §4). Whatever they answer, Continue
  * goes Home — a "no" here costs nothing and can be changed later.
+ *
+ * Also offers the app lock, ticked by default where the phone has Face ID or
+ * Touch ID: a stolen, unlocked phone otherwise opens straight onto everyone's
+ * locations. Not on the AN3 board; see docs/reference/ACCOUNT_PROTECTION.md.
  */
 export default function VerifiedScreen() {
   const router = useRouter();
-  const { locationStatus, requestLocationPermission } = usePrivacy();
+  const {
+    locationStatus,
+    requestLocationPermission,
+    biometricAvailable,
+    biometricLockEnabled,
+    enableBiometricLock,
+  } = usePrivacy();
   const [asking, setAsking] = useState(false);
+  const offerLock = biometricAvailable && !biometricLockEnabled;
+  const [lockChosen, setLockChosen] = useState(true);
 
   const alreadyOn = locationStatus === 'granted';
 
   const handleContinue = async () => {
+    setAsking(true);
     if (!alreadyOn) {
-      setAsking(true);
       // A failed request is the same as a "no": the journey flow asks again.
       await requestLocationPermission().catch(() => undefined);
+    }
+    if (offerLock && lockChosen) {
+      // Confirms with Face ID before switching on. A cancel leaves it off;
+      // it stays available in Privacy & Security.
+      await enableBiometricLock().catch(() => undefined);
     }
     router.replace('/(app)/home');
   };
@@ -57,6 +76,22 @@ export default function VerifiedScreen() {
           </Text>
 
           <View style={styles.footer}>
+            {offerLock && (
+              <TouchableOpacity
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: lockChosen }}
+                style={styles.lockRow}
+                onPress={() => setLockChosen((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, lockChosen && styles.checkboxOn]}>
+                  {lockChosen && <Icon name="check" size={13} color={C.onBrand} />}
+                </View>
+                <Text style={styles.lockText}>
+                  Lock wayLoc with {BIOMETRIC_NAME}, so no one else can open it on this phone.
+                </Text>
+              </TouchableOpacity>
+            )}
             <Button variant="brand" label="Continue" onPress={handleContinue} loading={asking} />
             <Text style={styles.footnote}>You stay signed in on this phone.</Text>
           </View>
@@ -117,6 +152,35 @@ const styles = StyleSheet.create({
     gap: SPACING.sm + 2,
     paddingBottom: SPACING.xl,
     alignItems: 'center',
+  },
+  lockRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm + 2,
+    alignSelf: 'stretch',
+    marginBottom: SPACING.xs,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    marginTop: 1,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: C.separator,
+    backgroundColor: C.field,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: {
+    borderColor: C.brand,
+    backgroundColor: C.brand,
+  },
+  lockText: {
+    flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: C.textMuted,
   },
   footnote: {
     fontFamily: FONTS.body,

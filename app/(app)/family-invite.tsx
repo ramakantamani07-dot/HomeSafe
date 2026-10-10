@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useFamily } from '../../src/hooks/useFamily';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
 import { normaliseContactNumber, type InviteeStatus, type TheyAreMy } from '../../src/models/Family';
 import { PhoneInput } from '../../src/components/common/PhoneInput';
@@ -101,6 +102,7 @@ export default function InviteSomeoneScreen() {
         },
       });
     } catch (err) {
+      if (isIdentityNotConfirmed(err)) return;
       Alert.alert("Couldn't send the invite", err instanceof Error ? err.message : 'Try again in a moment.');
     } finally {
       setSending(false);

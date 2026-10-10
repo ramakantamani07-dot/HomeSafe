@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import {
   MEMBER_MARKET_LABEL,
   canSendRequest,
@@ -72,7 +73,8 @@ export default function AddSomeoneScreen() {
         guardianAttested: minor && guardianAttested,
       });
       router.replace({ pathname: '/basic-member', params: { memberId: member.id } });
-    } catch {
+    } catch (err) {
+      if (isIdentityNotConfirmed(err)) return;
       Alert.alert(
         "Couldn't send the request",
         'Nothing was sent. Check your connection and try again.',

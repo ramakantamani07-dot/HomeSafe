@@ -24,4 +24,15 @@ export interface NotificationProvider {
    * Returns an unsubscribe function — MUST be called on cleanup to avoid leaks.
    */
   onTokenRefresh(handler: (newToken: string) => void): () => void;
+
+  /**
+   * A local reminder, repeating every `intervalDays`, to check who can see
+   * your location (account protection). Scheduled once and then left alone:
+   * re-scheduling on every launch would restart the clock and it would never
+   * fire for anyone who opens the app monthly.
+   */
+  ensureSharingReview(intervalDays: number): Promise<void>;
+
+  /** Cancels the reminder, on sign-out. */
+  cancelSharingReview(): Promise<void>;
 }

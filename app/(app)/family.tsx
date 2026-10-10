@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useLiveFamily } from '../../src/hooks/useFamily';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import { useBasicPhoneMembers } from '../../src/hooks/useBasicPhoneMembers';
 import { useInterval } from '../../src/hooks/useInterval';
 import { describeConsentStatus } from '../../src/models/BasicPhoneMember';
@@ -75,9 +76,10 @@ export default function FamilyScreen() {
       {
         text: 'Accept',
         onPress: () =>
-          acceptInvitation(invitationId).catch(() =>
-            Alert.alert("Couldn't accept", 'Check your connection and try again.'),
-          ),
+          acceptInvitation(invitationId).catch((err) => {
+            if (isIdentityNotConfirmed(err)) return;
+            Alert.alert("Couldn't accept", 'Check your connection and try again.');
+          }),
       },
     ]);
 

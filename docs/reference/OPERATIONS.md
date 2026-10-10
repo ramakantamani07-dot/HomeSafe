@@ -20,6 +20,7 @@ Cloud Logging → Logs-based metrics, filtered on `jsonPayload.metric="<name>"`.
 | `ask_ok` | `delivered` | `delivered: false` share > 50% (push tokens going stale) |
 | `push_failed` | `kind`, `code` | any `kind: MEMBER_SOS` |
 | `app_check` | `fn`, `mode`, `outcome` | while `mode: monitor`: `missing` share is what enforcing would refuse — keep it near 0 for a week before setting `APP_CHECK_MODE=enforce`; once enforcing: any rise in callable `unauthenticated` errors |
+| `new_device` | `otherDevices`, `family`, `reached`, `attempted` | `reached` < `attempted` often (stale tokens); a burst across many accounts in an hour (a SIM-swap campaign) |
 
 **Cost per lookup** = sum of `billedUnits` × the aggregator's unit price, per
 day. Zone checks are the steady cost (one unit per zone per 15 minutes while

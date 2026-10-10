@@ -7,6 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, identityColor, type ThemeColors } from '../../src/config/theme';
 import { useContacts } from '../../src/hooks/useContacts';
 import { useFamily } from '../../src/hooks/useFamily';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import { useGoBack } from '../../src/hooks/useGoBack';
 import { MAX_CONTACTS, contactBadges, type Contact } from '../../src/models/Contact';
 import { Icon } from '../../src/components/ui/Icon';
@@ -41,6 +42,7 @@ export default function TrustedContactsScreen() {
     try {
       await addContact({ name, phone, relationship: 'Family' });
     } catch (err) {
+      if (isIdentityNotConfirmed(err)) return;
       Alert.alert("Couldn't add them", err instanceof Error ? err.message : 'Try again in a moment.');
     }
   };

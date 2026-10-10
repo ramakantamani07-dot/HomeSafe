@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 
 import type { NotificationService } from '../services/NotificationService';
 import { useAuthContext } from './AuthContext';
@@ -25,14 +25,20 @@ export function NotificationStateProvider({
   const { user } = useAuthContext();
   const [deviceToken, setDeviceToken] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  // Null while auth loads on every cold start, so "no user" alone is not a
+  // sign-out; only going from a user to none is.
+  const signedInAs = useRef<string | null>(null);
 
   // Re-register on every sign-in. Tokens can rotate between sessions, so we
   // always fetch and persist the latest token rather than caching the old one.
   useEffect(() => {
     if (!user?.id) {
       setDeviceToken(null);
+      if (signedInAs.current) void notificationService.signedOut();
+      signedInAs.current = null;
       return;
     }
+    signedInAs.current = user.id;
 
     let mounted = true;
     const userId = user.id;

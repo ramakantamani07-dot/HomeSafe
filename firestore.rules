@@ -44,6 +44,10 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= maxLen;
     }
 
+    function validPushToken(value) {
+      return value == null || isReasonableString(value, 4096);
+    }
+
     // A journey's nextCheckInAt is computed and written entirely client-side
     // (CheckInService.confirmSafe/extendCheckIn) — nothing previously stopped
     // a buggy or compromised client from writing an arbitrary future value to
@@ -185,6 +189,24 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
+
+      // ── Devices (account protection) ─────────────────────────────────────
+      // One record per installation: platform, pushToken, lastSeenAt. Creating
+      // one sets off the new-phone warning (onDeviceRegistered), so the app may
+      // never read or delete these: someone who has taken over the account
+      // could otherwise reuse the old phone's id, or delete its record, and
+      // sign in without the owner being warned. `alertedAt` is server-only.
+      match /devices/{deviceId} {
+        allow read:   if false;
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['platform', 'pushToken', 'lastSeenAt'])
+          && request.resource.data.platform in ['ios', 'android', 'web']
+          && validPushToken(request.resource.data.get('pushToken', null));
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pushToken', 'lastSeenAt'])
+          && validPushToken(request.resource.data.get('pushToken', null));
+        allow delete: if false;
+      }
 
       // ── Contacts ───────────────────────────────────────────────────────────
       // Stores: name, phone, relationship, createdAt, updatedAt

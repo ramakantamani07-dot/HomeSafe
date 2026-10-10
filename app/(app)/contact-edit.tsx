@@ -18,6 +18,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useContacts } from '../../src/hooks/useContacts';
 import { useFamily } from '../../src/hooks/useFamily';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import { useGoBack } from '../../src/hooks/useGoBack';
 import {
   CONTACT_RELATIONSHIPS,
@@ -96,6 +97,7 @@ export default function ContactEditScreen() {
       }
       goBack();
     } catch (err) {
+      if (isIdentityNotConfirmed(err)) return;
       Alert.alert("Couldn't save", err instanceof Error ? err.message : 'Try again in a moment.');
       setSaving(false);
     }
@@ -109,8 +111,13 @@ export default function ContactEditScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          await deleteContact(existing.id);
-          goBack();
+          try {
+            await deleteContact(existing.id);
+            goBack();
+          } catch (err) {
+            if (isIdentityNotConfirmed(err)) return;
+            Alert.alert(`Couldn't remove ${existing.name}`, 'Check your connection and try again.');
+          }
         },
       },
     ]);

@@ -20,4 +20,8 @@ export class MockNotificationProvider implements NotificationProvider {
   onTokenRefresh(_handler: (newToken: string) => void): () => void {
     return () => {};
   }
+
+  async ensureSharingReview(_intervalDays: number): Promise<void> {}
+
+  async cancelSharingReview(): Promise<void> {}
 }

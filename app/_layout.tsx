@@ -29,6 +29,7 @@ import {
   SAFETY_CHECK_NOTIFICATION_CATEGORY,
   SAFETY_CHECK_NOTIFICATION_ID,
 } from '../src/models/SafetyCheck';
+import { SHARING_REVIEW_TYPE } from '../src/models/AccountProtection';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -97,6 +98,7 @@ function SafetyPromptNotificationBridge() {
   const { confirmOk } = useSafetyCheck();
   const { triggerSOS } = useSOS();
   const { recordOk } = useFamily();
+  const { user } = useAuth();
   const router = useRouter();
   const prevPhaseRef = React.useRef(phase);
 
@@ -143,6 +145,14 @@ function SafetyPromptNotificationBridge() {
           pathname: '/(app)/find-result',
           params: { memberId: data.memberId, sosAt: String(data.at ?? new Date().toISOString()) },
         });
+      } else if (
+        data?.type === SHARING_REVIEW_TYPE ||
+        (data?.type === 'NEW_DEVICE_SIGN_IN' && data.userId !== user?.id)
+      ) {
+        // The monthly "who can see you" reminder, or a family member's account
+        // signed in on a new phone: both are answered on Family. Your own
+        // new-phone warning just opens the app; its advice is in the text.
+        router.push('/(app)/family');
       } else if (data?.type === 'MEMBER_CHECKIN' && typeof data.memberId === 'string') {
         router.push({ pathname: '/(app)/basic-member', params: { memberId: data.memberId } });
       } else if (data?.type === ASK_OK_TYPE) {
@@ -156,7 +166,7 @@ function SafetyPromptNotificationBridge() {
     };
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => subscription.remove();
-  }, [confirmSafe, confirmOk, triggerSOS, recordOk, router]);
+  }, [confirmSafe, confirmOk, triggerSOS, recordOk, router, user?.id]);
 
   return null;
 }

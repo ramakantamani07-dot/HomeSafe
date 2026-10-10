@@ -44,6 +44,7 @@ Background on decisions already made. Useful context, not active plans.
 | [`reference/DATA_RETENTION.md`](reference/DATA_RETENTION.md) | Retention per data category and enforcement |
 | [`reference/FIREBASE_SERVICES.md`](reference/FIREBASE_SERVICES.md) | Firebase services in use |
 | [`reference/APP_CHECK.md`](reference/APP_CHECK.md) | App Check setup |
+| [`reference/ACCOUNT_PROTECTION.md`](reference/ACCOUNT_PROTECTION.md) | Account takeover (SIM swap, borrowed phone, SMS abuse): what is built and what the console needs |
 | [`reference/RUNNING.md`](reference/RUNNING.md) | Running on device, and switching mock → real |
 
 ## Conventions

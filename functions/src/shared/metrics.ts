@@ -20,7 +20,8 @@ export type MetricName =
   | 'ask_ok'               // delivered
   | 'push_failed'          // kind, code
   | 'contact_sms'          // template, requested, sent, failed
-  | 'app_check';           // fn, mode, outcome (verified | missing)
+  | 'app_check'            // fn, mode, outcome (verified | missing)
+  | 'new_device';          // otherDevices, family, reached, attempted
 
 export function metric(name: MetricName, fields: Record<string, string | number | boolean | null>): void {
   logger.info(`metric:${name}`, { metric: name, ...fields });

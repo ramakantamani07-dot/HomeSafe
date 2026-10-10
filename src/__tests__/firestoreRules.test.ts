@@ -1169,6 +1169,45 @@ describeWithEmulator('Firestore security rules', () => {
     await assertFails(getDoc(ref));
     await assertFails(setDoc(ref, { journeyId: 'j-safety', status: 'PENDING' }));
   });
+
+  // ── Devices (account protection) ───────────────────────────────────────────
+
+  test('owner registers a device and refreshes its push token, by merge write', async () => {
+    const { assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-a', 'devices', 'install-1');
+    await assertSucceeds(setDoc(ref, { platform: 'ios', pushToken: 'tok-1', lastSeenAt: new Date() }, { merge: true }));
+    await assertSucceeds(setDoc(ref, { platform: 'ios', pushToken: 'tok-2', lastSeenAt: new Date() }, { merge: true }));
+  });
+
+  test('a device record can never be read or deleted from the app', async () => {
+    // Someone holding the account could otherwise reuse the old phone's id, or
+    // delete its record, and sign in without the owner being warned.
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, getDoc, deleteDoc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-a', 'devices', 'install-2');
+    await setDoc(ref, { platform: 'android', pushToken: null, lastSeenAt: new Date() });
+    await assertFails(getDoc(ref));
+    await assertFails(deleteDoc(ref));
+  });
+
+  test('the app cannot set the server-only claim, change platform, or write for someone else', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc } = require('firebase/firestore');
+    const a = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const b = testEnv.authenticatedContext('user-b').firestore() as import('firebase/firestore').Firestore;
+    await assertFails(
+      setDoc(doc(a, 'users', 'user-a', 'devices', 'install-3'), { platform: 'ios', pushToken: null, lastSeenAt: new Date(), alertedAt: new Date() }),
+    );
+    const ref = doc(a, 'users', 'user-a', 'devices', 'install-4');
+    await setDoc(ref, { platform: 'ios', pushToken: null, lastSeenAt: new Date() });
+    await assertFails(setDoc(ref, { platform: 'android' }, { merge: true }));
+    await assertFails(
+      setDoc(doc(b, 'users', 'user-a', 'devices', 'install-5'), { platform: 'ios', pushToken: null, lastSeenAt: new Date() }),
+    );
+  });
 });
 
 // ─── Static rule validation (always runs) ────────────────────────────────────

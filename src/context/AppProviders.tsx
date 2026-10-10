@@ -28,6 +28,8 @@ import { FirebaseSOSProvider } from '../implementations/sos/FirebaseSOSProvider'
 import { MockSOSProvider } from '../implementations/sos/MockSOSProvider';
 import { FirebaseNotificationProvider } from '../implementations/notification/FirebaseNotificationProvider';
 import { MockNotificationProvider } from '../implementations/notification/MockNotificationProvider';
+import { FirebaseDeviceRegistryProvider } from '../implementations/devices/FirebaseDeviceRegistryProvider';
+import { MockDeviceRegistryProvider } from '../implementations/devices/MockDeviceRegistryProvider';
 import { NetInfoNetworkProvider } from '../implementations/network/NetInfoNetworkProvider';
 import { AsyncStorageOfflineQueueProvider } from '../implementations/offlineQueue/AsyncStorageOfflineQueueProvider';
 import { OSRMRoutingProvider } from '../implementations/routing/OSRMRoutingProvider';
@@ -203,7 +205,11 @@ const sosService = new SOSService(
   devMode ? null : networkProvider,
 );
 
-const notificationService = new NotificationService(notificationProvider);
+// Account protection: each phone records itself so a new one sets off a warning.
+const deviceRegistryProvider = devMode
+  ? new MockDeviceRegistryProvider()
+  : new FirebaseDeviceRegistryProvider(firebaseApp!);
+const notificationService = new NotificationService(notificationProvider, deviceRegistryProvider);
 
 // The map is the one provider that must NOT follow `devMode`.
 //

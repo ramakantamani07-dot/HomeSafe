@@ -120,6 +120,17 @@ unreferenced images were deleted on 10 Oct (still in git history).
 - **Battery** needs a walk on a release build; the procedure and pass mark
   are in `OPERATIONS.md`.
 
+### Account protection (10 Oct 2026)
+
+Built against mocks and the emulator — `docs/reference/ACCOUNT_PROTECTION.md`:
+Face ID / passcode before any change that widens who can find you (invite,
+accept, add a basic phone or zone, trusted contacts); the app lock offered on
+"You're in"; a new-phone sign-in warns the account's other phones and the
+family (`onDeviceRegistered`, device records the app can neither read nor
+delete); a monthly "who can see you" reminder. SOS, I'm OK and stopping
+sharing are never gated. Still open: SMS region policy (console), SIM Swap API
+(waits on G3).
+
 ### Firebase test plan (agreed 9 Oct 2026)
 
 Everything server-side has run only in tests and the emulator. This is the
@@ -192,6 +203,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Work | Phase |
 |---|---|
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
+| Firebase console: SMS region policy (UK, India only) — `docs/reference/ACCOUNT_PROTECTION.md` | 8 |
 | Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
 
 **Waiting on a decision or an input**

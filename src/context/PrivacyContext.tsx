@@ -31,6 +31,14 @@ interface PrivacyContextValue {
   disableBiometricLock(): Promise<void>;
   /** Runs biometric auth for the in-app lock gate. Returns true on success. */
   unlockWithBiometric(): Promise<boolean>;
+  /**
+   * Asks the phone's owner to confirm it is them before a protected change
+   * (models/AccountProtection). True when confirmed — or when the phone has
+   * no Face ID / Touch ID set up, matching account deletion and SOS resolve:
+   * there is nothing to check against, and blocking the change would only
+   * punish the owner.
+   */
+  confirmIdentity(reason: string): Promise<boolean>;
   refreshPermissions(): Promise<void>;
   // Duress ("silent SOS") code — a separate PIN that a fake-resolves an
   // active SOS: see SOSContext.triggerDuress.
@@ -52,6 +60,7 @@ export const PrivacyContext = createContext<PrivacyContextValue>({
   enableBiometricLock: async () => {},
   disableBiometricLock: async () => {},
   unlockWithBiometric: async () => false,
+  confirmIdentity: async () => false,
   refreshPermissions: async () => {},
   duressCodeSet: false,
   setDuressCode: async () => {},
@@ -128,6 +137,11 @@ export function PrivacyStateProvider({
     [privacyService],
   );
 
+  const confirmIdentity = useCallback(
+    async (reason: string) => (biometricAvailable ? privacyService.authenticate(reason) : true),
+    [biometricAvailable, privacyService],
+  );
+
   const refreshPermissions = useCallback(async () => {
     setPermissions(await privacyService.getPermissionsState());
   }, [privacyService]);
@@ -160,6 +174,7 @@ export function PrivacyStateProvider({
       enableBiometricLock,
       disableBiometricLock,
       unlockWithBiometric,
+      confirmIdentity,
       refreshPermissions,
       duressCodeSet,
       setDuressCode,
@@ -176,6 +191,7 @@ export function PrivacyStateProvider({
       enableBiometricLock,
       disableBiometricLock,
       unlockWithBiometric,
+      confirmIdentity,
       refreshPermissions,
       duressCodeSet,
       setDuressCode,

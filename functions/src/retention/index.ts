@@ -190,6 +190,8 @@ export const onUserAccountDeleted = functionsV1.auth.user().onDelete(async (user
   const contactsDeleted = await deleteAllDocsInCollection(userRef.collection('contacts'));
   const sosEventsDeleted = await deleteAllDocsInCollection(userRef.collection('sosEvents'));
   await deleteAllDocsInCollection(userRef.collection('familyStatus'));
+  // Registered phones and their push tokens (account protection).
+  await deleteAllDocsInCollection(userRef.collection('devices'));
   await userRef.delete();
 
   // Family connections are cancelled, not hard-deleted — consistent with the

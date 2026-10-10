@@ -1,14 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useBasicPhoneContext } from '../context/BasicPhoneContext';
 import type { Consent } from '../models/Consent';
 import type { LocateAudit } from '../models/LocateAudit';
 import type { SafeZone } from '../models/SafeZone';
 import type { MemberEvent } from '../models/MemberEvent';
+import { useIdentityGuard } from './useIdentityGuard';
 
 /** Basic-phone members and their Find state (Option 15 S2–S4, AI13). */
 export function useBasicPhoneMembers() {
-  return useBasicPhoneContext();
+  const basic = useBasicPhoneContext();
+  const guard = useIdentityGuard();
+  const { addMember, addZone } = basic;
+  // Adding someone to find, or a zone that reports on them, widens what this
+  // account can learn about another person: the owner confirms it is them.
+  return useMemo(
+    () => ({
+      ...basic,
+      addMember: guard('add-basic-phone', addMember),
+      addZone: guard('add-safe-zone', addZone),
+    }),
+    [basic, guard, addMember, addZone],
+  );
 }
 
 /** One member, or undefined once they are gone (deleted, or not yet loaded). */

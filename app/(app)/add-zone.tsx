@@ -9,6 +9,7 @@ import { useBasicPhoneMember, useBasicPhoneMembers } from '../../src/hooks/useBa
 import { usePlaces } from '../../src/hooks/usePlaces';
 import { useGoBack } from '../../src/hooks/useGoBack';
 import { ZONE_RADIUS_CHOICES } from '../../src/models/SafeZone';
+import { isIdentityNotConfirmed } from '../../src/models/AccountProtection';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Button } from '../../src/components/ui/Button';
 import { Icon } from '../../src/components/ui/Icon';
@@ -46,7 +47,8 @@ export default function AddZoneScreen() {
     try {
       await addZone({ memberId: member.id, name: name.trim(), centre: chosen.place.coordinates, radiusMeters: radius });
       goBack();
-    } catch {
+    } catch (err) {
+      if (isIdentityNotConfirmed(err)) return;
       Alert.alert("Couldn't add the zone", 'Check your connection and try again.');
       setSaving(false);
     }

@@ -10,6 +10,7 @@ import type { FirebaseApp } from 'firebase/app';
 
 import type { NotificationProvider } from '../../providers/NotificationProvider';
 import { lightTheme } from '../../config/theme';
+import { SHARING_REVIEW_ID, SHARING_REVIEW_TYPE } from '../../models/AccountProtection';
 
 export class FirebaseNotificationProvider implements NotificationProvider {
   private readonly db: Firestore;
@@ -67,5 +68,27 @@ export class FirebaseNotificationProvider implements NotificationProvider {
       handler(deviceToken.data);
     });
     return () => subscription.remove();
+  }
+
+  async ensureSharingReview(intervalDays: number): Promise<void> {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    if (scheduled.some((n) => n.identifier === SHARING_REVIEW_ID)) return;
+    await Notifications.scheduleNotificationAsync({
+      identifier: SHARING_REVIEW_ID,
+      content: {
+        title: 'Who can see your location?',
+        body: 'Take a moment to check your family in wayLoc, and remove anyone who shouldn’t be there.',
+        data: { type: SHARING_REVIEW_TYPE },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: intervalDays * 24 * 60 * 60,
+        repeats: true,
+      },
+    });
+  }
+
+  async cancelSharingReview(): Promise<void> {
+    await Notifications.cancelScheduledNotificationAsync(SHARING_REVIEW_ID);
   }
 }
