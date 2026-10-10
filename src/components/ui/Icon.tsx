@@ -59,7 +59,9 @@ export type IconName =
   | 'gps'
   | 'mic'
   | 'layers'
-  | 'recentre';
+  | 'recentre'
+  | 'pin'
+  | 'alertCircle';
 
 const IONICON_MAP: Record<IconName, keyof typeof Ionicons.glyphMap> = {
   sos: 'alert',
@@ -112,6 +114,8 @@ const IONICON_MAP: Record<IconName, keyof typeof Ionicons.glyphMap> = {
   mic: 'mic-outline',
   layers: 'layers-outline',
   recentre: 'navigate-outline',
+  pin: 'location',
+  alertCircle: 'alert-circle-outline',
 };
 
 interface IconProps {

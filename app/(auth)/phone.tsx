@@ -1,10 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Image,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,288 +10,303 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { useTheme } from '../../src/context/ThemeContext';
-import { ELEVATION, RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
+import { FIXED_PALETTES, FONTS, SPACING } from '../../src/config/theme';
+import { deviceRegion } from '../../src/config/markets';
 import { useAuth } from '../../src/hooks/useAuth';
-import { PhoneInput } from '../../src/components/common/PhoneInput';
-import { LoadingOverlay } from '../../src/components/common/LoadingOverlay';
+import { SignInLockedError } from '../../src/models/SignIn';
+import {
+  countryForRegion,
+  isValidMobile,
+  nationalDigits,
+  toE164,
+  type Country,
+} from '../../src/utils/phoneNumber';
 import {
   FirebaseRecaptchaVerifier,
   type FirebaseRecaptchaVerifierHandle,
 } from '../../src/components/auth/FirebaseRecaptchaVerifier';
-import { Icon } from '../../src/components/ui/Icon';
+import { STORY_ASPECT, SignInStory } from '../../src/components/auth/SignInStory';
+import { SignInPhoneField } from '../../src/components/auth/SignInPhoneField';
+import { BrandLockup, DevPill, SignInSheet } from '../../src/components/auth/SignInParts';
+import { lockedMessage } from '../../src/components/auth/signInCopy';
 import { Button } from '../../src/components/ui/Button';
-import type { ThemeColors } from '../../src/config/theme';
+import { Icon } from '../../src/components/ui/Icon';
 
-// Clean full scene, no baked-in UI (unlike bg1/bg2, which have a blurred
-// panel and controls rendered into the pixels — see the comment history on
-// this file). Used full-bleed behind the whole sign-in flow. Only a day
-// version exists so far; used in both themes for now with the scrim/card
-// colors adapting instead — swap in a clean night equivalent here if one
-// gets added later.
-const bgScene = require('../../assets/bg3.jpg');
-// The brand mark itself, transparent, so it sits on the photo rather than in
-// a plate on top of it. Same source the app icon is generated from.
-const brandLogo = require('../../assets/logo-signin.png');
+const C = FIXED_PALETTES.signIn;
+/**
+ * The mock auth provider accepts any number, so a development build does
+ * too; the per-country mobile rule applies wherever a real text is sent.
+ */
+const DEV_MIN_DIGITS = 6;
 
-/** Big enough to read the wordmark inside the artwork, small enough to leave
- *  the sign-in card the focus of the screen. */
-const BRAND_LOGO_SIZE = 132;
-
+/** AN1 — "Your mobile number". */
 export default function PhoneScreen() {
-  const theme = useTheme();
-  const styles = getStyles(theme);
   const router = useRouter();
   const { sendOTP, configureRecaptchaVerifier, isDevMode } = useAuth();
 
   const recaptchaRef = useRef<FirebaseRecaptchaVerifierHandle | null>(null);
-  const [phone, setPhone] = useState(''); // E.164 e.g. "+919876543210"
-  const [loading, setLoading] = useState(false);
-  // Not persisted anywhere — see docs/reference/IMPLEMENTATION_PLAN.md's minors item. This is
-  // the actual enforcement mechanism (can't proceed without checking it);
-  // whether to also store a durable attestation record server-side for
-  // compliance evidence is a separate decision, deliberately not built here.
+  const scrollRef = useRef<ScrollView>(null);
+
+  // With the keyboard up, bring Send code above it too, not just the field
+  // the OS scrolls to; the story slides up under the status bar instead.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () =>
+      scrollRef.current?.scrollToEnd({ animated: true }),
+    );
+    return () => sub.remove();
+  }, []);
+  const [country, setCountry] = useState<Country>(() => countryForRegion(deviceRegion()));
+  const [number, setNumber] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Not persisted — see docs/reference/IMPLEMENTATION_PLAN.md's minors item.
+  // This is the enforcement (no code is sent without it); a durable
+  // server-side attestation is a separate decision. Not on the AN1 board, and
+  // kept anyway: see D29.
   const [ageConfirmed, setAgeConfirmed] = useState(false);
 
-  const isValidPhone = phone.replace(/\D/g, '').length >= 10;
-  const canSubmit = isValidPhone && (isDevMode || ageConfirmed);
+  const valid = isDevMode
+    ? nationalDigits(number).length >= DEV_MIN_DIGITS
+    : isValidMobile(country, number);
+  const canSend = valid && (isDevMode || ageConfirmed) && !sending;
 
-  const handleSendOTP = async () => {
-    if (!canSubmit) return;
+  const handleSend = async () => {
+    if (!canSend) return;
+    setError(null);
 
-    // Wire reCAPTCHA verifier into Firebase provider right before the call.
-    if (configureRecaptchaVerifier && !recaptchaRef.current) {
-      Alert.alert('Please wait', 'Phone verification is still getting ready.');
-      return;
-    }
-
-    if (configureRecaptchaVerifier && recaptchaRef.current) {
+    if (configureRecaptchaVerifier) {
+      if (!recaptchaRef.current) {
+        setError('Phone verification is still getting ready. Try again in a moment.');
+        return;
+      }
       configureRecaptchaVerifier(recaptchaRef.current);
     }
 
-    setLoading(true);
+    const phone = toE164(country, number);
+    setSending(true);
     try {
       await sendOTP(phone);
       router.push({ pathname: '/(auth)/otp', params: { phone } });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send OTP.';
-      Alert.alert('Error', message);
+      if (err instanceof SignInLockedError) setError(lockedMessage(err.until, new Date()));
+      else setError(err instanceof Error ? err.message : "We couldn't send the code. Try again.");
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
-  return (
-    <ImageBackground source={bgScene} style={styles.flex} resizeMode="cover">
-      <View style={styles.scrimBottom} />
-      <FirebaseRecaptchaVerifier ref={recaptchaRef} enabled={!isDevMode} />
+  const changeCountry = (next: Country) => {
+    setCountry(next);
+    setError(null);
+  };
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <SafeAreaView style={styles.flex} edges={['top']}>
-          <View style={styles.brandRow}>
-            <Image
-              source={brandLogo}
-              style={styles.brandLogo}
-              resizeMode="contain"
-              accessible
-              accessibilityRole="image"
-              accessibilityLabel="wayLoc"
-            />
+  const changeNumber = (digits: string) => {
+    setNumber(digits);
+    setError(null);
+  };
+
+  return (
+    <View style={styles.root}>
+      <FirebaseRecaptchaVerifier ref={recaptchaRef} enabled={!isDevMode} />
+      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+        {/* Scrolls rather than squeezing: the story keeps its full size, and
+            the keyboard inset scrolls the number field into view (iOS). */}
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <BrandLockup />
+              {__DEV__ && isDevMode && <DevPill />}
+            </View>
+            <Text style={styles.headline} accessibilityRole="header">
+              Walk home together,{'\n'}even when apart.
+            </Text>
           </View>
 
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.card}>
-              {isDevMode && (
-                <View style={styles.devBanner}>
-                  <Text style={styles.devBannerText}>
-                    Dev mode — any number + any 6-digit code works
-                  </Text>
-                </View>
-              )}
+          <SignInStory style={styles.story} />
 
-              <Text style={styles.title}>Enter your phone number</Text>
+          <SignInSheet style={styles.sheet}>
+            <View style={styles.titles}>
+              <Text style={styles.title}>Your mobile number</Text>
               <Text style={styles.subtitle}>
                 {isDevMode
-                  ? 'Dev mode: enter any number to continue.'
-                  : "We'll send a one-time code to verify your number."}
+                  ? 'Development build — any number works; no text is sent.'
+                  : 'We’ll text you a 6-digit code — no password.'}
               </Text>
-
-              <View style={styles.inputWrapper}>
-                <PhoneInput
-                  onPhoneChange={setPhone}
-                  onSubmit={handleSendOTP}
-                  disabled={loading}
-                />
-              </View>
-
-              {!isDevMode && (
-                <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageConfirmed }}
-                  style={styles.ageRow}
-                  onPress={() => setAgeConfirmed((v) => !v)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
-                    {ageConfirmed && <Icon name="check" size={13} color={theme.textOnColor} />}
-                  </View>
-                  <Text style={styles.ageRowText}>
-                    I confirm I am 18 or older. wayLoc accounts are for adults — a parent or
-                    guardian should hold the account and manage sharing for a family member who is
-                    a minor.
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <Button
-                label={isDevMode ? 'Continue' : 'Send OTP'}
-                onPress={handleSendOTP}
-                disabled={!canSubmit || loading}
-                style={styles.button}
-              />
-
-              {!isDevMode && (
-                <Text style={styles.disclaimer}>
-                  By continuing you agree to our{' '}
-                  <Text
-                    style={styles.disclaimerLink}
-                    onPress={() => router.push('/(legal)/terms')}
-                  >
-                    Terms of Service
-                  </Text>{' '}
-                  and{' '}
-                  <Text
-                    style={styles.disclaimerLink}
-                    onPress={() => router.push('/(legal)/privacy-policy')}
-                  >
-                    Privacy Policy
-                  </Text>
-                  . Your number is only used for sign-in — we never share it.
-                </Text>
-              )}
             </View>
-          </ScrollView>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
 
-      <LoadingOverlay visible={loading} />
-    </ImageBackground>
+            <SignInPhoneField
+              country={country}
+              onCountryChange={changeCountry}
+              number={number}
+              onNumberChange={changeNumber}
+              onSubmit={handleSend}
+              disabled={sending}
+            />
+
+            {error && (
+              <View style={styles.errorRow} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Icon name="alertCircle" size={16} color={C.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {!isDevMode && (
+              <TouchableOpacity
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: ageConfirmed }}
+                style={styles.ageRow}
+                onPress={() => setAgeConfirmed((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, ageConfirmed && styles.checkboxOn]}>
+                  {ageConfirmed && <Icon name="check" size={13} color={C.onBrand} />}
+                </View>
+                <Text style={styles.ageText}>
+                  I’m 18 or older. A parent or guardian holds the account for anyone younger.
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <Button
+              variant="brand"
+              label="Send code"
+              onPress={handleSend}
+              disabled={!canSend}
+              loading={sending}
+            />
+
+            <Text style={styles.terms}>
+              By continuing you agree to the{' '}
+              <Text
+                accessibilityRole="link"
+                style={styles.termsLink}
+                onPress={() => router.push('/(legal)/terms')}
+              >
+                Terms
+              </Text>{' '}
+              and{' '}
+              <Text
+                accessibilityRole="link"
+                style={styles.termsLink}
+                onPress={() => router.push('/(legal)/privacy-policy')}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </SignInSheet>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-function getStyles(theme: ThemeColors) {
-  return StyleSheet.create({
-    flex: {
-      flex: 1,
-    },
-    scrimBottom: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: '62%',
-      backgroundColor: theme.isDark ? 'rgba(6,10,25,0.72)' : 'rgba(0,0,0,0.28)',
-    },
-    brandRow: {
-      alignItems: 'center',
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.lg,
-    },
-    brandLogo: {
-      width: BRAND_LOGO_SIZE,
-      height: BRAND_LOGO_SIZE,
-      // The photo behind this is a bright sunset and the mark is warm orange —
-      // close enough in value to lose its edges without separation. ELEVATION
-      // .float exists for exactly this (a control over arbitrary imagery), so
-      // it is reused rather than hand-rolled.
-      ...ELEVATION.float,
-    },
-    scrollContent: {
-      flexGrow: 1,
-      justifyContent: 'flex-end',
-    },
-    card: {
-      backgroundColor: theme.isDark ? 'rgba(17,27,58,0.9)' : 'rgba(255,255,255,0.92)',
-      borderTopLeftRadius: RADIUS.xl,
-      borderTopRightRadius: RADIUS.xl,
-      borderWidth: theme.isDark ? 1 : 0,
-      borderColor: theme.isDark ? theme.border : 'transparent',
-      borderBottomWidth: 0,
-      padding: SPACING.xl,
-      paddingTop: SPACING.xxl,
-    },
-    devBanner: {
-      backgroundColor: theme.warning.fg,
-      borderRadius: RADIUS.sm + 2,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.md + 2,
-      marginBottom: SPACING.lg,
-    },
-    devBannerText: {
-      color: theme.textOnColor,
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
-    title: {
-      fontSize: TYPOGRAPHY.heading.fontSize + 2,
-      fontWeight: '700',
-      color: theme.textPrimary,
-      marginBottom: SPACING.sm,
-    },
-    subtitle: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textSecondary,
-      lineHeight: 22,
-      marginBottom: SPACING.xxl - 4,
-    },
-    inputWrapper: {
-      marginBottom: SPACING.lg,
-    },
-    ageRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: SPACING.sm + 2,
-      marginBottom: SPACING.lg,
-    },
-    checkbox: {
-      width: 20,
-      height: 20,
-      borderRadius: 5,
-      borderWidth: 1.5,
-      borderColor: theme.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 1,
-      flexShrink: 0,
-    },
-    checkboxChecked: {
-      backgroundColor: theme.accent,
-      borderColor: theme.accent,
-    },
-    ageRowText: {
-      flex: 1,
-      fontSize: 12,
-      color: theme.textSecondary,
-      lineHeight: 17,
-    },
-    button: {
-      marginBottom: SPACING.lg,
-    },
-    disclaimer: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      textAlign: 'center',
-      lineHeight: 18,
-    },
-    disclaimerLink: {
-      color: theme.accent,
-      fontWeight: '600',
-      textDecorationLine: 'underline',
-    },
-  });
-}
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: SPACING.sm,
+    gap: SPACING.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headline: {
+    fontFamily: FONTS.headingXBold,
+    fontSize: 27,
+    lineHeight: 30,
+    letterSpacing: -0.8,
+    color: C.ink,
+  },
+  story: {
+    aspectRatio: STORY_ASPECT,
+    marginTop: SPACING.xs,
+  },
+  // Grows to the bottom edge, as on the board.
+  sheet: {
+    flexGrow: 1,
+    marginTop: -SPACING.sm,
+    marginBottom: 6,
+    paddingBottom: SPACING.lg,
+  },
+  titles: {
+    gap: SPACING.xs,
+  },
+  title: {
+    fontFamily: FONTS.headingXBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+    color: C.ink,
+  },
+  subtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: C.textMuted,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: FONTS.bodySemibold,
+    fontSize: 14,
+    color: C.error,
+  },
+  ageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm + 2,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    marginTop: 1,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: C.separator,
+    backgroundColor: C.field,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: {
+    borderColor: C.brand,
+    backgroundColor: C.brand,
+  },
+  ageText: {
+    flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 17,
+    color: C.textMuted,
+  },
+  terms: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 17,
+    color: C.textMuted,
+    textAlign: 'center',
+  },
+  termsLink: {
+    fontFamily: FONTS.bodySemibold,
+    color: C.ink,
+  },
+});

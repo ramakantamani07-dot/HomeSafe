@@ -1,307 +1,357 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
+  ActivityIndicator,
+  Keyboard,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
+  type TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { useTheme } from '../../src/context/ThemeContext';
-import { RADIUS, SPACING, TYPOGRAPHY } from '../../src/config/theme';
+import { FIXED_PALETTES, FONTS, RADIUS, SPACING } from '../../src/config/theme';
 import { TIMING } from '../../src/config/constants';
 import { useAuth } from '../../src/hooks/useAuth';
-import { LoadingOverlay } from '../../src/components/common/LoadingOverlay';
+import { useInterval } from '../../src/hooks/useInterval';
+import { SignInLockedError, WrongCodeError } from '../../src/models/SignIn';
+import { formatE164 } from '../../src/utils/phoneNumber';
 import {
   FirebaseRecaptchaVerifier,
   type FirebaseRecaptchaVerifierHandle,
 } from '../../src/components/auth/FirebaseRecaptchaVerifier';
-import { Button } from '../../src/components/ui/Button';
-import type { ThemeColors } from '../../src/config/theme';
+import { SignInStory } from '../../src/components/auth/SignInStory';
+import { CODE_LENGTH, CodeBoxes } from '../../src/components/auth/CodeBoxes';
+import { DevPill, SignInBackButton, SignInSheet } from '../../src/components/auth/SignInParts';
+import {
+  formatCountdown,
+  lockedMessage,
+  wrongCodeMessage,
+} from '../../src/components/auth/signInCopy';
+import { Icon } from '../../src/components/ui/Icon';
 
-const OTP_LENGTH = 6;
+const C = FIXED_PALETTES.signIn;
+const STORY_HEIGHT = 150;
+const RESEND_COOLDOWN_MS = TIMING.otpResendCooldownSeconds * 1000;
 
-// Same clean scene as phone.tsx — kept as the backdrop for the whole
-// sign-in flow, not just the first screen, so it reads as one continuous
-// moment rather than a photo on step one and a plain screen on step two.
-const bgScene = require('../../assets/bg3.jpg');
-
+/**
+ * AN2 "Enter the 6-digit code", and AN4, its wrong-code state.
+ *
+ * Signs in on the sixth digit — there is no Verify button. Times are kept as
+ * deadlines and the clock is re-read on each tick, so a countdown that sat in
+ * the background is still right when the app comes back.
+ */
 export default function OTPScreen() {
-  const theme = useTheme();
-  const styles = getStyles(theme);
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone = '' } = useLocalSearchParams<{ phone: string }>();
   const router = useRouter();
   const { verifyOTP, sendOTP, configureRecaptchaVerifier, isDevMode } = useAuth();
 
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
-  const [loading, setLoading] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState<number>(TIMING.otpResendCooldownSeconds);
-  const [canResend, setCanResend] = useState(false);
-
-  const inputRefs = useRef<Array<TextInput | null>>(Array(OTP_LENGTH).fill(null));
+  const inputRef = useRef<TextInput>(null);
   const recaptchaRef = useRef<FirebaseRecaptchaVerifierHandle | null>(null);
+  // Verification is async and ends in navigation; nothing may set state
+  // after this screen has gone.
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
-  // Countdown timer for resend
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState<'verifying' | 'resending' | null>(null);
+  const [wrongCode, setWrongCode] = useState<string | null>(null);
+  const [triesLeft, setTriesLeft] = useState<number | null>(null);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [resendAt, setResendAt] = useState(() => Date.now() + RESEND_COOLDOWN_MS);
+  const [now, setNow] = useState(() => Date.now());
+
+  const locked = lockedUntil !== null && now < lockedUntil;
+  const resendReady = now >= resendAt;
+  const ticking = !resendReady || lockedUntil !== null;
+  useInterval(() => setNow(Date.now()), ticking ? 1000 : null);
+
+  // A lock that has run out clears itself; the next code entered is fresh.
   useEffect(() => {
-    if (secondsLeft <= 0) {
-      setCanResend(true);
-      return;
+    if (lockedUntil !== null && now >= lockedUntil) {
+      setLockedUntil(null);
+      setWrongCode(null);
+      setTriesLeft(null);
     }
-    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(id);
-  }, [secondsLeft]);
+  }, [now, lockedUntil]);
 
-  const handleDigitChange = (text: string, index: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1);
-    const next = [...digits];
-    next[index] = digit;
-    setDigits(next);
-
-    if (digit && index < OTP_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all digits filled
-    if (digit && next.every((d) => d !== '')) {
-      handleVerify(next.join(''));
-    }
-  };
-
-  const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = async (code: string) => {
-    setLoading(true);
+  const verify = async (digits: string) => {
+    setBusy('verifying');
+    setError(null);
     try {
-      await verifyOTP(code);
-      router.replace('/(app)/home');
+      await verifyOTP(digits);
+      if (alive.current) router.replace('/(auth)/verified');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid code. Please try again.';
-      Alert.alert('Verification failed', message);
-      setDigits(Array(OTP_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
+      if (!alive.current) return;
+      setCode('');
+      if (err instanceof SignInLockedError) {
+        setWrongCode(digits);
+        setLockedUntil(err.until.getTime());
+        setNow(Date.now());
+        Keyboard.dismiss();
+      } else if (err instanceof WrongCodeError) {
+        setWrongCode(digits);
+        setTriesLeft(err.triesLeft);
+      } else {
+        setError(err instanceof Error ? err.message : "We couldn't check that code. Try again.");
+      }
     } finally {
-      setLoading(false);
+      if (alive.current) setBusy(null);
     }
+  };
+
+  const handleChange = (digits: string) => {
+    if (busy || locked) return;
+    // The first keystroke after a wrong code starts a new one.
+    if (wrongCode) {
+      setWrongCode(null);
+      setTriesLeft(null);
+    }
+    setError(null);
+    setCode(digits);
+    if (digits.length === CODE_LENGTH) void verify(digits);
   };
 
   const handleResend = async () => {
-    if (!canResend || !phone) return;
-
-    if (configureRecaptchaVerifier && !recaptchaRef.current) {
-      Alert.alert('Please wait', 'Phone verification is still getting ready.');
-      return;
-    }
-
-    if (configureRecaptchaVerifier && recaptchaRef.current) {
+    if (!resendReady || busy || locked || !phone) return;
+    if (configureRecaptchaVerifier) {
+      if (!recaptchaRef.current) {
+        setError('Phone verification is still getting ready. Try again in a moment.');
+        return;
+      }
       configureRecaptchaVerifier(recaptchaRef.current);
     }
-
-    setLoading(true);
+    setBusy('resending');
+    setError(null);
     try {
       await sendOTP(phone);
-      setDigits(Array(OTP_LENGTH).fill(''));
-      setSecondsLeft(TIMING.otpResendCooldownSeconds);
-      setCanResend(false);
-      inputRefs.current[0]?.focus();
+      if (!alive.current) return;
+      setCode('');
+      setWrongCode(null);
+      setTriesLeft(null);
+      setResendAt(Date.now() + RESEND_COOLDOWN_MS);
+      setNow(Date.now());
+      inputRef.current?.focus();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to resend OTP.';
-      Alert.alert('Error', message);
+      if (!alive.current) return;
+      if (err instanceof SignInLockedError) {
+        setLockedUntil(err.until.getTime());
+        setNow(Date.now());
+      } else {
+        setError(err instanceof Error ? err.message : "We couldn't send a new code. Try again.");
+      }
     } finally {
-      setLoading(false);
+      if (alive.current) setBusy(null);
     }
   };
 
-  const code = digits.join('');
-  const isComplete = code.length === OTP_LENGTH;
+  const editNumber = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(auth)/phone');
+  };
+
+  const shownPhone = formatE164(phone);
+  const showWrong = !!wrongCode && code.length === 0;
+  const message = locked
+    ? lockedMessage(new Date(lockedUntil!), new Date(now))
+    : showWrong && triesLeft !== null
+      ? wrongCodeMessage(triesLeft)
+      : error;
 
   return (
-    <ImageBackground source={bgScene} style={styles.flex} resizeMode="cover">
-      <View style={styles.scrimBottom} />
+    <View style={styles.root}>
       <FirebaseRecaptchaVerifier ref={recaptchaRef} enabled={!isDevMode} />
+      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topBar}>
+            <SignInBackButton onPress={editNumber} />
+            {__DEV__ && isDevMode && <DevPill />}
+          </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <SafeAreaView style={styles.flex} edges={['top']}>
-          <TouchableOpacity accessibilityRole="button" style={styles.back} onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
+          <SignInStory style={styles.story} />
 
-          <View style={styles.spacer} />
-
-          <View style={styles.card}>
-            {isDevMode && (
-              <View style={styles.devBanner}>
-                <Text style={styles.devBannerText}>Dev mode — enter any 6 digits</Text>
-              </View>
-            )}
-
-            <Text style={styles.title}>Enter the code</Text>
-            <Text style={styles.subtitle}>
-              {isDevMode
-                ? 'Enter any 6-digit code to sign in.'
-                : <>We sent a 6-digit code to{'\n'}<Text style={styles.phone}>{phone}</Text></>}
-            </Text>
-
-            <View style={styles.otpRow}>
-              {digits.map((digit, i) => (
-                <TextInput
-                  key={i}
-                  ref={(ref) => { inputRefs.current[i] = ref; }}
-                  style={[styles.digitBox, digit ? styles.digitBoxFilled : null]}
-                  value={digit}
-                  onChangeText={(t) => handleDigitChange(t, i)}
-                  onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  selectTextOnFocus
-                  caretHidden
-                />
-              ))}
+          <SignInSheet style={styles.sheet}>
+            <View style={styles.titles}>
+              <Text style={styles.title} accessibilityRole="header">
+                Enter the 6-digit code
+              </Text>
+              <Text style={styles.subtitle}>
+                {/* Nothing is sent in a development build, so it does not say "Sent". */}
+                {isDevMode ? 'For ' : 'Sent to '}
+                <Text style={styles.phone}>{shownPhone}</Text>
+                {' · '}
+                <Text accessibilityRole="link" style={styles.link} onPress={editNumber}>
+                  Edit
+                </Text>
+              </Text>
             </View>
 
-            <Button
-              label="Verify"
-              onPress={() => handleVerify(code)}
-              disabled={!isComplete || loading}
-              style={styles.button}
+            <CodeBoxes
+              ref={inputRef}
+              value={code}
+              onChange={handleChange}
+              wrongCode={showWrong || locked ? wrongCode : null}
+              disabled={locked || busy === 'verifying'}
             />
 
-            <View style={styles.resendRow}>
-              {canResend ? (
-                <TouchableOpacity accessibilityRole="button" onPress={handleResend} disabled={loading}>
-                  <Text style={styles.resendLink}>Resend code</Text>
+            {message ? (
+              <View style={styles.messageRow} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Icon name="alertCircle" size={16} color={C.error} />
+                <Text style={styles.messageText}>{message}</Text>
+              </View>
+            ) : busy === 'verifying' ? (
+              <View style={styles.messageRow}>
+                <ActivityIndicator size="small" color={C.brand} />
+                <Text style={styles.hint}>Checking…</Text>
+              </View>
+            ) : (
+              <Text style={styles.hint}>Signs you in automatically when all 6 digits are in.</Text>
+            )}
+
+            {!locked &&
+              (showWrong ? (
+                // AN4: the way forward is a fresh code.
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !resendReady || !!busy }}
+                  style={[styles.pill, (!resendReady || !!busy) && styles.pillWaiting]}
+                  onPress={handleResend}
+                  disabled={!resendReady || !!busy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.pillText}>
+                    {resendReady ? 'Send a new code' : `New code in ${formatCountdown((resendAt - now) / 1000)}`}
+                  </Text>
                 </TouchableOpacity>
               ) : (
-                <Text style={styles.resendTimer}>
-                  Resend in {secondsLeft}s
-                </Text>
-              )}
-            </View>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-
-      <LoadingOverlay visible={loading} />
-    </ImageBackground>
+                <View style={styles.resendRow}>
+                  {resendReady ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      onPress={handleResend}
+                      disabled={!!busy}
+                      hitSlop={SPACING.sm}
+                    >
+                      <Text style={styles.link}>
+                        {busy === 'resending' ? 'Sending…' : 'Send a new code'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.resendText}>
+                      Resend code in{' '}
+                      <Text style={styles.resendTime}>{formatCountdown((resendAt - now) / 1000)}</Text>
+                    </Text>
+                  )}
+                </View>
+              ))}
+          </SignInSheet>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-function getStyles(theme: ThemeColors) {
-  return StyleSheet.create({
-    flex: {
-      flex: 1,
-    },
-    scrimBottom: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: '68%',
-      backgroundColor: theme.isDark ? 'rgba(6,10,25,0.72)' : 'rgba(0,0,0,0.28)',
-    },
-    back: {
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.lg,
-    },
-    backText: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textOnColor,
-      fontWeight: '600',
-      textShadowColor: 'rgba(0,0,0,0.4)',
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
-    spacer: {
-      flex: 1,
-    },
-    card: {
-      backgroundColor: theme.isDark ? 'rgba(17,27,58,0.9)' : 'rgba(255,255,255,0.92)',
-      borderTopLeftRadius: RADIUS.xl,
-      borderTopRightRadius: RADIUS.xl,
-      borderWidth: theme.isDark ? 1 : 0,
-      borderColor: theme.isDark ? theme.border : 'transparent',
-      borderBottomWidth: 0,
-      padding: SPACING.xl,
-      paddingTop: SPACING.xxl,
-    },
-    title: {
-      fontSize: TYPOGRAPHY.title.fontSize,
-      fontWeight: '800',
-      color: theme.textPrimary,
-      marginBottom: SPACING.sm + 2,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.textSecondary,
-      lineHeight: 22,
-      marginBottom: SPACING.xxl - 4,
-    },
-    phone: {
-      color: theme.textPrimary,
-      fontWeight: '600',
-    },
-    otpRow: {
-      flexDirection: 'row',
-      gap: SPACING.sm + 2,
-      marginBottom: SPACING.xxl - 4,
-      justifyContent: 'center',
-    },
-    digitBox: {
-      width: 48,
-      height: 58,
-      borderWidth: 1.5,
-      borderColor: theme.border,
-      borderRadius: RADIUS.md,
-      textAlign: 'center',
-      fontSize: 24,
-      fontWeight: '700',
-      color: theme.textPrimary,
-      backgroundColor: theme.surface,
-    },
-    digitBoxFilled: {
-      borderColor: theme.accent,
-      backgroundColor: theme.accentMuted,
-    },
-    button: {
-      marginBottom: SPACING.lg,
-    },
-    resendRow: {
-      alignItems: 'center',
-    },
-    resendLink: {
-      fontSize: TYPOGRAPHY.body.fontSize,
-      color: theme.accent,
-      fontWeight: '600',
-    },
-    resendTimer: {
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      color: theme.textSecondary,
-    },
-    devBanner: {
-      backgroundColor: theme.warning.fg,
-      borderRadius: RADIUS.sm + 2,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.md + 2,
-      marginBottom: SPACING.xl,
-    },
-    devBannerText: {
-      color: theme.textOnColor,
-      fontSize: TYPOGRAPHY.callout.fontSize,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
-  });
-}
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: SPACING.xs,
+  },
+  story: {
+    height: STORY_HEIGHT,
+  },
+  sheet: {
+    flexGrow: 1,
+    marginTop: SPACING.sm,
+    marginBottom: 6,
+  },
+  titles: {
+    gap: 6,
+  },
+  title: {
+    fontFamily: FONTS.headingXBold,
+    fontSize: 26,
+    letterSpacing: -0.5,
+    color: C.ink,
+  },
+  subtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: C.textMuted,
+  },
+  phone: {
+    fontFamily: FONTS.bodySemibold,
+    color: C.ink,
+  },
+  link: {
+    fontFamily: FONTS.bodySemibold,
+    fontSize: 14,
+    color: C.brand,
+  },
+  hint: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: C.textMuted,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  messageText: {
+    flex: 1,
+    fontFamily: FONTS.bodySemibold,
+    fontSize: 14,
+    color: C.error,
+  },
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 24,
+  },
+  resendText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: C.textMuted,
+  },
+  resendTime: {
+    fontFamily: FONTS.bodySemibold,
+    color: C.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  pill: {
+    height: 48,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.tintFill,
+  },
+  pillWaiting: {
+    backgroundColor: C.neutralFill,
+  },
+  pillText: {
+    fontFamily: FONTS.bodySemibold,
+    fontSize: 15,
+    color: C.brand,
+  },
+});

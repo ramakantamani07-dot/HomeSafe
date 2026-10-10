@@ -8,6 +8,7 @@ root.
 | Document | What it is |
 |---|---|
 | [`plan/IMPLEMENTATION_PHASES.md`](plan/IMPLEMENTATION_PHASES.md) | **The current plan, and the status table.** What is built, what is left, and every decision taken along the way. Start here. |
+| [`architecture/END_TO_END_FLOW.html`](architecture/END_TO_END_FLOW.html) | **Explaining the app to someone.** Every flow from screen to server as diagrams: 40 screens, 30 data models, 22 server functions, and where each outside service (SMS, mobile operator, maps) plugs in. Open in a browser. |
 | [`architecture/ARCHITECTURE.md`](architecture/ARCHITECTURE.md) | The pattern we follow (ports and adapters), the layering rules, and the rules for new work. |
 | [`architecture/ARCHITECTURE_DEBT.md`](architecture/ARCHITECTURE_DEBT.md) | Audited debt with reproduction commands. Phase 0 cleared it; kept as the record of what was wrong and why. |
 | [`architecture/DEPENDENCIES.md`](architecture/DEPENDENCIES.md) | The gate a third-party library must clear, and decisions on record. |
@@ -25,7 +26,8 @@ docs govern *how*.
 | [`features/design-handoff.md`](features/design-handoff.md) | Superseded by Option 15 (**G1**, resolved 2 Oct). Kept for the palette's history only. |
 
 > **Mockups live with their images, not here.**
-> Option 15 boards: `assets/imgs/*.png` — `home`, `search in sheet`, `route`,
+> Removed from the repo on 10 Oct 2026 — the app never loaded them; recover from
+> git history. Option 15 boards: `assets/imgs/*.png` — `home`, `search in sheet`, `route`,
 > `ontheway`, `feelinguneasy`, `arrived`, `soshold`, `fakecall`, `settings`,
 > `familyandcircle`, `addsome`, `consentandfind`, `samresult`, `flow`.
 > Journey-flow boards: `assets/screens/*.png` (01–10).

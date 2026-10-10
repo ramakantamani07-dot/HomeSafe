@@ -10,7 +10,7 @@ emergency. Expo SDK 54 · React Native 0.81 · TypeScript · Firebase.
 |---|---|
 | [`docs/plan/IMPLEMENTATION_PHASES.md`](docs/plan/IMPLEMENTATION_PHASES.md) | **Start here.** Status table (what is built), known gaps, and every decision taken with its reasoning. |
 | [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) | Ports and adapters. The layering rules are enforced by a script, not by convention. |
-| [`docs/features/option15-ui-spec.md`](docs/features/option15-ui-spec.md) | The UI being built. Boards are `AI1`–`AI12` in `assets/imgs/`. |
+| [`docs/features/option15-ui-spec.md`](docs/features/option15-ui-spec.md) | The UI being built. Boards `AI1`–`AI12` were removed from `assets/imgs/` on 10 Oct 2026; they are in git history. |
 | [`docs/architecture/DEPENDENCIES.md`](docs/architecture/DEPENDENCIES.md) | The gate a third-party library must clear before it is added. |
 | [`docs/reference/RUNNING.md`](docs/reference/RUNNING.md) | Running on a device, and the build failures that have actually happened. |
 

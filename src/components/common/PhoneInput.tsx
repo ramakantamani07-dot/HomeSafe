@@ -9,27 +9,17 @@ import {
 
 import { useTheme } from '../../context/ThemeContext';
 import { ELEVATION, RADIUS, SPACING, TYPOGRAPHY } from '../../config/theme';
+import { deviceRegion } from '../../config/markets';
+import { COUNTRIES, countryForRegion, type Country } from '../../utils/phoneNumber';
 
-const COUNTRY_CODES = [
-  { code: '+91', flag: '🇮🇳', name: 'India' },
-  { code: '+1', flag: '🇺🇸', name: 'USA' },
-  { code: '+44', flag: '🇬🇧', name: 'UK' },
-  { code: '+61', flag: '🇦🇺', name: 'Australia' },
-  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
-  { code: '+971', flag: '🇦🇪', name: 'UAE' },
-  { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
-] as const;
+// Longest dial code first, so "+971" is matched before a shorter prefix.
+const SORTED_CODES = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
 
-type CountryCode = typeof COUNTRY_CODES[number];
-
-// Sort longest-first so "+971" is matched before "+9" would be (if it existed).
-const SORTED_CODES = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
-
-function parseE164(value: string): { country: CountryCode; local: string } | null {
+function parseE164(value: string): { country: Country; local: string } | null {
   if (!value.startsWith('+')) return null;
   for (const cc of SORTED_CODES) {
-    if (value.startsWith(cc.code)) {
-      return { country: cc, local: value.slice(cc.code.length) };
+    if (value.startsWith(cc.dialCode)) {
+      return { country: cc, local: value.slice(cc.dialCode.length) };
     }
   }
   return null;
@@ -47,20 +37,22 @@ interface PhoneInputProps {
 export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: PhoneInputProps) {
   const theme = useTheme();
   const parsed = initialValue ? parseE164(initialValue) : null;
-  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(parsed?.country ?? COUNTRY_CODES[0]);
+  const [selectedCountry, setSelectedCountry] = useState<Country>(
+    () => parsed?.country ?? countryForRegion(deviceRegion()),
+  );
   const [localNumber, setLocalNumber] = useState(parsed?.local ?? '');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleNumberChange = (text: string) => {
     const digits = text.replace(/\D/g, '');
     setLocalNumber(digits);
-    onPhoneChange(`${selectedCountry.code}${digits}`);
+    onPhoneChange(`${selectedCountry.dialCode}${digits}`);
   };
 
-  const handleCountrySelect = (country: CountryCode) => {
+  const handleCountrySelect = (country: Country) => {
     setSelectedCountry(country);
     setPickerOpen(false);
-    onPhoneChange(`${country.code}${localNumber}`);
+    onPhoneChange(`${country.dialCode}${localNumber}`);
   };
 
   return (
@@ -73,7 +65,7 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
           activeOpacity={0.7}
         >
           <Text style={styles.flag}>{selectedCountry.flag}</Text>
-          <Text style={[styles.countryCode, { color: theme.textPrimary }]}>{selectedCountry.code}</Text>
+          <Text style={[styles.countryCode, { color: theme.textPrimary }]}>{selectedCountry.dialCode}</Text>
           <Text style={[styles.caret, { color: theme.textSecondary }]}>▾</Text>
         </TouchableOpacity>
 
@@ -99,18 +91,18 @@ export function PhoneInput({ onPhoneChange, initialValue, onSubmit, disabled }: 
             ELEVATION.float,
           ]}
         >
-          {COUNTRY_CODES.map((c) => (
-            <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: c.code === selectedCountry.code }}
-              key={c.code}
+          {COUNTRIES.map((c) => (
+            <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected: c.dialCode === selectedCountry.dialCode }}
+              key={c.iso}
               style={[
                 styles.pickerItem,
-                c.code === selectedCountry.code && { backgroundColor: theme.accentMuted },
+                c.dialCode === selectedCountry.dialCode && { backgroundColor: theme.accentMuted },
               ]}
               onPress={() => handleCountrySelect(c)}
             >
               <Text style={styles.pickerFlag}>{c.flag}</Text>
               <Text style={[styles.pickerName, { color: theme.textPrimary }]}>{c.name}</Text>
-              <Text style={[styles.pickerCode, { color: theme.textSecondary }]}>{c.code}</Text>
+              <Text style={[styles.pickerCode, { color: theme.textSecondary }]}>{c.dialCode}</Text>
             </TouchableOpacity>
           ))}
         </View>

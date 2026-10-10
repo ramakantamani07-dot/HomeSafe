@@ -7,7 +7,7 @@ compound.
 |---|---|
 | Option 15 UI redesign | `docs/features/option15-ui-spec.md` |
 | Network location (basic-phone members) | `docs/features/network-location-spec.md` |
-| Design mockups | `assets/imgs/*.png` |
+| Design mockups | `assets/imgs/*.png` — removed 10 Oct 2026, in git history before 10 Oct 2026 |
 | Current flow (built) | `docs/features/journey-flow-spec.md` |
 | Current palette (built) | `docs/features/design-handoff.md` |
 | Known debt | `docs/architecture/ARCHITECTURE_DEBT.md` |
@@ -15,7 +15,7 @@ compound.
 
 ---
 
-## Status at 8 Oct 2026
+## Status at 10 Oct 2026
 
 | Phase | State | What is left |
 |---|---|---|
@@ -28,7 +28,7 @@ compound.
 | 5b · Family redesign | **All steps done, against mocks** | Device check of the invite push and Ask "OK?" needs two real accounts |
 | 5c · Trusted contacts + Profile | **Done, against mocks (9 Oct)** | SMS to contacts needs an SMS provider (G3) |
 | 6 · Network location | **6.1–6.6 done, against mocks** (resend D26, safe zones D27, SOS and check-ins by text or missed call D28) | Real operator, SMS and voice providers (G3) · device verification on Firebase |
-| 7 · Sign-in v6 | Not started | `AH1`–`AH4` boards never shared |
+| 7 · Sign-in | **Built against mocks (10 Oct)**, to the v8 boards `AN1`–`AN4` (D29) | Look on a device · code auto-fill needs real SMS, so real phone auth first (Firebase test plan step 0) |
 | 8 · Hardening | **Desk work done (9 Oct)** | Battery walk on a release build (`docs/reference/OPERATIONS.md`) · log-based metrics and alerts set up once Firebase is live |
 
 `AI5` was started early and deliberately: `AI4`'s "Feeling uneasy?" pill needs a
@@ -72,7 +72,8 @@ suite cannot see. Each was fixed at its cause, not at the screen:
 React Native + Hermes, 11 MB the native binary, 7.1 MB the JS bundle and
 3.1 MB images and fonts. The ~98 MB debug install is the dev client plus a
 33 MB debug library, neither of which ships. Unused source images in `assets/`
-(`bg1`, `bg2`, `sj1`–`sj4`, ~9 MB) are not bundled and do not affect app size.
+(`bg1`, `bg2`, `sj1`–`sj4`, ~9 MB) were never bundled; they and the rest of the
+unreferenced images were deleted on 10 Oct (still in git history).
 
 **Memory.** Swept every timer, listener and subscription:
 
@@ -191,17 +192,17 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Work | Phase |
 |---|---|
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
+| Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
 
 **Waiting on a decision or an input**
 
 | Item | Needs |
 |---|---|
-| Sign-in v6 (Phase 7) | `AH1`–`AH4` boards |
 | Pocket mode (D14) | What it should do |
 | Open places on the way (D4) | Per-journey Places cost measured before the flag is turned on |
 | Real network location, SMS (G3) | Operator aggregator, SMS providers, TRAI DLT, legal review |
 | Revocation offline window; short-lived operator grants on the Phase 8 list? | Two open checkboxes in the revocation design |
-| Known gaps below | Artwork (Android notification icon, app icon symbol), a support-email domain, EAS project rename, branding on OTP / biometric screens |
+| Known gaps below | Artwork (Android notification icon, app icon symbol), a support-email domain, EAS project rename, biometric-screen branding |
 
 ### Known gaps, none of them blocking
 
@@ -209,7 +210,6 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 |---|---|---|
 | Notification icon is the full-colour logo | `app.config.ts` | Android needs a monochrome silhouette or it renders a white blob |
 | `BiometricGate` still uses shield + wordmark | `src/components/security/` | Everything else now uses the real logo |
-| `otp.tsx` has no brand lockup | `app/(auth)/` | Decide whether branding carries through the flow |
 | Support email is `hello@homesafeapp.com` | Terms, Privacy | Survived the rename — the domain is a real-world decision, not ours to invent |
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
@@ -313,6 +313,63 @@ offline window; nothing short of short-lived operator grants does.
 - [x] Layer 3 as a Firestore trigger — **accepted 8 Oct** (D23)
 - [ ] Is the offline window acceptable, mitigated by layer 1?
 - [ ] Should short-lived operator grants go on the Phase 8 hardening list rather than being dismissed?
+
+---
+
+## Decisions settled 10 Oct 2026 — Phase 7 sign-in (v8 boards)
+
+### D29 · Sign-in is built to `AN1`–`AN4`, not `AH1`–`AH4`
+
+The `AH` boards Option 15 §4 names were never shared; `assets/signin-v8/`
+(deleted 10 Oct after the build; never committed) arrived instead, with the same four screens (phone, code, you're in, wrong
+code) and a new 14 s "walk home" story. The spec's behaviour rules are kept;
+where the build differs, this is why.
+
+- **The story plays in a web view, not Lottie or Rive.** It is an SVG
+  animated with SMIL, which WKWebView and Android's WebView play natively;
+  `react-native-webview` is already installed. Lottie would add a native
+  dependency to draw what the platform already draws. Decorative, so hidden
+  from screen readers and untouchable. The still frame shows under Reduce
+  Motion, and whenever the screen is covered by the next one — the web view
+  is unmounted, not left animating offscreen.
+- **No `libphonenumber-js`.** It has one maintainer, which fails
+  `DEPENDENCIES.md`, and ships ~240 countries to validate seven. Instead
+  `src/utils/phoneNumber.ts` holds each country's **mobile** range — stricter
+  than a general validator, which passes a landline that can never receive
+  the code. `PhoneInput` now reads the same list.
+- **Country from the device region** (`Intl`, as `markets.ts` already does),
+  not the SIM — reading the SIM needs a native module.
+- **No "Call me instead".** Firebase phone auth has no voice code, so the
+  button would do nothing (principle 4). Returns when a provider offers it.
+- **Five wrong codes lock that number for ten minutes**, counted in
+  `AuthService` from a `WrongCodeError` the adapter throws only for a wrong
+  code — a dropped connection never costs a try. In memory: a restart resets
+  it, and Firebase's own server limit still applies. Sending a code is
+  refused while locked, so no text is wasted.
+- **One hidden field behind the six boxes**, marked `oneTimeCode` /
+  `sms-otp`. The old six separate inputs broke auto-fill: iOS put the whole
+  code into the first box. Android's SMS Retriever is not built; Android's
+  autofill service fills the field instead.
+- **"You're in" asks for while-in-use location only**; "always" stays with
+  the first journey (`allow-location`). If location is already on, it says
+  so rather than asking. The navigation guard leaves a signed-in user on the
+  code and "You're in" screens, or AN3 would never be seen.
+- **The age confirmation stays**, though the boards drop it: it is what
+  stops an account being opened for a child, and a board is not a reason to
+  remove a safeguard.
+- **Drawn on white in both themes** (`FIXED_PALETTES.signIn`): the artwork is
+  a white scene. Gradients use React Native's `experimental_backgroundImage`
+  (New Architecture), each with a solid fallback; the wordmark is solid blue,
+  since a gradient cannot be clipped to text.
+- **The DEV pill is compiled out**: defined only under `__DEV__` and rendered
+  only behind `__DEV__ &&`. Checked: a release export does not contain its
+  text, and a test keeps every use behind the guard.
+- **One brand, the boards' gradient** (settled 10 Oct, at the owner's
+  request). The kids logo was orange; every copy of it — app icon, Android
+  adaptive icon, splash, `logo-source` and the native iOS
+  copies — had its warm hues remapped onto blue → cyan → mint, shading and
+  whites kept. The icon and splash are native assets, so they show only after
+  a native rebuild.
 
 ---
 
@@ -1114,7 +1171,7 @@ persists through the existing storage ports.
 
 ## Phase 5c · Trusted contacts and Profile — DONE against mocks (9 Oct 2026)
 
-Boards in `assets/trust/`: trusted contacts empty and list, add trusted
+Boards in `assets/trust/` (removed 10 Oct 2026, in git history): trusted contacts empty and list, add trusted
 contact, profile, and `flow.png`.
 
 ### What changed
@@ -1160,7 +1217,7 @@ contact, profile, and `flow.png`.
 ## Phase 5b · Family redesign — PLANNED (8 Oct 2026)
 
 **Goal:** replace the current Family page and Invite Family Member screen with
-the Option 15 family flow. Design source: `assets/imgs/family/`.
+the Option 15 family flow. Design source: `assets/imgs/family/` (removed 10 Oct 2026, in git history).
 
 | Board | File | Replaces |
 |---|---|---|
@@ -1412,9 +1469,9 @@ endpoints** · retention job deletes raw location after the configured window.
 
 ---
 
-## Phase 7 · Sign-in v6
+## Phase 7 · Sign-in — BUILT against mocks (10 Oct 2026), to `AN1`–`AN4`; see D29
 
-**Goal:** `AH1`–`AH4`.
+**Goal:** `AH1`–`AH4` (superseded by the v8 boards `AN1`–`AN4`, see D29).
 
 Animated background (Lottie or Rive, 14 s loop) with a still frame under
 reduce-motion · country picker defaulting from SIM/locale · `libphonenumber-js`
@@ -1465,6 +1522,7 @@ whenever capacity allows.
 | 2 Oct 2026 | **Phase 3** — open places behind a flag, off by default | Timeline ships without it; enable once per-journey Places cost is measured |
 | 8 Oct 2026 | **Revocation** — three layers, layer 3 a Firestore trigger | D23 |
 | 8 Oct 2026 | **F1–F4** — family redesign: contacts-only recognition, share sheet until SMS, new `theyAreMy` field, watchers shown by name | Phase 5b |
+| 10 Oct 2026 | **D29** — sign-in to the v8 boards: SMIL story in a web view, per-country mobile rules, no "Call me instead" | Phase 7 |
 
 ## Still open
 

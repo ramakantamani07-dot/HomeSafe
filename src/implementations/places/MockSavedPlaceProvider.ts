@@ -13,7 +13,7 @@ function delay(ms: number): Promise<void> {
 /**
  * In-memory saved places for dev mode.
  *
- * Seeds the exact list drawn in assets/screens/02: Home with an address, Work
+ * Seeds the exact list drawn in journey-flow board 02: Home with an address, Work
  * with an address, and School as a named slot with none — so the
  * "+ Add address → screen 03" branch of the flow is reachable on first run
  * without any setup.

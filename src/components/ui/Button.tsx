@@ -10,14 +10,16 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../../context/ThemeContext';
-import { FONTS, RADIUS, SPACING, TYPOGRAPHY } from '../../config/theme';
+import { FIXED_PALETTES, FONTS, RADIUS, SPACING, TYPOGRAPHY } from '../../config/theme';
 import { Icon, type IconName } from './Icon';
 
 // 'strong' is the design's main CTA: a solid ink pill ("Start journey",
 // "Save place", "Done", "Continue"). 'primary' stays the teal accent fill for
 // affirmative actions that aren't the page's single main commitment.
+// 'brand' is the logo gradient, used only on sign-in (boards AN1–AN4).
 export type ButtonVariant =
   | 'strong'
+  | 'brand'
   | 'primary'
   | 'secondary'
   | 'destructive'
@@ -90,6 +92,16 @@ function variantStyles(
   isDisabled: boolean,
 ) {
   switch (variant) {
+    case 'brand': {
+      const brand = FIXED_PALETTES.signIn;
+      return {
+        container: isDisabled
+          ? { backgroundColor: brand.disabled }
+          : { backgroundColor: brand.brand, experimental_backgroundImage: brand.buttonGradient },
+        text: { color: brand.onBrand },
+        spinnerColor: brand.onBrand,
+      };
+    }
     case 'strong':
       return {
         container: { backgroundColor: isDisabled ? theme.borderStrong : theme.strong },

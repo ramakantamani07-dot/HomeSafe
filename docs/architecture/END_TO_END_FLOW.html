@@ -1,0 +1,385 @@
+<!doctype html>
+<!-- Source of https://claude.ai/artifact/Nd99vtgjNvE9tiLGxc9u86 (private: share from that page).
+     Open this file in a browser; the diagrams are drawn by Mermaid, loaded from jsDelivr.
+     Counts are as of 10 Oct 2026 — update them here when the code changes. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>wayLoc End to End</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a single reading column with a sticky section index; diagrams and tables
+   break out to their own scroll boxes. Brand: the app's own blue → cyan → mint. */
+:root {
+  --bg: #F7F9FC;
+  --surface: #FFFFFF;
+  --ink: #121722;
+  --muted: #566070;
+  --line: #DFE5EE;
+  --brand: #1E6BFF;
+  --cyan: #0E9DC4;
+  --mint: #12A584;
+  --wait: #B25E00;
+  --wait-bg: #FFF2E0;
+  --live-bg: #E4F6EF;
+  --mock-bg: #EAF1FF;
+  --code-bg: #EEF2F8;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E131B; --surface: #161D28; --ink: #E9EEF6; --muted: #9AA6B8; --line: #283243;
+    --brand: #6E9EFF; --cyan: #4CC9EC; --mint: #4FD9B2; --wait: #FFB45C; --wait-bg: #33240F;
+    --live-bg: #12302A; --mock-bg: #172644; --code-bg: #1E2735; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E131B; --surface: #161D28; --ink: #E9EEF6; --muted: #9AA6B8; --line: #283243;
+  --brand: #6E9EFF; --cyan: #4CC9EC; --mint: #4FD9B2; --wait: #FFB45C; --wait-bg: #33240F;
+  --live-bg: #12302A; --mock-bg: #172644; --code-bg: #1E2735; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--brand); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; }
+.lede { font-size: 1.15rem; color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cyan); }
+
+header.top { display: grid; gap: 14px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 26px; }
+.count { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 2px; }
+.count b { font-family: var(--display); font-size: 2.1rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--brand); }
+.count span { font-weight: 600; }
+.count small { color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
+
+nav.index { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); margin-inline: -20px; padding: 10px 20px; overflow-x: auto; white-space: nowrap; }
+nav.index a { display: inline-block; margin-right: 6px; padding: 5px 11px; border-radius: 999px; text-decoration: none; color: var(--ink); font-size: 0.88rem; font-weight: 600; border: 1px solid var(--line); background: var(--surface); }
+nav.index a:hover, nav.index a:focus-visible { border-color: var(--brand); color: var(--brand); outline: none; }
+
+section { display: grid; gap: 16px; padding-top: 48px; scroll-margin-top: 56px; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; min-width: 640px; display: flex; justify-content: center; background: transparent; }
+.steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; min-width: 0; }
+.steps li::before { content: counter(s); font-family: var(--mono); font-size: 0.8rem; font-weight: 500; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--mock-bg); color: var(--brand); margin-top: 1px; }
+.note { border-left: 3px solid var(--mint); padding: 4px 0 4px 14px; color: var(--muted); max-width: 72ch; }
+.note b { color: var(--ink); }
+
+.table-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 0.93rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.group { font-family: var(--display); font-weight: 700; background: var(--bg); color: var(--ink); }
+.pill { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.live { background: var(--live-bg); color: var(--mint); }
+.pill.mock { background: var(--mock-bg); color: var(--brand); }
+.pill.wait { background: var(--wait-bg); color: var(--wait); }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.group-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.group-card h3 { display: flex; justify-content: space-between; gap: 8px; }
+.group-card h3 em { font-style: normal; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips code { background: var(--code-bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; color: var(--muted); font-size: 0.88rem; }
+footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 520px) { .wrap { padding-block: 24px 60px; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">Product map · as built, 10 Oct 2026</div>
+  <h1>wayLoc, end to end</h1>
+  <p class="lede">You tell wayLoc where you're going, the people you choose can see you get there, and there are ways to get help that don't mean declaring an emergency. This page follows every flow from the screen to the server, and marks each place where an outside company's service plugs in.</p>
+  <div class="counts">
+    <div class="count"><b>40</b><span>Screens</span><small>35 in the app, 3 sign-in, 2 legal</small></div>
+    <div class="count"><b>30</b><span>Data models</span><small>The shapes of everything the app knows</small></div>
+    <div class="count"><b>22</b><span>Server functions</span><small>Cloud Functions that run without the phone</small></div>
+    <div class="count"><b>25</b><span>Database collections</span><small>In Cloud Firestore; 23 readable by rules, 2 server-only</small></div>
+    <div class="count"><b>28</b><span>Connectors</span><small>"Ports": each one swaps a fake for a real service</small></div>
+    <div class="count"><b>12</b><span>Outside services</span><small>4 live today, 5 built, 3 waiting on contracts</small></div>
+  </div>
+</header>
+
+<nav class="index" aria-label="Sections">
+  <a href="#big-picture">Big picture</a><a href="#sign-in">Sign-in</a><a href="#journey">A journey</a><a href="#help">Getting help</a><a href="#people">Family &amp; contacts</a><a href="#basic-phone">Basic phones</a><a href="#functions">Server functions</a><a href="#data">Data models</a><a href="#providers">Outside services</a>
+</nav>
+
+<section id="big-picture">
+  <div class="eyebrow">How it fits together</div>
+  <h2>The big picture</h2>
+  <p>Three layers. The phone app does everything it can on the device. Firebase stores data and runs the server functions. Outside services do the jobs we can't: maps, routes, texts, and locating a phone that has no app.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph PHONE["Traveller's or guardian's phone"]
+    S["Screens"] --> H["Hooks and state"] --> SV["Services: the rules"] --> P["28 connectors (ports)"]
+  end
+  subgraph FB["Firebase (Google)"]
+    AU["Authentication: phone number sign-in"]
+    DB[("Firestore database: 25 collections")]
+    CF["22 Cloud Functions"]
+    FCM["Cloud Messaging: push"]
+  end
+  subgraph OUT["Outside services"]
+    MAP["Apple Maps and MapKit: map and nearby places"]
+    GEO["Phone's own geocoder: address search"]
+    OSRM["OSRM: walking routes"]
+    SMS["SMS and voice provider: texts, missed calls"]
+    OP["Mobile operator (CAMARA): locate a basic phone"]
+  end
+  P --> AU
+  P --> DB
+  P --> MAP
+  P --> GEO
+  P --> OSRM
+  DB -- "a write triggers" --> CF
+  CF --> FCM --> PHONE
+  CF --> SMS
+  CF --> OP
+  SMS -- "replies and missed calls" --> CF
+  </pre></div>
+  <p class="note"><b>Why connectors matter.</b> Every outside service sits behind a connector with a fake ("mock") version. That's why the whole app runs today with no backend: flip one setting and the same screens talk to the real service.</p>
+</section>
+
+<section id="sign-in">
+  <div class="eyebrow">Flow 1</div>
+  <h2>Signing in</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  A["Phone number screen: country from the phone, number checked as a real mobile"] -- "Send code" --> B["Firebase Auth texts a 6-digit code"]
+  B --> C["Code screen: fills itself from Messages, signs in on the 6th digit"]
+  C -- "wrong code" --> D["Red boxes: N tries left. 5 wrong locks this number for 10 minutes"]
+  D --> C
+  C -- "right code" --> E["You're in: explains location, asks While Using only"]
+  E --> F["Home"]
+  </pre></div>
+  <p class="note"><b>Outside service:</b> Firebase Authentication sends the text. In development a fake accepts any number and any code. Before real use, sign-in has to move to Firebase's native phone verification (the plan's "step 0").</p>
+</section>
+
+<section id="journey">
+  <div class="eyebrow">Flow 2 · the core of the app</div>
+  <h2>A journey, from Home to Arrived</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  H["Home: full-screen map with a pull-up sheet"] --> W["Where to? Search in the sheet"]
+  W -- "address lookup" --> G(["Phone's own geocoder"])
+  W --> R["Route: 3 to 5 steps and an ETA"]
+  R -- "walking route" --> O(["OSRM routing"])
+  R --> ST["Start. First time only: allow location"]
+  ST --> J[("journeys record created")]
+  J -.-> F1["onJourneyStarted: tells contacts who opted in"]
+  ST --> OW["On the way: turn banner, ETA, check-in countdown"]
+  OW -- "location updates, sent in batches" --> LU[("locationUpdates")]
+  LU --> WL["Guardians: Watch live"]
+  OW --> CI{"Check-in due"}
+  CI -- "I'm OK, even from the lock screen" --> OW
+  CI -- "no answer" --> MC["Missed check-in"]
+  MC -.-> F2["onMissedCheckIn: push or text to contacts"]
+  OW --> SC{"Safety check: late, stopped or off route"}
+  SC -- "no answer" --> ESC["Escalated"]
+  ESC -.-> F3["onSafetyCheckEscalated: alert, journey stays live"]
+  OW -- "within 100 m for 20 s" --> AR["Arrived: private walk feedback, location stops"]
+  </pre></div>
+  <p class="note"><b>Backstops on the server.</b> The phone detects a missed check-in or an unanswered safety check first. If the phone is off or out of signal, two scheduled functions catch it anyway: <code>detectMissedCheckIns</code> every 2 minutes and <code>escalateOverdueSafetyChecks</code> every minute.</p>
+</section>
+
+<section id="help">
+  <div class="eyebrow">Flow 3</div>
+  <h2>Getting help, from uneasy to emergency</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  U["Feeling uneasy? pill"] --> U1["Call guardian"]
+  U --> U2["Fake call: a convincing incoming call"]
+  U --> U3["Location shared more often for 15 minutes"]
+  S["SOS button"] -- "hold 3 s" --> T1["Guardians alerted with live location"]
+  S -- "hold 6 s" --> T2["Also offers 999 or 112, from the phone's region"]
+  T1 --> X["10 seconds to cancel"]
+  T1 --> SE[("sosEvents")]
+  SE -.-> F["onSOSTriggered: push to contacts with the app, text to the rest"]
+  T1 -- "no data signal" --> OFF["Queued on the phone. Text my contacts now opens Messages"]
+  </pre></div>
+  <p class="note"><b>Nobody is called automatically.</b> Emergency mode offers to call the first trusted contact; the person decides.</p>
+</section>
+
+<section id="people">
+  <div class="eyebrow">Flow 4</div>
+  <h2>Family and trusted contacts</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  subgraph FAM["Family: people who use the app"]
+    I["Invite someone from your contacts"] -- "is this number on wayLoc?" --> LI["lookupInvitee"]
+    I --> INV[("familyInvitations")]
+    INV -.-> OI["onFamilyInvitationCreated: push to them"]
+    OI --> ACC["They accept"] --> CON[("familyConnections")]
+    CON --> LIVE["See each other's status and Watch live"]
+    LIVE --> ASK["Ask OK?"] --> AO["askMemberOk: push with an I'm OK button"]
+  end
+  subgraph TC["Trusted contacts: people who get alerts"]
+    ADD["Add a contact, choose what they're alerted to"] --> CT[("contacts")]
+    CT -.-> TA["onTrustedContactAdded: text them so SOS isn't the first they hear"]
+    TEST["Send a test alert"] --> STA["sendTestAlert, at most once an hour"]
+  end
+  </pre></div>
+  <p class="note"><b>Push or text.</b> For every alert, contacts with the app get a push and everyone else gets a text through the SMS provider. A shared tracking link opens a web page served by <code>getSharedJourney</code>.</p>
+</section>
+
+<section id="basic-phone">
+  <div class="eyebrow">Flow 5 · where most outside services plug in</div>
+  <h2>Basic phones: finding someone who has no app</h2>
+  <p>A grandparent or a child with a basic phone can still be found, through their mobile operator, but only after they say yes by text. Nothing is locatable until the consent reaches <b>ACTIVE</b>.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["Guardian adds Sam: name and number"] --> C1[("consents: PENDING_SMS")]
+  C1 -.-> RC["requestConsentSms"]
+  RC ==> SMS1(["SMS provider sends: reply YES or STOP"])
+  SMS1 --> M["Sam's basic phone"]
+  M -- "replies YES" --> SMS2(["SMS provider webhook"])
+  SMS2 ==> IN["inboundConsentSms: checks the signature, reads the word"]
+  IN --> C2[("SMS_APPROVED")]
+  C2 ==> OPC(["Operator consent (CIBA)"])
+  OPC -- "operator asks Sam itself" --> C3[("OPERATOR_PENDING")]
+  C3 -- "approved" --> C4[("ACTIVE")]
+  C4 --> FIND["Guardian taps Find"]
+  FIND --> LM["locateMember: holds Sam? ACTIVE? market on? within the hourly limit?"]
+  LM ==> OPL(["Operator: CAMARA Location Retrieval"])
+  OPL --> CIRCLE["A circle on the map: approximate, never a dot"]
+  LM --> AUD[("locateAudits: every lookup recorded")]
+  M -- "texts STOP, any time" --> IN
+  IN --> REV[("REVOKED")]
+  REV -.-> OCR["onConsentRevoked: tidy up, text Sam to confirm"]
+  </pre></div>
+  <div class="legend">
+    <span><b>Rounded boxes</b> are outside services</span>
+    <span><b>Thick arrows</b> are calls to them</span>
+    <span><b>Dotted arrows</b> are functions a database write sets off</span>
+  </div>
+
+  <h3>Safe zones and asking for help</h3>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  Z["Guardian draws a zone: 500 m to 5 km, up to 5"] --> SZ[("safeZones")]
+  SZ -.-> OZ["onSafeZoneCreated: texts Sam once"]
+  CS["checkSafeZones, every 15 minutes"] ==> V(["Operator: inside this circle? yes or no"])
+  V -- "2 agreeing answers flip it" --> ZE[("zoneEvents")] --> PUSH["Sam reached School, approximate"]
+  H["Sam texts HELP or rings our number"] ==> WH(["SMS or voice provider webhook"])
+  WH --> HB["inboundConsentSms or inboundMemberCall"]
+  HB --> AL["Every ACTIVE guardian: push and text with an approximate location"]
+  HB --> BACK["Text back to Sam: who was told, and call 112 or 999"]
+  </pre></div>
+  <p class="note"><b>Status today.</b> All of this runs end to end against fake operator and SMS services and the local database emulator. Going live needs an operator aggregator contract, SMS and voice providers for the UK and India, India's TRAI DLT registration, and a legal review (decision G3).</p>
+</section>
+
+<section id="functions">
+  <div class="eyebrow">The server</div>
+  <h2>All 22 server functions</h2>
+  <p>A function runs in one of five ways: when a database record is written, on a timer, when the app calls it, when an outside service calls a web address, or when an account is deleted.</p>
+  <div class="table-box"><table>
+    <thead><tr><th>Function</th><th>Runs when</th><th>What it does</th><th>Outside service</th></tr></thead>
+    <tbody>
+      <tr><td class="group" colspan="4">Alerts to guardians and contacts · 6</td></tr>
+      <tr><td><code>onSOSTriggered</code></td><td>SOS record created</td><td>Alerts every trusted contact</td><td>Push; SMS for contacts without the app</td></tr>
+      <tr><td><code>onMissedCheckIn</code></td><td>Journey becomes Missed check-in</td><td>Alerts contacts, once</td><td>Push; SMS</td></tr>
+      <tr><td><code>onSafetyCheckEscalated</code></td><td>Safety check escalated</td><td>Alerts contacts; journey stays live</td><td>Push; SMS</td></tr>
+      <tr><td><code>onJourneyStarted</code></td><td>Journey created</td><td>Tells contacts who switched it on (off by default)</td><td>Push; SMS</td></tr>
+      <tr><td><code>onTrustedContactAdded</code></td><td>Contact added</td><td>Texts the new contact</td><td>SMS</td></tr>
+      <tr><td><code>sendTestAlert</code></td><td>App calls it</td><td>A marked TEST alert, at most once an hour</td><td>Push; SMS</td></tr>
+      <tr><td class="group" colspan="4">Backstops on a timer · 2</td></tr>
+      <tr><td><code>detectMissedCheckIns</code></td><td>Every 2 minutes</td><td>Catches missed check-ins when the phone can't</td><td>—</td></tr>
+      <tr><td><code>escalateOverdueSafetyChecks</code></td><td>Every minute</td><td>Escalates unanswered safety checks</td><td>—</td></tr>
+      <tr><td class="group" colspan="4">Basic phones · 8</td></tr>
+      <tr><td><code>requestConsentSms</code></td><td>Consent created</td><td>Texts the member asking YES or STOP</td><td>SMS provider</td></tr>
+      <tr><td><code>resendConsentRequest</code></td><td>App calls it</td><td>Sends the request again, limited</td><td>SMS provider</td></tr>
+      <tr><td><code>inboundConsentSms</code></td><td>SMS provider calls our web address</td><td>Reads YES, STOP, HELP and check-in words</td><td>SMS provider; operator</td></tr>
+      <tr><td><code>inboundMemberCall</code></td><td>Voice provider calls our web address</td><td>A missed call counts as HELP</td><td>Voice provider; operator</td></tr>
+      <tr><td><code>locateMember</code></td><td>Guardian taps Find</td><td>Checks every rule, then asks the operator</td><td>Operator (CAMARA)</td></tr>
+      <tr><td><code>onConsentRevoked</code></td><td>Consent becomes REVOKED</td><td>Records it, texts the member, cleans up</td><td>SMS provider</td></tr>
+      <tr><td><code>checkSafeZones</code></td><td>Every 15 minutes</td><td>Asks "inside this zone?" for ACTIVE members</td><td>Operator (CAMARA)</td></tr>
+      <tr><td><code>onSafeZoneCreated</code></td><td>Zone created</td><td>Tells the member once</td><td>SMS provider</td></tr>
+      <tr><td class="group" colspan="4">Family · 3</td></tr>
+      <tr><td><code>lookupInvitee</code></td><td>App calls it</td><td>Is this number on wayLoc? Yes or no only</td><td>—</td></tr>
+      <tr><td><code>onFamilyInvitationCreated</code></td><td>Invitation created</td><td>Push to the person invited</td><td>Push</td></tr>
+      <tr><td><code>askMemberOk</code></td><td>App calls it</td><td>Push asking "are you OK?"</td><td>Push</td></tr>
+      <tr><td class="group" colspan="4">Sharing and data · 3</td></tr>
+      <tr><td><code>getSharedJourney</code></td><td>Someone opens a tracking link</td><td>Serves one shared journey to the web page</td><td>wayloc-web (Vercel)</td></tr>
+      <tr><td><code>enforceDataRetention</code></td><td>Every 24 hours</td><td>Deletes data past its keep-by date; lookup locations after 30 days</td><td>—</td></tr>
+      <tr><td><code>onUserAccountDeleted</code></td><td>An account is deleted</td><td>Finishes deleting everything, even if the app was interrupted</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><b>By trigger:</b> 9 run on a database write, 4 on a timer, 5 when the app calls them, 3 at a web address for outside services, and 1 on account deletion.</p>
+</section>
+
+<section id="data">
+  <div class="eyebrow">What the app knows</div>
+  <h2>30 data models</h2>
+  <p>A data model is the shape of one kind of thing, written once in <code>src/models/</code> and used by the screens, the rules and the tests.</p>
+  <div class="groups">
+    <div class="group-card"><h3>Journeys <em>9</em></h3><div class="chips"><code>Journey</code><code>JourneyPreferences</code><code>JourneyTimeline</code><code>JourneyShare</code><code>LocationUpdate</code><code>CheckIn</code><code>SafetyCheck</code><code>AlertRules</code><code>WalkFeedback</code></div></div>
+    <div class="group-card"><h3>Basic phones <em>6</em></h3><div class="chips"><code>BasicPhoneMember</code><code>Consent</code><code>ConsentKeywords</code><code>LocateAudit</code><code>MemberEvent</code><code>SafeZone</code></div></div>
+    <div class="group-card"><h3>Account and settings <em>6</em></h3><div class="chips"><code>User</code><code>SignIn</code><code>Permission</code><code>SafetyPreferences</code><code>TrackingConfig</code><code>DataRetentionPolicy</code></div></div>
+    <div class="group-card"><h3>Places and maps <em>4</em></h3><div class="chips"><code>Place</code><code>MapModels</code><code>RouteResult</code><code>SafePlace</code></div></div>
+    <div class="group-card"><h3>Safety <em>3</em></h3><div class="chips"><code>SOS</code><code>UneasyEvent</code><code>FakeCall</code></div></div>
+    <div class="group-card"><h3>People <em>2</em></h3><div class="chips"><code>Contact</code><code>Family</code></div></div>
+  </div>
+  <h3>Where they're stored: 25 database collections</h3>
+  <div class="chips">
+    <code>users</code><code>journeys</code><code>locationUpdates</code><code>checkIns</code><code>safetyChecks</code><code>sosEvents</code><code>uneasyEvents</code><code>walkFeedback</code><code>savedPlaces</code><code>contacts</code><code>journeyShares</code><code>familyInvitations</code><code>familyConnections</code><code>familyStatus</code><code>sharedStatus</code><code>watchers</code><code>basicPhoneMembers</code><code>consents</code><code>consentEvents</code><code>locateAudits</code><code>memberEvents</code><code>safeZones</code><code>zoneEvents</code><code>smsInbound</code><code>okRequests</code>
+  </div>
+  <p class="note"><b>Rules guard every read and write.</b> Walk feedback is private, so guardians can't read it, and a phone can never set a consent to ACTIVE; only the server can. The last two collections are server-only.</p>
+</section>
+
+<section id="providers">
+  <div class="eyebrow">Where the outside world plugs in</div>
+  <h2>12 outside services</h2>
+  <div class="legend">
+    <span class="pill live">Live</span> works on a real phone today
+    <span class="pill mock">Built</span> written and tested; needs setup or credentials
+    <span class="pill wait">Waiting</span> needs a contract first; runs on a fake until then
+  </div>
+  <div class="table-box"><table>
+    <thead><tr><th>Service</th><th>Used for</th><th>Plugs in at</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Apple Maps (MapKit)</td><td>The map; nearby open places when uneasy</td><td><code>MapProvider</code>, <code>SafePlaceProvider</code></td><td><span class="pill live">Live</span> free</td></tr>
+      <tr><td>Phone's own geocoder</td><td>Address and postcode search</td><td><code>PlacesProvider</code></td><td><span class="pill live">Live</span> free</td></tr>
+      <tr><td>OSRM</td><td>Walking routes and turn steps</td><td><code>RoutingProvider</code></td><td><span class="pill live">Live</span> public server; self-host for scale</td></tr>
+      <tr><td>Phone services</td><td>Location, contacts picker, Face ID, secure storage, battery, signal</td><td>Expo device connectors</td><td><span class="pill live">Live</span></td></tr>
+      <tr><td>Firebase Authentication</td><td>Sign-in by text code</td><td><code>AuthProvider</code></td><td><span class="pill mock">Built</span> needs native phone verification</td></tr>
+      <tr><td>Cloud Firestore</td><td>Everything stored</td><td>15 Firebase connectors and the rules</td><td><span class="pill mock">Built</span> tested on the emulator; not deployed</td></tr>
+      <tr><td>Cloud Functions</td><td>The 22 server functions</td><td><code>functions/src</code></td><td><span class="pill mock">Built</span> not deployed</td></tr>
+      <tr><td>Firebase Cloud Messaging + Apple push</td><td>Push to guardians and contacts</td><td><code>NotificationProvider</code></td><td><span class="pill mock">Built</span> needs an Apple push key</td></tr>
+      <tr><td>Google Places</td><td>Richer place search (optional)</td><td><code>PlacesProvider</code></td><td><span class="pill mock">Built</span> off; needs a billed key</td></tr>
+      <tr><td>SMS provider, UK and India</td><td>Consent texts, YES, STOP, HELP; texts to contacts without the app</td><td><code>SmsProvider</code> on the server</td><td><span class="pill wait">Waiting</span> provider and TRAI DLT</td></tr>
+      <tr><td>Voice provider</td><td>Missed-call SOS from a basic phone</td><td><code>SmsProvider.parseInboundCall</code></td><td><span class="pill wait">Waiting</span></td></tr>
+      <tr><td>Mobile operator via CAMARA (Vonage, Nokia Network as Code or direct)</td><td>Locate a basic phone, check safe zones, operator consent</td><td><code>OperatorLocationProvider</code>, <code>ConsentStrategy</code></td><td><span class="pill wait">Waiting</span> aggregator contract</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><b>The tracking web page</b> (wayloc-web on Vercel) is ours, not a third party; it reads one shared journey through <code>getSharedJourney</code>.</p>
+</section>
+
+<footer>
+  Counted from the code on the <span class="mono">feat/cd-101_wayLoc-flow-ui</span> branch: <span class="mono">src/models</span>, <span class="mono">src/providers</span>, <span class="mono">functions/src/index.ts</span>, <span class="mono">firestore.rules</span> and <span class="mono">app/</span>. Decisions referenced (G3, D29) are in <span class="mono">docs/plan/IMPLEMENTATION_PHASES.md</span>.
+</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+  });
+</script>
+</body>
+</html>

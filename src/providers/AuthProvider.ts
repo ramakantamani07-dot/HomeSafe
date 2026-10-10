@@ -11,6 +11,10 @@ export interface AuthProvider {
   /**
    * Verifies the OTP code against the session created by sendOTP.
    * Returns the authenticated User on success.
+   *
+   * A code that is simply wrong must reject with `WrongCodeError`
+   * (models/SignIn) — and only that case, since `AuthService` counts those
+   * towards the lock. Network and session failures reject with anything else.
    */
   verifyOTP(code: string): Promise<User>;
 

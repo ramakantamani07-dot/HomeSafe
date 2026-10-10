@@ -12,7 +12,7 @@ import type { PlacesProvider } from '../../providers/PlacesProvider';
  * Local fixture data — no API key, no network, no billing account.
  *
  * Used in dev mode (see AppProviders) and by tests. The fixtures are the
- * exact places drawn in assets/screens/02, so the search screen can be driven
+ * exact places drawn in journey-flow board 02, so the search screen can be driven
  * end to end on a real device before a Places key exists: typing "riverside"
  * produces the three schools in the design, and "SE15 4AB" produces the
  * addresses at that postcode.

@@ -186,6 +186,8 @@ function DeviceIntegrityCheck() {
   return null;
 }
 
+const SIGN_IN_FINISHING_SCREENS = new Set(['otp', 'verified']);
+
 function NavigationGuard({ fontsReady }: { fontsReady: boolean }) {
   const { user, isLoading: authLoading } = useAuth();
   const { isLoading: privacyLoading } = usePrivacy();
@@ -206,9 +208,14 @@ function NavigationGuard({ fontsReady }: { fontsReady: boolean }) {
     // Security) — exempt this group from the redirect in both directions.
     const inLegalGroup = segments[0] === '(legal)';
 
+    // The code screen and "You're in" finish sign-in themselves: the user
+    // exists the moment the code is accepted, but "You're in" (AN3) still
+    // has to be shown before Home.
+    const finishingSignIn = inAuthGroup && SIGN_IN_FINISHING_SCREENS.has((segments as string[])[1]);
+
     if (!user && !inAuthGroup && !inLegalGroup) {
       router.replace('/(auth)/phone');
-    } else if (user && inAuthGroup) {
+    } else if (user && inAuthGroup && !finishingSignIn) {
       router.replace('/(app)/home');
     }
   }, [user, authLoading, privacyLoading, fontsReady, segments]);

@@ -23,6 +23,7 @@ import type { AuthProvider } from '../../providers/AuthProvider';
 import type { Unsubscribe } from '../../providers/types';
 import type { User } from '../../models/User';
 import { defaultUserSettings } from '../../models/User';
+import { WrongCodeError } from '../../models/SignIn';
 
 export class AuthError extends Error {
   constructor(
@@ -162,6 +163,7 @@ export class FirebaseAuthProvider implements AuthProvider {
       return mapFirebaseUser(result.user);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? 'auth/unknown';
+      if (code === 'auth/invalid-verification-code') throw new WrongCodeError();
       throw new AuthError(mapFirebaseErrorCode(code), code, err);
     }
   }

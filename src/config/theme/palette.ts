@@ -178,9 +178,12 @@ export const FEATURE_COLORS = {
    * and hiding the map under it would undo that.
    */
   basicPhoneArea: 'rgba(48,176,199,0.18)',
-  /** Sign-in screens and the logo. */
-  brandTeal: '#0B8A74',
 } as const;
+
+/** The logo's gradient stops: blue → cyan → mint (sign-in v8 README). */
+const BRAND_BLUE = '#1E6BFF';
+const BRAND_CYAN = '#22C1EE';
+const BRAND_MINT = '#3EE0B5';
 
 export const FIXED_PALETTES = {
   sos: {
@@ -193,6 +196,40 @@ export const FIXED_PALETTES = {
     redDim: '#3A1E1E',
     text: '#FFFFFF',
     textMuted: '#C8B5B5',
+  },
+  /**
+   * Sign-in (boards AN1–AN4, decision D29). Drawn on white in both
+   * themes: the story artwork above the sheet is a white scene, and a dark
+   * sheet under it would read as a different app.
+   *
+   * Gradients are CSS strings for `experimental_backgroundImage` (New
+   * Architecture); every surface that uses one also sets its `solid` colour,
+   * which is what shows if gradients are unavailable.
+   */
+  signIn: {
+    background: '#FFFFFF',
+    sheet: '#F6F8FC',
+    sheetEdge: 'rgba(255,255,255,0.75)',
+    field: '#FFFFFF',
+    fieldIdle: 'rgba(255,255,255,0.7)',
+    ink: '#111214',
+    textMuted: '#5F6368',
+    separator: '#C7C7CC',
+    brand: BRAND_BLUE,
+    focusRing: 'rgba(30,107,255,0.12)',
+    tintFill: 'rgba(30,107,255,0.12)',
+    neutralFill: 'rgba(118,118,128,0.14)',
+    disabled: '#B8C4D6',
+    error: '#D70015',
+    errorEdge: '#FF3B30',
+    errorFill: '#FFF5F4',
+    devFill: 'rgba(255,149,0,0.16)',
+    devText: '#A35200',
+    devDot: '#FF9500',
+    onBrand: '#FFFFFF',
+    markGradient: `linear-gradient(150deg, ${BRAND_BLUE}, ${BRAND_CYAN} 60%, ${BRAND_MINT})`,
+    buttonGradient: `linear-gradient(180deg, ${BRAND_CYAN}, ${BRAND_BLUE})`,
+    checkGradient: `linear-gradient(160deg, ${BRAND_CYAN}, ${BRAND_BLUE})`,
   },
   /** Mirrors the native incoming-call screen. */
   fakeCall: {

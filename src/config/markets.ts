@@ -65,7 +65,7 @@ const CONFIGURED_MARKET = process.env.EXPO_PUBLIC_MARKET ?? '';
  * Guarded because `Intl` support varies by engine build, and the failure mode
  * here has to be "fall back to 112", never "throw inside an emergency screen".
  */
-function deviceRegion(): string | null {
+export function deviceRegion(): string | null {
   try {
     const locale = Intl.DateTimeFormat().resolvedOptions().locale;
     // "en-GB" → "GB"; "en" alone carries no region.
