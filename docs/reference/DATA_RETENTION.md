@@ -128,3 +128,97 @@ item in `IMPLEMENTATION_PLAN.md` Phase 1 — not done in this pass.
 | Delete account | Privacy & Data → Delete Account | Everything (see account deletion sequence in SECURITY_REVIEW.md) |
 | Remove contact | Contacts screen | Single contact document |
 | Sign out | Profile screen | Local auth session; device token removed from Firestore |
+
+---
+
+## Proposed, not built (10 Oct 2026): keep less on the server
+
+Some people would rather their data stayed on their phone. This section
+records which data can, which cannot, and two changes to make later. Nothing
+here is implemented yet; the tables above describe what the app does today.
+
+### The test
+
+**Does someone else need it at a moment when your phone can't help?** A
+phone that is dead, smashed, taken or out of signal cannot raise an alert.
+The server can — but only if it already holds what it needs.
+
+### Must stay on the server
+
+| Data | Why it cannot be phone-only |
+|---|---|
+| Active journey and its live location, while the journey runs | Family watch it live; if the phone dies mid-walk, the server's missed-check-in backstop alerts them with the last known position |
+| Trusted contacts | The server sends SOS and missed-check-in alerts (push or text) even when the phone is off |
+| SOS records | Once SOS is held, the alert must go out even if the phone is taken a second later; the record is also evidence |
+| Family connections and shared status | Other people's phones read them |
+| Basic-phone consents and locate audits | Proof the person agreed to be found; only the server may make consent ACTIVE |
+| Account and device list | Sign-in, and the new-phone warning (`ACCOUNT_PROTECTION.md`) |
+
+### Could be phone-only — only the owner ever uses it
+
+| Data | Today | What moving it costs |
+|---|---|---|
+| Journey history after arrival (destination, times) | Firestore, until the account is deleted | Lost with the phone; not in the data export |
+| Location trail after arrival | Firestore, 30 days (7 for cancelled or missed) | Route no longer shown in history; guardians can't look back |
+| Saved places (Home, Work, School) | Firestore | Re-added on a new phone. Among the most sensitive things held |
+| Walk feedback | Firestore, private | Nothing material |
+| "Feeling uneasy" log | Firestore | The route-safety insight it was kept for |
+| Check-in records after a journey | Firestore, until the account is deleted | Nothing for safety |
+
+Already phone-only: profile copy, settings and app lock, duress PIN, fake-call
+settings, offline queue.
+
+### What the location trail is
+
+The GPS points the phone sends **only during a journey**: position, accuracy,
+heading, speed and time (`LocationUpdate`), stored under the journey in
+`locationUpdates`. One point every 30 s or 50 m on a normal journey; every
+15 s or 25 m after "Feeling uneasy?"; every 10 s or 20 m during SOS; every
+60 s or 100 m on low battery (`TrackingConfig`). A 20-minute walk leaves about
+40 points — joined up, the exact route, street by street.
+
+During the journey it powers Watch live, the last known position on a missed
+check-in, and the guardians' view in an SOS. **After arrival it serves no
+safety purpose.**
+
+### Proposal 1 — delete the trail when the journey ends
+
+Delete `locationUpdates` from the server as soon as a journey is ARRIVED or
+CANCELLED, instead of after 30 / 7 days. **Unchanged:** SOS journeys keep
+their trail (decision above), and so do journeys with a missed check-in or an
+escalated safety check, until that is resolved.
+
+- **Gain:** 30 days of exact routes — where someone walks, when, and which
+  way home — stops existing on the server. Much less exposed in a breach or
+  to a legal demand. The biggest privacy gain available, at no safety cost.
+- **Cost:** journey history no longer draws the route walked; a guardian
+  cannot look back at yesterday's walk.
+- **Shape:** a Firestore trigger on the journey reaching ARRIVED / CANCELLED
+  that deletes its `locationUpdates` in batches; `enforceDataRetention` stays
+  as the backstop. Update the table at the top of this file.
+
+### Proposal 2 — "Keep my history on this phone only", on by default
+
+Journey history, saved places, walk feedback and the uneasy log are stored on
+the phone (secure storage / local database) instead of Firestore. The setting
+says plainly: *if you lose or change your phone, this history goes with it.*
+
+- **Gain:** the owner's routine (home and school addresses, where they go)
+  never leaves the phone.
+- **Cost:** no history on a new phone, none in the data export, and the
+  uneasy-log insight is lost.
+- **Shape:** phone-backed adapters behind the existing ports
+  (`SavedPlaceProvider`, `WalkFeedbackProvider`, `UneasyEventProvider`, the
+  history half of `JourneyProvider`), chosen by the setting — no screen
+  changes.
+
+### Not proposed
+
+Moving anything from "Must stay on the server" to the phone. It would make the
+app look as safe while being unable to help when the phone is not there —
+the kind of claim Option 15 §1 principle 4 forbids.
+
+### To decide
+
+- [ ] Proposal 1: delete the trail on arrival (recommended)
+- [ ] Proposal 2: phone-only history setting, and whether it is on by default
