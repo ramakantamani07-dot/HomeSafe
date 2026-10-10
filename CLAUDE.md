@@ -52,6 +52,12 @@ npm run check        # tests + architecture + design-token guards
 npx tsc --noEmit
 ```
 
+**Never commit `.env` files or sensitive values** (keys, Firebase config,
+webhook secrets). Only the empty `.env.example` templates belong in git. A
+pre-commit hook (`scripts/check-secrets.sh`, switched on by `npm install`)
+blocks secret files, credential-shaped text, and any value from your local
+`.env` files; run it by hand with `npm run check:secrets`.
+
 `npm run check:arch` and `check:tokens` enforce the layering and colour rules
 above. They have caught real mistakes; when one fails, it is usually right.
 

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Blocks commits containing .env files or sensitive values.
+# Switched on by `npm install` (package.json "prepare"); see scripts/check-secrets.sh.
+exec bash "$(git rev-parse --show-toplevel)/scripts/check-secrets.sh"

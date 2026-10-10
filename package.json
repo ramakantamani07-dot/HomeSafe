@@ -12,7 +12,9 @@
     "check:tokens": "bash scripts/check-design-tokens.sh",
     "check:arch": "bash scripts/check-architecture.sh",
     "check": "npm run check:tokens && npm run check:arch && npm run check:a11y && npx tsc --noEmit && npm test",
-    "check:a11y": "node scripts/check-accessibility.js"
+    "check:a11y": "node scripts/check-accessibility.js",
+    "check:secrets": "bash scripts/check-secrets.sh",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
     "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
