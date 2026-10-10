@@ -8,7 +8,7 @@ root.
 | Document | What it is |
 |---|---|
 | [`plan/IMPLEMENTATION_PHASES.md`](plan/IMPLEMENTATION_PHASES.md) | **The current plan, and the status table.** What is built, what is left, and every decision taken along the way. Start here. |
-| [`architecture/END_TO_END_FLOW.html`](architecture/END_TO_END_FLOW.html) | **Explaining the app to someone.** Every flow from screen to server as diagrams: 40 screens, 30 data models, 22 server functions, and where each outside service (SMS, mobile operator, maps) plugs in. Open in a browser. |
+| [`architecture/END_TO_END_FLOW.html`](architecture/END_TO_END_FLOW.html) | **Explaining the app to someone.** Every flow from screen to server as diagrams: 40 screens, 31 data models, 23 server functions, the security layers, and where each outside service (SMS, mobile operator, maps) plugs in. Open in a browser. |
 | [`architecture/ARCHITECTURE.md`](architecture/ARCHITECTURE.md) | The pattern we follow (ports and adapters), the layering rules, and the rules for new work. |
 | [`architecture/ARCHITECTURE_DEBT.md`](architecture/ARCHITECTURE_DEBT.md) | Audited debt with reproduction commands. Phase 0 cleared it; kept as the record of what was wrong and why. |
 | [`architecture/DEPENDENCIES.md`](architecture/DEPENDENCIES.md) | The gate a third-party library must clear, and decisions on record. |
