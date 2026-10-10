@@ -1,6 +1,7 @@
 import * as logger from 'firebase-functions/logger';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { appCallable } from '../shared/appCheck';
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
@@ -112,7 +113,7 @@ const MEMBER_ID = /^[A-Za-z0-9_-]{1,128}$/;
  * unanswered is still `PENDING_SMS` (expiry is lazy, D19), so resending revives
  * it — the member will be reading a new message, and deserves the full window.
  */
-export const resendConsentRequest = onCall(async (request) => {
+export const resendConsentRequest = appCallable('resendConsentRequest', async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in to resend.');
   const memberId = (request.data as { memberId?: unknown } | null)?.memberId;

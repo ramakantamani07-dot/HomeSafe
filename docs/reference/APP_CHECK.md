@@ -1,8 +1,13 @@
-# Firebase App Check — Setup Plan
+# Firebase App Check
 
-Status: **not implemented**. Tracked as an open item in `SECURITY_REVIEW.md`'s cross-cutting
-concerns table. This doc exists so the reasoning and rollout plan aren't lost between sessions —
-see that file for where this fits alongside the project's other open security items.
+**Status (10 Oct 2026): server side built, app side not yet.** Tracked in
+`SECURITY_REVIEW.md` §7 and the plan's "What is left".
+
+| Part | State |
+|---|---|
+| Functions the app calls record App Check, and can refuse without it | **Built** — `functions/src/shared/appCheck.ts` |
+| The app sends App Check tokens | Not yet — needs the Firebase iOS config file (below) |
+| Firestore refuses requests without it | Not yet — a console switch, flipped last |
 
 ## Why this exists
 
@@ -11,8 +16,9 @@ authenticated, does it own the document. They don't check *what* is making the r
 Firebase config (API key, project ID, etc.) ships inside the app binary and isn't secret — anyone
 can extract it and write a script that talks to Firestore/Cloud Functions directly, using a real
 or freshly-created login, completely bypassing the app's UI. Concretely, that means someone could
-script fake SOS triggers (each one costs a round of push notifications and pollutes real data) or
-hit the database at a volume no real user's phone would ever produce.
+script fake SOS triggers (each one costs a round of push notifications and pollutes real data),
+run Find against basic-phone members (each one a billed operator lookup), or hit the database at a
+volume no real user's phone would ever produce.
 
 App Check closes this by requiring every request to carry a fresh attestation proving it came from
 a genuine, untampered instance of the real app — verified via Apple's **App Attest** (iOS) or
@@ -27,36 +33,52 @@ misconfiguration here doesn't just weaken security, it silently breaks SOS/journ
 real users. Firebase's own recommended rollout exists specifically to avoid that failure mode, and
 it's the one to follow rather than shortcutting straight to enforcement.
 
-## Rollout plan
+## What is built: the server side
 
-1. **Add the App Check SDK to the client.** Use `@react-native-firebase/app-check`, not the plain
-   web `firebase/app-check` JS SDK — this app already committed to the React Native Firebase
-   native-module path for anything needing real native platform integration (that's why
-   `@react-native-firebase/app`/`messaging` exist, to fix the iOS APNs/FCM token mismatch — see
-   `NATIVE_ARCHITECTURE_REVIEW.md` P0 #2), and App Attest/Play Integrity are native-only APIs with
-   no meaningful web equivalent. This step is safe/additive and doesn't require a live project to
-   write — but wiring it in productively still wants a real Firebase project to point at.
-2. **Enable App Check for the project in the Firebase Console**, registering the iOS app (App
-   Attest provider) and Android app (Play Integrity provider) — but leave enforcement **off**
-   ("Unenforced" / monitoring-only mode). This starts collecting pass/fail data without blocking
-   anything.
-3. **Test on real devices.** App Attest does not work in the iOS Simulator; Play Integrity needs a
-   real Android device too. This needs an actual build (EAS dev client or a real device build), not
-   just `expo start`.
-4. **Watch the App Check metrics in the console** for a period to confirm real app traffic is
-   validating cleanly before touching enforcement.
-5. **Flip to Enforced one product at a time** — Firestore first, then Cloud Functions — not all at
-   once, so a problem in one surface doesn't take down everything simultaneously.
+Every function the app calls is declared with `appCallable` instead of `onCall`:
+`locateMember`, `askMemberOk`, `lookupInvitee`, `sendTestAlert`, `resendConsentRequest`.
 
-## Current blockers
+- **Monitor (the default).** Each request writes `metric:app_check` with `fn`, `mode` and
+  `outcome` (`verified` or `missing`). Nothing is refused. The `missing` share is exactly what
+  enforcing would refuse — see `OPERATIONS.md`.
+- **Enforce.** `APP_CHECK_MODE=enforce` in `functions/.env`, then redeploy. Firebase refuses any
+  request without a valid token before our code runs. Only the exact word `enforce` turns it on;
+  a typo stays in monitor, because the failure mode of a wrong switch is every user losing Find.
 
-- No real Firebase project yet (in progress separately — this doc's plan assumes one exists).
-- No real device available to this session to validate App Attest/Play Integrity — same category
-  of blocker as the Apple Developer Program enrollment and the Google Maps API key: something only
-  the user can do on their own hardware/accounts, not something verifiable from here.
+**Deliberately not covered:** the three HTTP endpoints. `inboundConsentSms` and
+`inboundMemberCall` are called by the SMS/voice providers, which cannot attest — they are guarded
+by the provider's signature. `getSharedJourney` serves the public tracking page to anyone the
+traveller shares the link with — it is guarded by the share token.
 
-## Next step, once unblocked
+**Not yet used:** `consumeAppCheckToken` (replay protection, one token per request). Worth turning
+on for `locateMember` once the app sends limited-use tokens, since each call is a billed lookup.
 
-Come back to this once the Firebase project is live and the app is running against it for real —
-add the client SDK, register both platforms in Console with enforcement off, then work through
-steps 3–5 above with real devices before enabling enforcement.
+## Rollout plan — what is left
+
+1. **Firebase console** *(you)*:
+   - Project settings → Your apps → the iOS app (`com.ramasatish.wayLoc`) → download
+     **`GoogleService-Info.plist`**. Keep it out of git (it is project config; the pre-commit
+     hook blocks it).
+   - App Check → register the iOS app with the **App Attest** provider (and Android with **Play
+     Integrity** when there is an Android app). Leave every product **Unenforced**.
+   - App Check → Apps → add a **debug token** for development builds; App Attest does not work in
+     the Simulator or in debug builds without one.
+2. **Native library in the app.** `@react-native-firebase/app` + `@react-native-firebase/app-check`
+   (not the web `firebase/app-check`: App Attest and Play Integrity are native-only). Neither is
+   installed yet — an earlier version of this doc said `app`/`messaging` already were; they are
+   not. This is the same library real phone sign-in needs (the Firebase test plan's step 0), so do
+   both in one native rebuild. It is not in Expo's `bundledNativeModules.json`, and on iOS it
+   needs `expo-build-properties` → `useFrameworks: "static"`; check `react-native-maps` and the
+   SOS widget target still build with that before committing to it.
+3. **Bridge the token to the Firebase JS SDK.** The app talks to Firestore and Functions through
+   the **JS SDK** (`firebase` package), which does not see the native App Check token on its own.
+   Without this step the native library would attest and every request would still arrive without
+   a token. In `src/config/firebase.ts`, after `initializeApp`:
+   `initializeAppCheck(app, { provider: new CustomProvider({ getToken: <read the token from
+   @react-native-firebase/app-check> }), isTokenAutoRefreshEnabled: true })`.
+   Keep it behind a port (`AppCheckProvider`) with a mock, like every other native capability.
+4. **Test on the iPhone** (debug token for Debug builds, App Attest for Release). Watch
+   `metric:app_check` for the callables and the App Check page in the console for Firestore.
+5. **Enforce one product at a time**, once `missing` stays near zero for a week of real use:
+   Cloud Functions first (`APP_CHECK_MODE=enforce`, redeploy), then Firestore (console switch).
+   Firestore last, because it carries SOS and journey tracking.

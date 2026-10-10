@@ -1,5 +1,6 @@
 import * as logger from 'firebase-functions/logger';
-import { HttpsError, onCall, type FunctionsErrorCode } from 'firebase-functions/v2/https';
+import { HttpsError, type FunctionsErrorCode } from 'firebase-functions/v2/https';
+import { appCallable } from '../shared/appCheck';
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
@@ -204,7 +205,7 @@ const MEMBER_ID = /^[A-Za-z0-9_-]{1,128}$/;
  * rate limit: SOS lookups start from the member's own text or missed call,
  * server-side (Phase 6.6), and call `locate` directly.
  */
-export const locateMember = onCall(async (request) => {
+export const locateMember = appCallable('locateMember', async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in to find someone.');
 

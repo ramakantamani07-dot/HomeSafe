@@ -201,6 +201,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Pocket mode (D14) | What it should do |
 | Open places on the way (D4) | Per-journey Places cost measured before the flag is turned on |
 | Real network location, SMS (G3) | Operator aggregator, SMS providers, TRAI DLT, legal review |
+| App Check, app side: send tokens from the app (App Attest / Play Integrity), then enforce | `GoogleService-Info.plist` from the Firebase console, App Attest registered there; same native library as real phone sign-in (step 0). Server side built 10 Oct — see `docs/reference/APP_CHECK.md` |
 | Revocation offline window; short-lived operator grants on the Phase 8 list? | Two open checkboxes in the revocation design |
 | Known gaps below | Artwork (Android notification icon, app icon symbol), a support-email domain, EAS project rename, biometric-screen branding |
 

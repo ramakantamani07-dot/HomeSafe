@@ -1,5 +1,6 @@
 import * as logger from 'firebase-functions/logger';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { appCallable } from '../shared/appCheck';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { db, messaging } from '../shared/firebase';
@@ -56,7 +57,7 @@ export function gateAskOk(input: {
  * Returns whether a device was reached. A member with no registered device is
  * not an error, but it is not "asked" either, and the screen must not say so.
  */
-export const askMemberOk = onCall(async (request) => {
+export const askMemberOk = appCallable('askMemberOk', async (request) => {
   const askerId = request.auth?.uid;
   if (!askerId) throw new HttpsError('unauthenticated', 'Sign in to ask.');
   const connectionId = (request.data as { connectionId?: unknown } | null)?.connectionId;

@@ -1,4 +1,5 @@
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { appCallable } from '../shared/appCheck';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
@@ -34,7 +35,7 @@ export function withinLookupLimit(stored: { day?: string; count?: number } | und
  * kept here, out of the client's reach. The limit is the enumeration defence;
  * the contacts-only rule is a courtesy the official app keeps.
  */
-export const lookupInvitee = onCall(async (request) => {
+export const lookupInvitee = appCallable('lookupInvitee', async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
   const phone = (request.data as { phone?: unknown } | null)?.phone;

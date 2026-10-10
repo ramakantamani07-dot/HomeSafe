@@ -1,6 +1,7 @@
 import * as logger from 'firebase-functions/logger';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { appCallable } from '../shared/appCheck';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
@@ -70,7 +71,7 @@ export const onTrustedContactAdded = onDocumentCreated('users/{userId}/contacts/
  * "Send a test alert" — the same routes as a real alert, push or text per
  * contact, every message marked TEST so nobody acts on it.
  */
-export const sendTestAlert = onCall(async (request) => {
+export const sendTestAlert = appCallable('sendTestAlert', async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
 

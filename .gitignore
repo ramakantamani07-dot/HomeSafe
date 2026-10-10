@@ -30,3 +30,7 @@ ui-debug.log
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# Firebase native config: project settings, kept out of git with the .env files.
+GoogleService-Info.plist
+google-services.json
