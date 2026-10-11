@@ -5,7 +5,9 @@ import type { RouteResult } from '../models/RouteResult';
  * Abstraction over any routing API.
  *
  * Concrete implementations:
- *  - OSRMRoutingProvider      — OSRM HTTP API (open-source, configurable base URL)
+ *  - MapKitWalkingRoutingProvider — Apple MapKit walking routes (iOS; free, keyless)
+ *  - OSRMRoutingProvider      — OSRM HTTP API (open-source, configurable base URL);
+ *                               Android until a walking source replaces it
  *  - MockRoutingProvider      — deterministic synthetic route (dev / CI)
  *
  * Rules:

@@ -80,6 +80,21 @@ Check the result with `grep -E "BUILD SUCCEEDED|BUILD FAILED"` on the log —
 piping `xcodebuild` into `tail` discards its exit code, so a failed build still
 reports exit 0.
 
+**`pod install` fails with "invalid byte sequence in UTF-8"** (seen 11 Oct
+2026, adding the walking-directions module). Two causes, both outside the code:
+
+- The shell is not UTF-8, and `Info.plist` holds non-ASCII text (the location
+  permission messages). Run it as
+  `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install`.
+- React Native's post-install hook reads every `Info.plist` under `ios/`,
+  skipping only paths containing `build/`. A Release build put in
+  `ios/build-release` left compiled *binary* plists there, which it cannot
+  read. Give Release builds `-derivedDataPath build/release`, so they sit
+  inside `ios/build/` and are skipped.
+
+A new local native module under `modules/` (such as `walking-directions`)
+needs `pod install` before it is linked; a JS reload is not enough.
+
 ### What mock mode gives you
 
 | Area | Mock behaviour |

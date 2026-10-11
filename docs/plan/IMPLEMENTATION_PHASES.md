@@ -205,7 +205,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
 | Firebase console: SMS region policy (UK, India only) — `docs/reference/ACCOUNT_PROTECTION.md` | 8 |
 | Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
-| **Walking routes.** `OSRMRoutingProvider` asks for `/route/v1/driving/` — car routes and car times for a walking app, so the ETA and the "late" safety check are wrong in a real build (mock mode draws a straight line, which hides it). The default server, `router.project-osrm.org`, is a volunteer demo whose usage policy rules out production use and which only offers driving anyway. Recommended: Apple's walking directions (MapKit `MKDirections`, free, keyless — the same route the map, geocoder and nearby places already took); Android later from a self-hosted OSRM `foot` profile | 3 |
+| **Walking routes on Android.** iOS now uses Apple's walking directions (`modules/walking-directions`, `MapKitWalkingRoutingProvider`, 11 Oct). Android still falls back to `OSRMRoutingProvider`, which asks for `/route/v1/driving/` from `router.project-osrm.org`, a volunteer demo whose usage policy rules out production use — car routes and car times. Needs a self-hosted OSRM with the `foot` profile, or another walking source, before an Android release | 3 |
 
 **Waiting on a decision or an input**
 
@@ -242,7 +242,7 @@ it would take:
 | Our own data | The "Feeling uneasy" log (`UneasyEvent`) and walk feedback (`WalkFeedback`) — the spec keeps both "for the future route-safety work" (Option 15 §D2, §9). Useful only once many people have walked the same area |
 | A router that can weigh them | A self-hosted OSRM with custom costs; the public server and Apple's directions cannot |
 
-**Order:** walking routes first (above), then data, then the ranking.
+**Order:** walking routes first (done on iOS, 11 Oct; Android above), then data, then the ranking.
 
 **Wording rule.** Never "the safest route": the app cannot know that, and
 Option 15 §1 principle 4 forbids a claim it cannot stand behind — someone hurt

@@ -33,6 +33,7 @@ import { MockDeviceRegistryProvider } from '../implementations/devices/MockDevic
 import { NetInfoNetworkProvider } from '../implementations/network/NetInfoNetworkProvider';
 import { AsyncStorageOfflineQueueProvider } from '../implementations/offlineQueue/AsyncStorageOfflineQueueProvider';
 import { OSRMRoutingProvider } from '../implementations/routing/OSRMRoutingProvider';
+import { MapKitWalkingRoutingProvider } from '../implementations/routing/MapKitWalkingRoutingProvider';
 import { MockRoutingProvider } from '../implementations/routing/MockRoutingProvider';
 import { FakeCallSettingsStore } from '../implementations/fakeCall/FakeCallSettingsStore';
 import { SecureUserStorageProvider } from '../implementations/storage/SecureUserStorageProvider';
@@ -66,6 +67,7 @@ import { MockNetworkLocationProvider } from '../implementations/networkLocation/
 import { ExpoContactPickerProvider } from '../implementations/deviceContacts/ExpoContactPickerProvider';
 import { MockContactPickerProvider } from '../implementations/deviceContacts/MockContactPickerProvider';
 import { isNearbyPlacesAvailable } from '../../modules/nearby-places';
+import { isWalkingDirectionsAvailable } from '../../modules/walking-directions';
 
 import { FakeCallService } from '../services/FakeCallService';
 import { DataExportService } from '../services/DataExportService';
@@ -229,13 +231,19 @@ const mapProvider = nativeMapsAvailable
   ? new ReactNativeMapsProvider()
   : new MockMapProvider();
 
-// Routing: MockRoutingProvider in dev (no network calls), OSRM in production.
-// Base URL is configurable via EXPO_PUBLIC_OSRM_BASE_URL so no URL is hardcoded.
+// Routing. On iOS, Apple's walking directions whenever the native module is
+// linked — like the map, geocoder and nearby places, it needs no key and no
+// backend, so mock *data* is no reason to draw a straight line. Elsewhere: the
+// synthetic route in dev, OSRM in production. OSRM is asked for *driving*
+// routes and its default server is a demo; Android needs a walking source
+// before release ("Walking routes", docs/plan/IMPLEMENTATION_PHASES.md).
 const OSRM_BASE_URL =
   process.env.EXPO_PUBLIC_OSRM_BASE_URL ?? 'https://router.project-osrm.org';
-const routingProvider = devMode
-  ? new MockRoutingProvider()
-  : new OSRMRoutingProvider(OSRM_BASE_URL);
+const routingProvider = isWalkingDirectionsAvailable
+  ? new MapKitWalkingRoutingProvider()
+  : devMode
+    ? new MockRoutingProvider()
+    : new OSRMRoutingProvider(OSRM_BASE_URL);
 const routingService = new RoutingService(routingProvider);
 
 // Address lookup, in descending order of capability.
