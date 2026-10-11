@@ -81,16 +81,23 @@ export default function AddPlaceScreen() {
    * ignoring the new coordinates would silently discard the adjustment the
    * user just made.
    */
+  // Not an effect cleanup: clearing `pendingPin` below re-runs this effect,
+  // and a cleanup would cancel the very lookup it just started — the address
+  // came back and was thrown away, leaving the screen on an empty search.
+  // A lookup is dropped only if the screen has gone or a newer pin arrived.
+  const pinLookup = useRef(0);
+  useEffect(() => () => { pinLookup.current = -1; }, []);
   useEffect(() => {
     if (!pendingPin) return;
     const coordinates = pendingPin;
     setPendingPin(null);
 
-    let cancelled = false;
+    const lookup = ++pinLookup.current;
+    const stale = () => pinLookup.current !== lookup;
     void placesService
       .describeCoordinates(coordinates)
       .then((described) => {
-        if (cancelled) return;
+        if (stale()) return;
         setPlace(described);
         setIsPicking(false);
         // Only fill the name if the user hasn't chosen one — re-pinning
@@ -98,7 +105,7 @@ export default function AddPlaceScreen() {
         setName((current) => current || described.name);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (stale()) return;
         // The pin is still perfectly usable without a street name.
         setPlace({
           name: 'Dropped pin',
@@ -109,7 +116,6 @@ export default function AddPlaceScreen() {
         });
         setIsPicking(false);
       });
-    return () => { cancelled = true; };
   }, [pendingPin, setPendingPin, placesService]);
 
   // The saved place may still be loading when this screen mounts (a cold
