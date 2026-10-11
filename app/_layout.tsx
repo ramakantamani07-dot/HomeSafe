@@ -246,6 +246,11 @@ export default function RootLayout() {
   // to the system font rather than block sign-in over a decorative typeface.
   const fontsReady = fontsLoaded || !!fontError;
 
+  // Nothing is drawn until the fonts are in. Text laid out before then is
+  // measured in the fallback font and drawn in the real, wider one, so iOS
+  // clips it ("WayLo…"). The splash screen stays up meanwhile.
+  if (!fontsReady) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AppProviders>

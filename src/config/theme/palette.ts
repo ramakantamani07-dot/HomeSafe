@@ -180,10 +180,9 @@ export const FEATURE_COLORS = {
   basicPhoneArea: 'rgba(48,176,199,0.18)',
 } as const;
 
-/** The logo's gradient stops: blue → cyan → mint (sign-in v8 README). */
+/** The logo's gradient stops used in the app: blue → cyan (sign-in v8 README). */
 const BRAND_BLUE = '#1E6BFF';
 const BRAND_CYAN = '#22C1EE';
-const BRAND_MINT = '#3EE0B5';
 
 export const FIXED_PALETTES = {
   sos: {
@@ -227,7 +226,6 @@ export const FIXED_PALETTES = {
     devText: '#A35200',
     devDot: '#FF9500',
     onBrand: '#FFFFFF',
-    markGradient: `linear-gradient(150deg, ${BRAND_BLUE}, ${BRAND_CYAN} 60%, ${BRAND_MINT})`,
     buttonGradient: `linear-gradient(180deg, ${BRAND_CYAN}, ${BRAND_BLUE})`,
     checkGradient: `linear-gradient(160deg, ${BRAND_CYAN}, ${BRAND_BLUE})`,
   },

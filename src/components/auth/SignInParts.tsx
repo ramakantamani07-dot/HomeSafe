@@ -1,20 +1,23 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ELEVATION, FIXED_PALETTES, FONTS, RADIUS, SPACING } from '../../config/theme';
 import { Icon } from '../ui/Icon';
 
 const C = FIXED_PALETTES.signIn;
 
-/** The gradient pin tile and the wordmark (AN1's header). */
+// Cut from assets/logo-source.png, the app's own logo, at 3× their size here.
+// Images rather than a styled Text: they keep the logo's gradient lettering,
+// which React Native cannot draw on text.
+const logoMark = require('../../../assets/signin/logo-mark.png');
+const logoWordmark = require('../../../assets/signin/logo-wordmark.png');
+
+/** The app's logo, mark and wordmark side by side (AN1's header). */
 export function BrandLockup() {
   return (
     <View style={styles.lockup} accessible accessibilityRole="header" accessibilityLabel="WayLoc">
-      <View style={styles.mark}>
-        <Icon name="pin" size={22} color={C.onBrand} />
-      </View>
-      {/* Solid brand blue: React Native cannot clip a gradient to text. */}
-      <Text style={styles.wordmark}>WayLoc</Text>
+      <Image source={logoMark} style={styles.mark} resizeMode="contain" />
+      <Image source={logoWordmark} style={styles.wordmark} resizeMode="contain" />
     </View>
   );
 }
@@ -59,7 +62,10 @@ export function SignInBackButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-const MARK_SIZE = 40;
+const MARK_SIZE = 44;
+const WORDMARK_HEIGHT = 24;
+/** The wordmark image's own proportions (939 × 243). */
+const WORDMARK_ASPECT = 939 / 243;
 const BACK_SIZE = 44;
 
 const styles = StyleSheet.create({
@@ -72,19 +78,10 @@ const styles = StyleSheet.create({
   mark: {
     width: MARK_SIZE,
     height: MARK_SIZE,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.brand,
-    experimental_backgroundImage: C.markGradient,
-    ...ELEVATION.sm,
   },
   wordmark: {
-    fontFamily: FONTS.headingXBold,
-    fontSize: 22,
-    // No negative letter-spacing: iOS measures the text without it and clips
-    // the last letter ("WayLo").
-    color: C.brand,
+    height: WORDMARK_HEIGHT,
+    width: WORDMARK_HEIGHT * WORDMARK_ASPECT,
   },
   devPill: {
     flexDirection: 'row',

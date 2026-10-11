@@ -239,10 +239,11 @@ const styles = StyleSheet.create({
     aspectRatio: STORY_ASPECT,
     marginTop: SPACING.xs,
   },
-  // Grows to the bottom edge, as on the board.
+  // Grows to the bottom edge, as on the board. Starts below the story, not over
+  // it: the artwork's lowest caption ("Open · safe spot") sits on its edge.
   sheet: {
     flexGrow: 1,
-    marginTop: -SPACING.sm,
+    marginTop: 0,
     marginBottom: 6,
     paddingBottom: SPACING.lg,
   },
