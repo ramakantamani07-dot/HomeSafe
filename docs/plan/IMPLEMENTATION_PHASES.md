@@ -205,6 +205,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
 | Firebase console: SMS region policy (UK, India only) — `docs/reference/ACCOUNT_PROTECTION.md` | 8 |
 | Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
+| **Walking routes.** `OSRMRoutingProvider` asks for `/route/v1/driving/` — car routes and car times for a walking app, so the ETA and the "late" safety check are wrong in a real build (mock mode draws a straight line, which hides it). The default server, `router.project-osrm.org`, is a volunteer demo whose usage policy rules out production use and which only offers driving anyway. Recommended: Apple's walking directions (MapKit `MKDirections`, free, keyless — the same route the map, geocoder and nearby places already took); Android later from a self-hosted OSRM `foot` profile | 3 |
 
 **Waiting on a decision or an input**
 
@@ -227,6 +228,29 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Support email is `hello@homesafeapp.com` | Terms, Privacy | Survived the rename — the domain is a real-world decision, not ours to invent |
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
+
+### Future — recorded, not planned (11 Oct 2026)
+
+**Safer routes.** Today the app finds the fastest route; nothing judges how
+safe a street is, and Apple's walking directions would not change that. What
+it would take:
+
+| Need | Notes |
+|---|---|
+| Street data | Lighting, busy versus empty streets, open shops along the way. OpenStreetMap has some lighting tags; coverage is patchy |
+| Crime data | UK: street-level and open (police.uk). India: nothing comparable at street level |
+| Our own data | The "Feeling uneasy" log (`UneasyEvent`) and walk feedback (`WalkFeedback`) — the spec keeps both "for the future route-safety work" (Option 15 §D2, §9). Useful only once many people have walked the same area |
+| A router that can weigh them | A self-hosted OSRM with custom costs; the public server and Apple's directions cannot |
+
+**Order:** walking routes first (above), then data, then the ranking.
+
+**Wording rule.** Never "the safest route": the app cannot know that, and
+Option 15 §1 principle 4 forbids a claim it cannot stand behind — someone hurt
+on "the safest route" would rightly feel misled. Say what is true and
+checkable instead: "a better-lit route", "busier streets", "passes 3 open
+places". Related, already built: nearby safe places on "Feeling uneasy?"
+(`SafePlace`, safest kinds first), and "Open places on the way" behind its
+flag (D4).
 
 ---
 
