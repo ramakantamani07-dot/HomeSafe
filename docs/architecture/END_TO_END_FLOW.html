@@ -142,9 +142,9 @@ flowchart TD
   CF ==> SMS(["SMS and voice provider"])
   SMS -- "YES, STOP, HELP,&lt;br/&gt;missed calls" --> CF
   CF ==> OP(["Mobile operator (CAMARA)&lt;br/&gt;locates a basic phone"])
-  APP ==> MAP(["Apple Maps and MapKit&lt;br/&gt;map, nearby places"])
+  APP ==> MAP(["Apple Maps and MapKit&lt;br/&gt;map, nearby places,&lt;br/&gt;walking routes (iPhone)"])
   APP ==> GEO(["Phone's own geocoder&lt;br/&gt;address search"])
-  APP ==> OSRM(["OSRM&lt;br/&gt;walking routes"])
+  APP ==> OSRM(["OSRM&lt;br/&gt;routes on Android&lt;br/&gt;(driving; to replace)"])
 </pre></div>
   <p class="note"><b>Why connectors matter.</b> Every outside service sits behind a connector with a fake ("mock") version. That's why the whole app runs today with no backend: flip one setting and the same screens talk to the real service.</p>
 </section>
@@ -180,7 +180,7 @@ flowchart TD
   H["Home: full-screen map with a&lt;br/&gt;pull-up sheet"] --> W["Where to? Search in the sheet"]
   W -- "address lookup" --> G(["Phone's own geocoder"])
   W --> R["Route: 3 to 5 steps and an ETA"]
-  R -- "walking route" --> O(["OSRM routing"])
+  R -- "walking route" --> O(["Apple Maps on iPhone,&lt;br/&gt;OSRM on Android"])
   R --> ST["Start. First time only: allow&lt;br/&gt;location"]
   ST --> J[("journeys record created")]
   J -.-> F1["onJourneyStarted: tells&lt;br/&gt;contacts who opted in"]
@@ -409,9 +409,9 @@ flowchart TD
   <div class="table-box"><table>
     <thead><tr><th>Service</th><th>Used for</th><th>Plugs in at</th><th>Status</th></tr></thead>
     <tbody>
-      <tr><td>Apple Maps (MapKit)</td><td>The map; nearby open places when uneasy</td><td><code>MapProvider</code>, <code>SafePlaceProvider</code></td><td><span class="pill live">Live</span> free</td></tr>
+      <tr><td>Apple Maps (MapKit)</td><td>The map; nearby open places when uneasy; walking routes on iPhone</td><td><code>MapProvider</code>, <code>SafePlaceProvider</code>, <code>RoutingProvider</code></td><td><span class="pill live">Live</span> free</td></tr>
       <tr><td>Phone's own geocoder</td><td>Address and postcode search</td><td><code>PlacesProvider</code></td><td><span class="pill live">Live</span> free</td></tr>
-      <tr><td>OSRM</td><td>Walking routes and turn steps</td><td><code>RoutingProvider</code></td><td><span class="pill live">Live</span> public server; self-host for scale</td></tr>
+      <tr><td>OSRM</td><td>Routes on Android</td><td><code>RoutingProvider</code></td><td><span class="pill wait">To replace</span> asks a public demo server for driving routes; Android needs a walking source</td></tr>
       <tr><td>Phone services</td><td>Location, contacts picker, Face ID, secure storage, battery, signal</td><td>Expo device connectors</td><td><span class="pill live">Live</span></td></tr>
       <tr><td>Firebase Authentication</td><td>Sign-in by text code</td><td><code>AuthProvider</code></td><td><span class="pill mock">Built</span> needs native phone verification</td></tr>
       <tr><td>Cloud Firestore</td><td>Everything stored</td><td>15 Firebase connectors and the rules</td><td><span class="pill mock">Built</span> tested on the emulator; not deployed</td></tr>
