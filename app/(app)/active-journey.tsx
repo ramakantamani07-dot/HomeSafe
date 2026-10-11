@@ -100,6 +100,14 @@ export default function ActiveJourneyScreen() {
   const [ending, setEnding] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // The map follows the traveller until they drag it; then "Re-centre" hands
+  // the camera back.
+  const [following, setFollowing] = useState(true);
+  const [followKey, setFollowKey] = useState(0);
+  const recentre = useCallback(() => {
+    setFollowing(true);
+    setFollowKey((k) => k + 1);
+  }, []);
 
   // "Last updated N min ago" has to advance on its own — a frozen freshness
   // label is indistinguishable from a fresh one, which is exactly the lie
@@ -351,6 +359,11 @@ export default function ActiveJourneyScreen() {
         markers={mapData.markers}
         polyline={mapData.polyline}
         style={StyleSheet.absoluteFillObject}
+        // Draggable, so the traveller can look ahead or around them; it
+        // follows their position until they do.
+        interactive
+        onUserPan={() => setFollowing(false)}
+        followKey={followKey}
       />
 
       {/* Floating header — back out to Home without stopping the journey, and
@@ -407,7 +420,20 @@ export default function ActiveJourneyScreen() {
         in the same place on screen — §1 principle 3, so the control you need
         when something is wrong is never somewhere new.
       */}
-      <View style={[styles.stack, { paddingBottom: insets.bottom + SPACING.md }]}>
+      <View
+        style={[styles.stack, { paddingBottom: insets.bottom + SPACING.md }]}
+        pointerEvents="box-none"
+      >
+        {!following && (
+          <TouchableOpacity
+            onPress={recentre}
+            style={[styles.backChip, styles.recentre]}
+            accessibilityRole="button"
+            accessibilityLabel="Re-centre the map on you"
+          >
+            <Icon name="recentre" size={22} color={theme.accent} />
+          </TouchableOpacity>
+        )}
         <EtaCapsule
           minutesLabel={minutesRemaining !== null ? `${minutesRemaining} min` : null}
           detail={etaDetail}
@@ -544,6 +570,9 @@ function getStyles(theme: ThemeColors) {
       lineHeight: 18,
       fontFamily: FONTS.bodyMedium,
       color: theme.warning.fg,
+    },
+    recentre: {
+      alignSelf: 'flex-end',
     },
     stack: {
       position: 'absolute',

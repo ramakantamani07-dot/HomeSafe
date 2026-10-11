@@ -22,6 +22,8 @@ function ReactNativeMapView({
   style,
   interactive = false,
   onRegionChangeComplete,
+  onUserPan,
+  followKey,
 }: AppMapViewProps) {
   const theme = useTheme();
   const mapRef = useRef<MapView>(null);
@@ -50,6 +52,18 @@ function ReactNativeMapView({
     // region literal every render, which would otherwise re-animate constantly.
   }, [interactive, reduceMotion, region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta]);
 
+  // "Re-centre": the screen hands the camera back by changing `followKey`.
+  // The first render is not a request, so it is skipped.
+  const lastFollowKey = useRef(followKey);
+  useEffect(() => {
+    if (!interactive || followKey === lastFollowKey.current) return;
+    lastFollowKey.current = followKey;
+    userHasPanned.current = false;
+    mapRef.current?.animateToRegion(region, reduceMotion ? 0 : CAMERA_SETTLE_MS);
+    // Only a new key recentres; region changes are the effect above's job.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followKey, interactive]);
+
   const roleColor: Record<MarkerRole, string> = {
     start: theme.accent,
     current: theme.safe.fg,
@@ -62,7 +76,9 @@ function ReactNativeMapView({
       style={[StyleSheet.absoluteFillObject, style]}
       provider={PROVIDER_DEFAULT}
       onPanDrag={() => {
+        if (userHasPanned.current) return;
         userHasPanned.current = true;
+        onUserPan?.();
       }}
       // An interactive map takes `region` as its starting camera only
       // (initialRegion) — passing the controlled `region` prop as well would

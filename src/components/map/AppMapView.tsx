@@ -14,6 +14,10 @@ interface AppMapViewProps {
   interactive?: boolean;
   /** Fires when an interactive map settles; its centre is the dropped pin. */
   onRegionChangeComplete?(region: MapRegion): void;
+  /** First drag after following; see MapProvider. */
+  onUserPan?(): void;
+  /** Change to recentre and follow again; see MapProvider. */
+  followKey?: number;
 }
 
 /**
@@ -29,6 +33,8 @@ export function AppMapView({
   style,
   interactive,
   onRegionChangeComplete,
+  onUserPan,
+  followKey,
 }: AppMapViewProps) {
   const { mapProvider } = useMapContext();
   const { MapView } = mapProvider;
@@ -41,6 +47,8 @@ export function AppMapView({
       style={style}
       interactive={interactive}
       onRegionChangeComplete={onRegionChangeComplete}
+      onUserPan={onUserPan}
+      followKey={followKey}
     />
   );
 }

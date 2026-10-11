@@ -31,6 +31,16 @@ export interface AppMapViewProps {
    * thumb.
    */
   onRegionChangeComplete?(region: MapRegion): void;
+  /**
+   * Interactive maps only. Fires on the first drag after the map was
+   * following, so a screen can offer a way back ("Re-centre").
+   */
+  onUserPan?(): void;
+  /**
+   * Interactive maps only. Change it to hand the camera back: the map moves to
+   * `region` and follows again until the next drag.
+   */
+  followKey?: number;
 }
 
 /**
