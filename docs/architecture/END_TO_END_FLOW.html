@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Source of https://claude.ai/artifact/Nd99vtgjNvE9tiLGxc9u86 (private: share from that page).
      Open this file in a browser; the diagrams are drawn by Mermaid, loaded from jsDelivr.
-     Counts are as of 10 Oct 2026 (security layers added) — update them here when the code changes. -->
+     Counts are as of 11 Oct 2026 — update them here when the code changes. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -71,6 +71,10 @@ nav.index a:hover, nav.index a:focus-visible { border-color: var(--brand); color
 section { display: grid; gap: 16px; padding-top: 48px; scroll-margin-top: 56px; }
 .diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow-x: auto; }
 .diagram pre.mermaid { margin: 0; min-width: 640px; display: flex; justify-content: center; background: transparent; }
+/* Diagram text is measured and drawn in one font, set here and in each
+   diagram's init line. If the page's web font applied, the boxes would be
+   sized for one face and drawn in a wider one, clipping every label. */
+.diagram pre.mermaid, .diagram pre.mermaid * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; }
 .steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
 .steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; min-width: 0; }
 .steps li::before { content: counter(s); font-family: var(--mono); font-size: 0.8rem; font-weight: 500; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--mock-bg); color: var(--brand); margin-top: 1px; }
@@ -126,37 +130,22 @@ footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line);
   <h2>The big picture</h2>
   <p>Three layers. The phone app does everything it can on the device. Firebase stores data and runs the server functions. Outside services do the jobs we can't: maps, routes, texts, and locating a phone that has no app.</p>
   <div class="diagram"><pre class="mermaid">
-flowchart LR
-  subgraph PHONE["Traveller's or guardian's phone"]
-    S["Screens"] --> H["Hooks and state"] --> SV["Services: the rules"] --> P["28 connectors (ports)"]
-  end
-  subgraph FB["Firebase (Google)"]
-    AU["Authentication: phone number sign-in"]
-    AC["App Check: is this the real app?"]
-    DB[("Firestore database: 26 collections, guarded by rules")]
-    CF["23 Cloud Functions"]
-    FCM["Cloud Messaging: push"]
-  end
-  subgraph OUT["Outside services"]
-    MAP["Apple Maps and MapKit: map and nearby places"]
-    GEO["Phone's own geocoder: address search"]
-    OSRM["OSRM: walking routes"]
-    SMS["SMS and voice provider: texts, missed calls"]
-    OP["Mobile operator (CAMARA): locate a basic phone"]
-  end
-  P --> AU
-  P -- "every call carries proof" --> AC
-  AC --> CF
-  P --> DB
-  P --> MAP
-  P --> GEO
-  P --> OSRM
-  DB -- "a write triggers" --> CF
-  CF --> FCM --> PHONE
-  CF --> SMS
-  CF --> OP
-  SMS -- "replies and missed calls" --> CF
-  </pre></div>
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
+flowchart TD
+  APP["The phone app&lt;br/&gt;screens, rules, 29 connectors"]
+  APP -- "sign-in" --> AU["Firebase&lt;br/&gt;Authentication"]
+  APP -- "reads and writes,&lt;br/&gt;checked by the rules" --> DB[("Firestore database&lt;br/&gt;26 collections")]
+  APP -- "calls, with&lt;br/&gt;App Check proof" --> CF["23 Cloud Functions"]
+  DB -. "a write triggers" .-> CF
+  CF -- "push" --> FCM["Cloud Messaging"]
+  FCM -- "alerts" --> PH["Family's and contacts'&lt;br/&gt;phones"]
+  CF ==> SMS(["SMS and voice provider"])
+  SMS -- "YES, STOP, HELP,&lt;br/&gt;missed calls" --> CF
+  CF ==> OP(["Mobile operator (CAMARA)&lt;br/&gt;locates a basic phone"])
+  APP ==> MAP(["Apple Maps and MapKit&lt;br/&gt;map, nearby places"])
+  APP ==> GEO(["Phone's own geocoder&lt;br/&gt;address search"])
+  APP ==> OSRM(["OSRM&lt;br/&gt;walking routes"])
+</pre></div>
   <p class="note"><b>Why connectors matter.</b> Every outside service sits behind a connector with a fake ("mock") version. That's why the whole app runs today with no backend: flip one setting and the same screens talk to the real service.</p>
 </section>
 
@@ -164,18 +153,19 @@ flowchart LR
   <div class="eyebrow">Flow 1</div>
   <h2>Signing in</h2>
   <div class="diagram"><pre class="mermaid">
-flowchart LR
-  A["Phone number screen: country from the phone, number checked as a real mobile"] -- "Send code" --> B["Firebase Auth texts a 6-digit code"]
-  B --> C["Code screen: fills itself from Messages, signs in on the 6th digit"]
-  C -- "wrong code" --> D["Red boxes: N tries left. 5 wrong locks this number for 10 minutes"]
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
+flowchart TD
+  A["Phone number screen: country&lt;br/&gt;from the phone, number checked&lt;br/&gt;as a real mobile"] -- "Send code" --> B["Firebase Auth texts a 6-digit&lt;br/&gt;code"]
+  B --> C["Code screen: fills itself from&lt;br/&gt;Messages, signs in on the 6th&lt;br/&gt;digit"]
+  C -- "wrong code" --> D["Red boxes: N tries left. 5&lt;br/&gt;wrong locks this number for 10&lt;br/&gt;minutes"]
   D --> C
-  C -- "right code" --> E["You're in: explains location, asks While Using only"]
-  E --> L["Offers the app lock: Face ID or Touch ID, ticked by default"]
+  C -- "right code" --> E["You're in: explains location,&lt;br/&gt;asks While Using only"]
+  E --> L["Offers the app lock: Face ID&lt;br/&gt;or Touch ID, ticked by default"]
   L --> F["Home"]
-  C -- "this phone records itself" --> DV[("devices")]
-  DV -.-> ND["onDeviceRegistered: a phone this account hasn't used before?"]
-  ND -- "yes" --> W1["Push to the account's other phones: if that wasn't you, call your network"]
-  ND -- "yes" --> W2["Push to the family: Priya's wayLoc was signed in on a new phone"]
+  C -- "this phone records&lt;br/&gt;itself" --> DV[("devices")]
+  DV -.-> ND["onDeviceRegistered: a phone&lt;br/&gt;this account hasn't used&lt;br/&gt;before?"]
+  ND -- "yes" --> W1["Push to the account's other&lt;br/&gt;phones: if that wasn't you,&lt;br/&gt;call your network"]
+  ND -- "yes" --> W2["Push to the family: Priya's&lt;br/&gt;wayLoc was signed in on a new&lt;br/&gt;phone"]
   </pre></div>
   <p class="note"><b>Why the new-phone warning.</b> Whoever holds the phone number can sign in. If someone moves the number to their own SIM (a SIM swap), the owner's old phone and the family are told straight away. The app can add itself to the device list but can never read or delete it, so a stolen account can't hide the sign-in.</p>
   <p class="note"><b>Outside service:</b> Firebase Authentication sends the text. In development a fake accepts any number and any code. Before real use, sign-in has to move to Firebase's native phone verification (the plan's "step 0").</p>
@@ -185,25 +175,26 @@ flowchart LR
   <div class="eyebrow">Flow 2 · the core of the app</div>
   <h2>A journey, from Home to Arrived</h2>
   <div class="diagram"><pre class="mermaid">
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
 flowchart TD
-  H["Home: full-screen map with a pull-up sheet"] --> W["Where to? Search in the sheet"]
+  H["Home: full-screen map with a&lt;br/&gt;pull-up sheet"] --> W["Where to? Search in the sheet"]
   W -- "address lookup" --> G(["Phone's own geocoder"])
   W --> R["Route: 3 to 5 steps and an ETA"]
   R -- "walking route" --> O(["OSRM routing"])
-  R --> ST["Start. First time only: allow location"]
+  R --> ST["Start. First time only: allow&lt;br/&gt;location"]
   ST --> J[("journeys record created")]
-  J -.-> F1["onJourneyStarted: tells contacts who opted in"]
-  ST --> OW["On the way: turn banner, ETA, check-in countdown"]
-  OW -- "location updates, sent in batches" --> LU[("locationUpdates")]
+  J -.-> F1["onJourneyStarted: tells&lt;br/&gt;contacts who opted in"]
+  ST --> OW["On the way: turn banner, ETA,&lt;br/&gt;check-in countdown"]
+  OW -- "location updates, sent&lt;br/&gt;in batches" --> LU[("locationUpdates")]
   LU --> WL["Guardians: Watch live"]
   OW --> CI{"Check-in due"}
-  CI -- "I'm OK, even from the lock screen" --> OW
+  CI -- "I'm OK, even from the&lt;br/&gt;lock screen" --> OW
   CI -- "no answer" --> MC["Missed check-in"]
-  MC -.-> F2["onMissedCheckIn: push or text to contacts"]
-  OW --> SC{"Safety check: late, stopped or off route"}
+  MC -.-> F2["onMissedCheckIn: push or text&lt;br/&gt;to contacts"]
+  OW --> SC{"Safety check: late, stopped or&lt;br/&gt;off route"}
   SC -- "no answer" --> ESC["Escalated"]
-  ESC -.-> F3["onSafetyCheckEscalated: alert, journey stays live"]
-  OW -- "within 100 m for 20 s" --> AR["Arrived: private walk feedback, location stops"]
+  ESC -.-> F3["onSafetyCheckEscalated: alert,&lt;br/&gt;journey stays live"]
+  OW -- "within 100 m for 20 s" --> AR["Arrived: private walk&lt;br/&gt;feedback, location stops"]
   </pre></div>
   <p class="note"><b>Backstops on the server.</b> The phone detects a missed check-in or an unanswered safety check first. If the phone is off or out of signal, two scheduled functions catch it anyway: <code>detectMissedCheckIns</code> every 2 minutes and <code>escalateOverdueSafetyChecks</code> every minute.</p>
 </section>
@@ -212,16 +203,17 @@ flowchart TD
   <div class="eyebrow">Flow 3</div>
   <h2>Getting help, from uneasy to emergency</h2>
   <div class="diagram"><pre class="mermaid">
-flowchart LR
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
+flowchart TD
   U["Feeling uneasy? pill"] --> U1["Call guardian"]
-  U --> U2["Fake call: a convincing incoming call"]
-  U --> U3["Location shared more often for 15 minutes"]
-  S["SOS button"] -- "hold 3 s" --> T1["Guardians alerted with live location"]
-  S -- "hold 6 s" --> T2["Also offers 999 or 112, from the phone's region"]
+  U --> U2["Fake call: a convincing&lt;br/&gt;incoming call"]
+  U --> U3["Location shared more often for&lt;br/&gt;15 minutes"]
+  S["SOS button"] -- "hold 3 s" --> T1["Guardians alerted with live&lt;br/&gt;location"]
+  S -- "hold 6 s" --> T2["Also offers 999 or 112, from&lt;br/&gt;the phone's region"]
   T1 --> X["10 seconds to cancel"]
   T1 --> SE[("sosEvents")]
-  SE -.-> F["onSOSTriggered: push to contacts with the app, text to the rest"]
-  T1 -- "no data signal" --> OFF["Queued on the phone. Text my contacts now opens Messages"]
+  SE -.-> F["onSOSTriggered: push to&lt;br/&gt;contacts with the app, text to&lt;br/&gt;the rest"]
+  T1 -- "no data signal" --> OFF["Queued on the phone. Text my&lt;br/&gt;contacts now opens Messages"]
   </pre></div>
   <p class="note"><b>Nobody is called automatically.</b> Emergency mode offers to call the first trusted contact; the person decides.</p>
 </section>
@@ -230,20 +222,21 @@ flowchart LR
   <div class="eyebrow">Flow 4</div>
   <h2>Family and trusted contacts</h2>
   <div class="diagram"><pre class="mermaid">
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
 flowchart TD
-  subgraph FAM["Family: people who use the app"]
-    I["Invite someone from your contacts"] -- "is this number on wayLoc? 20 a day" --> LI["lookupInvitee"]
+  subgraph FAM["Family"]
+    I["Invite someone from your&lt;br/&gt;contacts"] -- "is this number on&lt;br/&gt;wayLoc? 20 a day" --> LI["lookupInvitee"]
     I -- "Face ID first" --> INV[("familyInvitations")]
-    INV -.-> OI["onFamilyInvitationCreated: push to them"]
+    INV -.-> OI["onFamilyInvitationCreated:&lt;br/&gt;push to them"]
     OI --> ACC["They accept, after Face ID"] --> CON[("familyConnections")]
-    CON --> LIVE["See each other's status and Watch live"]
-    LIVE --> ASK["Ask OK?"] --> AO["askMemberOk: push with an I'm OK button, once per 5 minutes"]
-    REM["Every 30 days: Who can see your location?"] --> LIVE
+    CON --> LIVE["See each other's status and&lt;br/&gt;Watch live"]
+    LIVE --> ASK["Ask OK?"] --> AO["askMemberOk: push with an I'm&lt;br/&gt;OK button, once per 5 minutes"]
+    REM["Every 30 days: Who can see&lt;br/&gt;your location?"] --> LIVE
   end
-  subgraph TC["Trusted contacts: people who get alerts"]
-    ADD["Add, change or remove a contact, after Face ID"] --> CT[("contacts")]
-    CT -.-> TA["onTrustedContactAdded: text them so SOS isn't the first they hear"]
-    TEST["Send a test alert"] --> STA["sendTestAlert, at most once an hour"]
+  subgraph TC["Trusted contacts"]
+    ADD["Add, change or remove a&lt;br/&gt;contact, after Face ID"] --> CT[("contacts")]
+    CT -.-> TA["onTrustedContactAdded: text&lt;br/&gt;them so SOS isn't the first&lt;br/&gt;they hear"]
+    TEST["Send a test alert"] --> STA["sendTestAlert, at most once an&lt;br/&gt;hour"]
   end
   </pre></div>
   <p class="note"><b>Push or text.</b> For every alert, contacts with the app get a push and everyone else gets a text through the SMS provider. A shared tracking link opens a web page served by <code>getSharedJourney</code>.</p>
@@ -254,25 +247,26 @@ flowchart TD
   <h2>Basic phones: finding someone who has no app</h2>
   <p>A grandparent or a child with a basic phone can still be found, through their mobile operator, but only after they say yes by text. Nothing is locatable until the consent reaches <b>ACTIVE</b>.</p>
   <div class="diagram"><pre class="mermaid">
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
 flowchart TD
-  A["Guardian adds Sam: name and number, after Face ID"] --> C1[("consents: PENDING_SMS")]
+  A["Guardian adds Sam: name and&lt;br/&gt;number, after Face ID"] --> C1[("consents: PENDING_SMS")]
   C1 -.-> RC["requestConsentSms"]
-  RC ==> SMS1(["SMS provider sends: reply YES or STOP"])
+  RC ==> SMS1(["SMS provider sends: reply YES&lt;br/&gt;or STOP"])
   SMS1 --> M["Sam's basic phone"]
   M -- "replies YES" --> SMS2(["SMS provider webhook"])
-  SMS2 ==> IN["inboundConsentSms: checks the signature, reads the word"]
+  SMS2 ==> IN["inboundConsentSms: checks the&lt;br/&gt;signature, reads the word"]
   IN --> C2[("SMS_APPROVED")]
   C2 ==> OPC(["Operator consent (CIBA)"])
   OPC -- "operator asks Sam itself" --> C3[("OPERATOR_PENDING")]
   C3 -- "approved" --> C4[("ACTIVE")]
   C4 --> FIND["Guardian taps Find"]
-  FIND --> LM["locateMember: holds Sam? ACTIVE? market on? within the hourly limit?"]
-  LM ==> OPL(["Operator: CAMARA Location Retrieval"])
-  OPL --> CIRCLE["A circle on the map: approximate, never a dot"]
-  LM --> AUD[("locateAudits: every lookup recorded")]
+  FIND --> LM["locateMember: holds Sam?&lt;br/&gt;ACTIVE? market on? within the&lt;br/&gt;hourly limit?"]
+  LM ==> OPL(["Operator: CAMARA Location&lt;br/&gt;Retrieval"])
+  OPL --> CIRCLE["A circle on the map:&lt;br/&gt;approximate, never a dot"]
+  LM --> AUD[("locateAudits: every lookup&lt;br/&gt;recorded")]
   M -- "texts STOP, any time" --> IN
   IN --> REV[("REVOKED")]
-  REV -.-> OCR["onConsentRevoked: tidy up, text Sam to confirm"]
+  REV -.-> OCR["onConsentRevoked: tidy up,&lt;br/&gt;text Sam to confirm"]
   </pre></div>
   <div class="legend">
     <span><b>Rounded boxes</b> are outside services</span>
@@ -282,15 +276,16 @@ flowchart TD
 
   <h3>Safe zones and asking for help</h3>
   <div class="diagram"><pre class="mermaid">
-flowchart LR
-  Z["Guardian draws a zone after Face ID: 500 m to 5 km, up to 5"] --> SZ[("safeZones")]
-  SZ -.-> OZ["onSafeZoneCreated: texts Sam once"]
-  CS["checkSafeZones, every 15 minutes"] ==> V(["Operator: inside this circle? yes or no"])
-  V -- "2 agreeing answers flip it" --> ZE[("zoneEvents")] --> PUSH["Sam reached School, approximate"]
-  H["Sam texts HELP or rings our number"] ==> WH(["SMS or voice provider webhook"])
-  WH --> HB["inboundConsentSms or inboundMemberCall"]
-  HB --> AL["Every ACTIVE guardian: push and text with an approximate location"]
-  HB --> BACK["Text back to Sam: who was told, and call 112 or 999"]
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
+flowchart TD
+  Z["Guardian draws a zone after&lt;br/&gt;Face ID: 500 m to 5 km, up to&lt;br/&gt;5"] --> SZ[("safeZones")]
+  SZ -.-> OZ["onSafeZoneCreated: texts Sam&lt;br/&gt;once"]
+  CS["checkSafeZones, every 15&lt;br/&gt;minutes"] ==> V(["Operator: inside this circle?&lt;br/&gt;yes or no"])
+  V -- "2 agreeing answers flip&lt;br/&gt;it" --> ZE[("zoneEvents")] --> PUSH["Sam reached School,&lt;br/&gt;approximate"]
+  H["Sam texts HELP or rings our&lt;br/&gt;number"] ==> WH(["SMS or voice provider webhook"])
+  WH --> HB["inboundConsentSms or&lt;br/&gt;inboundMemberCall"]
+  HB --> AL["Every ACTIVE guardian: push&lt;br/&gt;and text with an approximate&lt;br/&gt;location"]
+  HB --> BACK["Text back to Sam: who was&lt;br/&gt;told, and call 112 or 999"]
   </pre></div>
   <p class="note"><b>Status today.</b> All of this runs end to end against fake operator and SMS services and the local database emulator. Going live needs an operator aggregator contract, SMS and voice providers for the UK and India, India's TRAI DLT registration, and a legal review (decision G3).</p>
 </section>
@@ -300,26 +295,28 @@ flowchart LR
   <h2>Security, layer by layer</h2>
   <p>Every request passes several separate checks before it reaches anyone's data. One rule sits above them all: <b>nothing that gets someone help, or reduces what others can see, is ever slowed down.</b> SOS, I'm OK and stopping sharing never ask for Face ID.</p>
   <div class="diagram"><pre class="mermaid">
-flowchart LR
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
+flowchart TD
   U["A person, or a script"] --> L1{"App lock: Face ID to open"}
-  L1 --> L2{"Signed in? Texted code; 5 wrong codes lock 10 minutes"}
-  L2 --> L3{"App Check: is this the real app on a real phone?"}
-  L3 -- "server functions" --> L5{"Rate limits: Find hourly, lookups 20 a day, Ask OK every 5 minutes"}
-  L3 -- "database" --> L4{"Rules: is this your record? Only the server can switch consent on"}
+  L1 --> L2{"Signed in? Texted code; 5&lt;br/&gt;wrong codes lock 10 minutes"}
+  L2 --> L3{"App Check: is this the real&lt;br/&gt;app on a real phone?"}
+  L3 -- "server functions" --> L5{"Rate limits: Find hourly,&lt;br/&gt;lookups 20 a day, Ask OK every&lt;br/&gt;5 minutes"}
+  L3 -- "database" --> L4{"Rules: is this your record?&lt;br/&gt;Only the server can switch&lt;br/&gt;consent on"}
   L5 --> D[("Your data")]
   L4 --> D
-  CH["Adding a watcher, a basic phone, a zone or a trusted contact"] --> FX{"Confirm it's you: Face ID or passcode"} --> L3
+  CH["Adding a watcher, a basic&lt;br/&gt;phone, a zone or a trusted&lt;br/&gt;contact"] --> FX{"Confirm it's you: Face ID or&lt;br/&gt;passcode"} --> L3
   </pre></div>
 
   <h3>What happens in a SIM swap</h3>
   <div class="diagram"><pre class="mermaid">
+%%{init: {"themeVariables": {"fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif", "fontSize": "15px"}, "flowchart": {"wrappingWidth": 210, "padding": 12, "nodeSpacing": 36, "rankSpacing": 44}}}%%
 flowchart TD
-  A["Someone moves Priya's number to their own SIM"] --> B["They sign in on their phone with the texted code"]
-  B --> C[("Their phone records itself in devices")]
+  A["Someone moves Priya's number&lt;br/&gt;to their own SIM"] --> B["They sign in on their phone&lt;br/&gt;with the texted code"]
+  B --> C[("Their phone records itself in&lt;br/&gt;devices")]
   C -.-> D["onDeviceRegistered"]
-  D --> E["Priya's old phone, on Wi-Fi: New sign-in to your wayLoc. Call your mobile network now"]
-  D --> F["Priya's family: Priya's wayLoc was signed in on a new phone. Check with her another way"]
-  B --> G["Every change that would let them see more asks for Face ID, which is Priya's face, not theirs"]
+  D --> E["Priya's old phone, on Wi-Fi:&lt;br/&gt;New sign-in to your wayLoc.&lt;br/&gt;Call your mobile network now"]
+  D --> F["Priya's family: Priya's wayLoc&lt;br/&gt;was signed in on a new phone.&lt;br/&gt;Check with her another way"]
+  B --> G["Every change that would let&lt;br/&gt;them see more asks for Face&lt;br/&gt;ID, which is Priya's face, not&lt;br/&gt;theirs"]
   </pre></div>
 
   <div class="table-box"><table>
