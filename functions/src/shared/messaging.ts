@@ -103,6 +103,7 @@ export async function sendAlerts(
   title: string,
   body: string,
   data: AlertData,
+  options: { category?: string } = {},
 ): Promise<void> {
   if (contactTokens.length === 0) {
     logger.info('No FCM tokens found — no alerts sent', { alertType: data.type });
@@ -118,7 +119,12 @@ export async function sendAlerts(
         android: { priority: 'high' },
         apns: {
           payload: {
-            aps: { contentAvailable: true, sound: 'default' },
+            aps: {
+              contentAvailable: true,
+              sound: 'default',
+              // Shows the category's actions, e.g. "I'm on it" on an SOS.
+              ...(options.category ? { category: options.category } : {}),
+            },
           },
         },
       }),

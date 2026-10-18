@@ -102,6 +102,7 @@ export type SmsTemplate =
   | 'checkin-sent'
   | 'sos-guardian'
   | 'contact-sos'
+  | 'contact-sos-reminder'
   | 'contact-missed'
   | 'contact-journey'
   | 'contact-added'
@@ -163,6 +164,7 @@ export function renderSms(template: SmsTemplate, guardianName: string, details: 
     // Trusted-contact texts (Phase 5c). Bodies are built by alerts/; these
     // keep each template key and its DLT id in the one registry.
     case 'contact-sos':
+    case 'contact-sos-reminder':
     case 'contact-missed':
     case 'contact-journey':
     case 'contact-added':

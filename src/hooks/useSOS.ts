@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useSOSContext } from '../context/SOSContext';
+import type { SosResponse } from '../models/SOS';
 import { usePrivacy } from './usePrivacy';
 
 export type SOSResolveStage = 'idle' | 'authenticating' | 'resolving' | 'error';
@@ -58,3 +59,18 @@ export function useSOS() {
     resolveError,
   };
 }
+
+/**
+ * Who has said "I'm on it" to the user's own SOS, live, for as long as the
+ * calling screen is mounted (Emergency mode).
+ */
+export function useSosResponses(sosId: string | undefined): SosResponse[] {
+  const { subscribeResponses } = useSOSContext();
+  const [responses, setResponses] = useState<SosResponse[]>([]);
+  useEffect(() => {
+    if (!sosId) return;
+    return subscribeResponses(sosId, setResponses);
+  }, [sosId, subscribeResponses]);
+  return responses;
+}
+

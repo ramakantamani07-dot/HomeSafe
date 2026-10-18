@@ -21,6 +21,9 @@ Cloud Logging → Logs-based metrics, filtered on `jsonPayload.metric="<name>"`.
 | `push_failed` | `kind`, `code` | any `kind: MEMBER_SOS` |
 | `app_check` | `fn`, `mode`, `outcome` | while `mode: monitor`: `missing` share is what enforcing would refuse — keep it near 0 for a week before setting `APP_CHECK_MODE=enforce`; once enforcing: any rise in callable `unauthenticated` errors |
 | `new_device` | `otherDevices`, `family`, `reached`, `attempted` | `reached` < `attempted` often (stale tokens); a burst across many accounts in an hour (a SIM-swap campaign) |
+| `hands_free_sos` | `outcome`, `platform`, `location` | any `unauthorised` spike (someone probing keys); `location: none` share rising |
+| `sos_ack` | `outcome` | `not-allowed` rising (people who think they should be able to respond can't) |
+| `sos_escalation` | `stage`, `pushed`, `texted` | **any** `stage: 2` — five minutes with nobody responding to an SOS; look at it |
 
 **Cost per lookup** = sum of `billedUnits` × the aggregator's unit price, per
 day. Zone checks are the steady cost (one unit per zone per 15 minutes while

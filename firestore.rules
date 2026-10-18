@@ -513,7 +513,11 @@ service cloud.firestore {
           // Ownership, trigger timestamp, and creation time are all immutable.
           && fieldUnchanged('userId')
           && fieldUnchanged('triggeredAt')
-          && fieldUnchanged('createdAt');
+          && fieldUnchanged('createdAt')
+          // Acknowledgements and escalation are the server's: a phone that
+          // could write them could fake "Mum has seen it" or stop escalation.
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+               ['acks', 'firstAckAt', 'escalationStage', 'escalationDueAt', 'source', 'locationObservedAt']);
         allow delete: if isOwner(userId);
       }
 

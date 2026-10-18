@@ -15,6 +15,8 @@ export interface StoredSOS {
   location: { latitude: number; longitude: number } | null;
   status: 'ACTIVE' | 'RESOLVED';
   triggeredAt: Timestamp;
+  /** Set by a duress "resolve": the SOS stays ACTIVE while looking cancelled. */
+  duressTriggered?: boolean;
   /** "hands-free" when Siri, the Action Button or a tile started it. Absent from the app. */
   source?: string;
   /** When `location` was observed, when it may be older than the SOS (hands-free). */
@@ -61,6 +63,8 @@ export interface AlertData {
   location: string; // "lat,lng" or "" when unknown
   /** Present only on SAFETY_CHECK_ESCALATED. "" when the battery is unknown. */
   battery?: string;
+  /** Present on SOS_TRIGGERED: which SOS "I'm on it" answers. */
+  sosId?: string;
 }
 
 // ── Network location (mirrors src/models/Consent.ts, LocateAudit.ts) ────────

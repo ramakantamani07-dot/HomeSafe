@@ -1,5 +1,5 @@
 import type { SOSProvider } from '../../providers/SOSProvider';
-import type { SOSEvent } from '../../models/SOS';
+import type { AcknowledgeOutcome, SOSEvent, SosResponse } from '../../models/SOS';
 import type { Coordinates } from '../../models/Journey';
 
 function delay(ms: number): Promise<void> {
@@ -86,5 +86,15 @@ export class MockSOSProvider implements SOSProvider {
       if (sos.status === 'ACTIVE') return { ...sos };
     }
     return null;
+  }
+
+  /** No server in mock mode: nobody responds, and the traveller is told exactly that. */
+  subscribeResponses(_userId: string, _sosId: string, onChange: (responses: SosResponse[]) => void): () => void {
+    onChange([]);
+    return () => {};
+  }
+
+  async acknowledgeSOS(): Promise<AcknowledgeOutcome> {
+    return 'acknowledged';
   }
 }

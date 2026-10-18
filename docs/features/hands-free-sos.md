@@ -98,6 +98,38 @@ offering a switch that does nothing.
 it); an SOS queued on the phone for later (an extension cannot run again on
 its own).
 
+## Acknowledgements and escalation (every SOS, 18 Oct 2026)
+
+For every SOS, however it started. Escalation only ever **adds** people and
+urgency; it never holds anyone back — every trusted contact is still alerted
+at once, as before. (A "primary contacts first, others after 60 s" design was
+considered and rejected: it would alert some people *later* than today.)
+
+| When | What happens |
+|---|---|
+| At once (unchanged) | Every trusted contact: push, or a text without the app. The push carries **I'm on it** |
+| Any time | A trusted contact or family member taps **I'm on it** (notification or `sos-received` screen). The traveller's Emergency mode shows "Mum has seen your SOS · 21:43"; escalation stops |
+| +2 min, nobody | A second, more urgent alert to every contact ("still active and nobody has responded"), by push and text |
+| +5 min, still nobody | Family members who aren't contacts are alerted; the traveller's phone is told to call 999 / 112 |
+
+- "I'm on it" means seen and acting — never "safe". Only the traveller ends an
+  SOS, with Face ID.
+- **Duress:** a duress "resolve" leaves the SOS ACTIVE, so escalation carries
+  on — but nothing is sent to the traveller's own phone ("Mum has seen it",
+  "nobody has responded"), which would tell whoever forced the cancel that it
+  is still running. Tested.
+- Who may say "I'm on it": the traveller's trusted contacts (named as the
+  traveller saved them) and family. Server-checked; strangers and the
+  traveller themselves are refused.
+- `acks`, `firstAckAt`, `escalationStage`, `escalationDueAt` are written only
+  by the server; the rules refuse them from any phone (tested). The
+  every-minute timer (`escalateSos`) finds due steps by `escalationDueAt` and
+  claims each in a transaction, so overlapping runs never repeat one.
+- New SMS template `contact-sos-reminder` (needs its India DLT id,
+  `DLT_TEMPLATE_CONTACT_SOS_REMINDER`). Metrics: `sos_ack`, `sos_escalation`.
+- **Not built:** "I'm on it" by text reply from contacts without the app; per-
+  person escalation timings.
+
 ## Phase 0 — the app lock never holds an SOS back
 
 Fixed alongside: an SOS from the widget or tile opened the app behind the Face

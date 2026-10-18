@@ -49,4 +49,4 @@ export {
 } from './networkLocation';
 export { askMemberOk, lookupInvitee, onFamilyInvitationCreated } from './family';
 export { onDeviceRegistered } from './security/newDevice';
-export { registerSosKey, revokeSosKey, deviceSos } from './sos';
+export { registerSosKey, revokeSosKey, deviceSos, acknowledgeSos, escalateSos } from './sos';

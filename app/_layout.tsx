@@ -30,6 +30,7 @@ import {
   SAFETY_CHECK_NOTIFICATION_ID,
 } from '../src/models/SafetyCheck';
 import { SHARING_REVIEW_TYPE } from '../src/models/AccountProtection';
+import { SOS_ACK_ACTION, SOS_ALERT_CATEGORY } from '../src/models/SOS';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -75,6 +76,14 @@ const ANSWER_OK_ACTION = 'ANSWER_OK';
 Notifications.setNotificationCategoryAsync(ASK_OK_CATEGORY, [
   { identifier: ANSWER_OK_ACTION, buttonTitle: "I'm OK" },
   { identifier: SOS_ACTION, buttonTitle: 'SOS', options: { isDestructive: true } },
+]).catch(() => {});
+/**
+ * "I'm on it" on an SOS alert, so a contact can answer from the lock screen
+ * (functions/src/sos/escalation.ts). Opens WayLoc, which sends the answer and
+ * shows where the person is.
+ */
+Notifications.setNotificationCategoryAsync(SOS_ALERT_CATEGORY, [
+  { identifier: SOS_ACK_ACTION, buttonTitle: "I'm on it", options: { opensAppToForeground: true } },
 ]).catch(() => {});
 Notifications.setNotificationCategoryAsync(
   SAFETY_CHECK_NOTIFICATION_CATEGORY,
@@ -139,6 +148,19 @@ function SafetyPromptNotificationBridge() {
       } else if (id === SAFETY_CHECK_NOTIFICATION_ID) {
         if (action === CONFIRM_SAFE_ACTION) void confirmOk();
         else if (action === SOS_ACTION) void triggerSOS();
+      } else if (data?.type === 'SOS_TRIGGERED' && typeof data.userId === 'string' && typeof data.sosId === 'string') {
+        // Someone's SOS. "I'm on it" answers it straight away; either way the
+        // contact lands on the screen showing where that person is.
+        router.push({
+          pathname: '/(app)/sos-received',
+          params: {
+            ownerId: data.userId,
+            sosId: data.sosId,
+            name: typeof data.userName === 'string' ? data.userName : '',
+            location: typeof data.location === 'string' ? data.location : '',
+            ack: action === SOS_ACK_ACTION ? '1' : '',
+          },
+        });
       } else if (data?.type === 'MEMBER_SOS' && typeof data.memberId === 'string') {
         // A basic-phone member asked for help: straight to where they are.
         router.push({

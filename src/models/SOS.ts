@@ -112,3 +112,34 @@ export function sosFallbackText(location: { latitude: number; longitude: number 
   // some phones would make it part of the URL.
   return `I need help.${where}\n(Sent from wayLoc — it couldn't reach the internet.)`;
 }
+
+/**
+ * Someone answering an SOS with "I'm on it" (functions/src/sos/escalation.ts):
+ * a trusted contact (named as the traveller knows them) or a family member.
+ * Seen and acting — never "safe".
+ */
+export interface SosResponse {
+  name: string;
+  at: Date;
+}
+
+export type AcknowledgeOutcome = 'acknowledged' | 'already' | 'not-active' | 'not-allowed' | 'not-found';
+
+/** The iOS notification category whose action is "I'm on it". Must match SOS_ALERT_CATEGORY on the server. */
+export const SOS_ALERT_CATEGORY = 'wayloc.sos-alert';
+export const SOS_ACK_ACTION = 'ACK_SOS';
+
+/**
+ * What Emergency mode says about who has responded. Only what is known: a
+ * name and a time someone tapped "I'm on it" — nobody is said to be "coming".
+ */
+export function describeResponses(responses: SosResponse[], formatTime: (d: Date) => string): string {
+  if (responses.length === 0) return "Nobody has said they're responding yet.";
+  const sorted = [...responses].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const first = sorted[0];
+  if (sorted.length === 1) return `${first.name} has seen your SOS · ${formatTime(first.at)}`;
+  const names = sorted.map((r) => r.name);
+  const list = names.length === 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${list} are responding · first at ${formatTime(first.at)}`;
+}
+

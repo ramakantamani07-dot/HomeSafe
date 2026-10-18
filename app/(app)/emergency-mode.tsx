@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
 import { SPACING, TYPOGRAPHY } from '../../src/config/theme';
-import { useSOS } from '../../src/hooks/useSOS';
+import { useSOS, useSosResponses } from '../../src/hooks/useSOS';
 import { usePrivacy } from '../../src/hooks/usePrivacy';
 import { PinEntryModal } from '../../src/components/security/PinEntryModal';
 import { Icon } from '../../src/components/ui/Icon';
@@ -16,6 +16,7 @@ import { sosFallbackText } from '../../src/models/SOS';
 import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 import { useContacts } from '../../src/hooks/useContacts';
 import { callNumber, textMany } from '../../src/utils/deviceLinks';
+import { describeResponses } from '../../src/models/SOS';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -29,6 +30,7 @@ export default function EmergencyModeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { activeSOS, isSOSLoading, resolveSOSWithAuth, resolveStage, triggerDuress } = useSOS();
+  const responses = useSosResponses(activeSOS?.id);
   const { verifyDuressCode } = usePrivacy();
   const { isOffline } = useNetworkStatus();
   const { contacts } = useContacts();
@@ -103,6 +105,18 @@ export default function EmergencyModeScreen() {
             ? "No data signal — wayLoc will alert your contacts the moment it reconnects. Text them now as well."
             : 'Your trusted contacts have been notified.\nYour location is being shared.'}
         </Text>
+
+        {/* Who has said "I'm on it" (functions/src/sos/escalation.ts). Only
+            names and times — never that anyone is "on their way". */}
+        {!isOffline && (
+          <Text
+            style={[styles.subtitle, { color: responses.length ? theme.safe.fg : theme.textSecondary }]}
+            accessibilityRole="text"
+            accessibilityLiveRegion="polite"
+          >
+            {describeResponses(responses, formatTime)}
+          </Text>
+        )}
 
         {/* The first trusted contact — the order on the contacts screen
             exists for exactly this button. A phone call needs no data. */}

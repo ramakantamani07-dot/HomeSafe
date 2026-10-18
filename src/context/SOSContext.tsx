@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SOSEvent } from '../models/SOS';
+import type { AcknowledgeOutcome, SOSEvent, SosResponse } from '../models/SOS';
 import type { SOSService } from '../services/SOSService';
 import { useAuthContext } from './AuthContext';
 import { useJourneyContext } from './JourneyContext';
@@ -17,6 +17,10 @@ interface SOSContextValue {
    * keeps running — see SOSService.triggerDuress.
    */
   triggerDuress(): Promise<void>;
+  /** Who has said "I'm on it" to this user's SOS `sosId`, live. Returns an unsubscribe. */
+  subscribeResponses(sosId: string, onChange: (responses: SosResponse[]) => void): () => void;
+  /** "I'm on it" to someone else's SOS. */
+  acknowledgeSOS(ownerId: string, sosId: string): Promise<AcknowledgeOutcome>;
 }
 
 const NOOP = async () => {};
@@ -27,6 +31,8 @@ export const SOSContext = createContext<SOSContextValue>({
   triggerSOS: NOOP,
   resolveSOS: NOOP,
   triggerDuress: NOOP,
+  subscribeResponses: () => () => {},
+  acknowledgeSOS: async () => 'not-found',
 });
 
 export function SOSStateProvider({
@@ -105,9 +111,20 @@ export function SOSStateProvider({
     setActiveSOS(null);
   }, [user?.id, activeSOS, sosService]);
 
+  const subscribeResponses = useCallback(
+    (sosId: string, onChange: (responses: SosResponse[]) => void) =>
+      user?.id ? sosService.subscribeResponses(user.id, sosId, onChange) : () => {},
+    [user?.id, sosService],
+  );
+
+  const acknowledgeSOS = useCallback(
+    (ownerId: string, sosId: string) => sosService.acknowledgeSOS(ownerId, sosId),
+    [sosService],
+  );
+
   const value = useMemo<SOSContextValue>(
-    () => ({ activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress }),
-    [activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress],
+    () => ({ activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress, subscribeResponses, acknowledgeSOS }),
+    [activeSOS, isSOSLoading, triggerSOS, resolveSOS, triggerDuress, subscribeResponses, acknowledgeSOS],
   );
 
   return (

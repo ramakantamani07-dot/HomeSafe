@@ -129,6 +129,10 @@ class SpySOSProvider implements SOSProvider {
 
   async getActiveSOS(_userId: string): Promise<SOSEvent | null> { return null; }
 
+  subscribeResponses(): () => void { return () => {}; }
+
+  async acknowledgeSOS(): Promise<'acknowledged'> { return 'acknowledged'; }
+
   async markDuress(userId: string, sosId: string): Promise<SOSEvent> {
     if (this.shouldFail) throw new Error('network error');
     this.calls.push({ method: 'markDuress', args: [userId, sosId] });

@@ -1,7 +1,9 @@
 import { HttpsError, onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { appCallable } from '../shared/appCheck';
 import { handleDeviceSos, parseDeviceSosBody, registerKey, revokeKeys, type KeyPlatform } from './handsFree';
+import { acknowledge, runDueEscalations } from './escalation';
 
 /**
  * Issues this phone an SOS key (see handsFree.ts). Called by the app when the
@@ -53,4 +55,25 @@ export const deviceSos = onRequest({ cors: false }, async (req, res) => {
     outcome.status === 'rate-limited' ? 429 :
     outcome.status === 'sent' ? 201 : 200;
   res.status(code).json(outcome);
+});
+
+/**
+ * "I'm on it", from a trusted contact or family member, on an active SOS.
+ * Only those people may; the first one stops escalation and the traveller is
+ * told who (escalation.ts).
+ */
+export const acknowledgeSos = appCallable('acknowledgeSos', async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
+  const { ownerId, sosId } = (request.data ?? {}) as { ownerId?: unknown; sosId?: unknown };
+  const id = /^[A-Za-z0-9_-]{1,128}$/;
+  if (typeof ownerId !== 'string' || !id.test(ownerId) || typeof sosId !== 'string' || !id.test(sosId)) {
+    throw new HttpsError('invalid-argument', 'Unknown SOS.');
+  }
+  return acknowledge(uid, ownerId, sosId);
+});
+
+/** Every minute: the escalation steps that are due (escalation.ts). */
+export const escalateSos = onSchedule('every 1 minutes', async () => {
+  await runDueEscalations();
 });

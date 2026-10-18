@@ -1,4 +1,4 @@
-import type { SOSEvent } from '../models/SOS';
+import type { AcknowledgeOutcome, SOSEvent, SosResponse } from '../models/SOS';
 import type { Coordinates } from '../models/Journey';
 
 export interface SOSProvider {
@@ -29,4 +29,11 @@ export interface SOSProvider {
   markDuress(userId: string, sosId: string): Promise<SOSEvent>;
   /** Returns the current active SOS for the user, or null if none. */
   getActiveSOS(userId: string): Promise<SOSEvent | null>;
+  /**
+   * Who has said "I'm on it" to one of the user's own SOS, live. Returns an
+   * unsubscribe function — must be called on cleanup.
+   */
+  subscribeResponses(userId: string, sosId: string, onChange: (responses: SosResponse[]) => void): () => void;
+  /** "I'm on it" to someone else's SOS. The server decides whether this person may. */
+  acknowledgeSOS(ownerId: string, sosId: string): Promise<AcknowledgeOutcome>;
 }

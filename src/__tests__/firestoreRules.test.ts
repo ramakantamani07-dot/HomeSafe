@@ -1219,6 +1219,21 @@ describeWithEmulator('Firestore security rules', () => {
     await assertFails(getDoc(ref));
     await assertFails(setDoc(ref, { userId: 'user-a', hash: 'x', revokedAt: null }));
   });
+
+  // ── SOS acknowledgements and escalation are the server's ──────────────────
+
+  test('the traveller can still end their SOS, but cannot fake "seen" or stop escalation', async () => {
+    const { assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-a', 'sosEvents', 'sos-esc');
+    const now = new Date();
+    await setDoc(ref, { userId: 'user-a', status: 'ACTIVE', triggeredAt: now, createdAt: now, journeyId: null, location: null });
+    await assertFails(updateDoc(ref, { firstAckAt: now }));
+    await assertFails(updateDoc(ref, { acks: { x: { name: 'Mum', at: now } } }));
+    await assertFails(updateDoc(ref, { escalationStage: 2 }));
+    await assertSucceeds(updateDoc(ref, { status: 'RESOLVED', resolvedAt: now }));
+  });
 });
 
 // ─── Static rule validation (always runs) ────────────────────────────────────

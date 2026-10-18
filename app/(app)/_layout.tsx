@@ -75,6 +75,7 @@ export default function AppLayout() {
         <Stack.Screen name="data-visibility" />
         <Stack.Screen name="fake-call-settings" />
         <Stack.Screen name="hands-free-sos" />
+        <Stack.Screen name="sos-received" />
         <Stack.Screen name="medical-id" />
         <Stack.Screen name="delete-account" />
         <Stack.Screen name="family-invite" />

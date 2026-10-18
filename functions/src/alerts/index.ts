@@ -12,6 +12,7 @@ import { db } from '../shared/firebase';
 import { getAlertRecipients, sendAlerts } from '../shared/messaging';
 import { mapLink, textContacts } from './contactSms';
 import { localTime, marketForNumber } from '../networkLocation/config';
+import { SOS_ALERT_CATEGORY, firstDueAt } from '../sos/escalation';
 import type {
   StoredJourney,
   StoredSOS,
@@ -82,8 +83,17 @@ export const onSOSTriggered = onDocumentCreated(
         journeyId: sos.journeyId ?? '',
         timestamp: sos.triggeredAt.toDate().toISOString(),
         location,
+        sosId,
       },
+      // "I'm on it" on the notification itself.
+      { category: SOS_ALERT_CATEGORY },
     );
+
+    // Start the escalation clock (sos/escalation.ts): if nobody says "I'm on
+    // it" in two minutes, everyone is alerted again, more urgently.
+    await event.data?.ref
+      .update({ escalationStage: 0, escalationDueAt: Timestamp.fromDate(firstDueAt(sos.triggeredAt.toDate())) })
+      .catch(() => {});
   },
 );
 

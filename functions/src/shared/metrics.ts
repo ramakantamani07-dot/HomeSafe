@@ -22,7 +22,9 @@ export type MetricName =
   | 'contact_sms'          // template, requested, sent, failed
   | 'app_check'            // fn, mode, outcome (verified | missing)
   | 'new_device'           // otherDevices, family, reached, attempted
-  | 'hands_free_sos';      // outcome, platform, location (device | journey | none)
+  | 'hands_free_sos'       // outcome, platform, location (device | journey | none)
+  | 'sos_ack'              // outcome
+  | 'sos_escalation';      // stage, pushed, texted
 
 export function metric(name: MetricName, fields: Record<string, string | number | boolean | null>): void {
   logger.info(`metric:${name}`, { metric: name, ...fields });

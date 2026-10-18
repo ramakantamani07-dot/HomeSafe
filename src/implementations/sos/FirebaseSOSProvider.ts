@@ -10,13 +10,15 @@ import {
   query,
   where,
   limit,
+  onSnapshot,
   type Firestore,
   type DocumentReference,
 } from 'firebase/firestore';
 import type { FirebaseApp } from 'firebase/app';
+import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 
 import type { SOSProvider } from '../../providers/SOSProvider';
-import type { SOSEvent, SOSStatus } from '../../models/SOS';
+import type { AcknowledgeOutcome, SOSEvent, SOSStatus, SosResponse } from '../../models/SOS';
 import type { Coordinates } from '../../models/Journey';
 
 type StoredSOS = {
@@ -49,10 +51,13 @@ function fromFirestore(id: string, data: StoredSOS): SOSEvent {
 }
 
 export class FirebaseSOSProvider implements SOSProvider {
+  private readonly functions: Functions;
+
   private readonly db: Firestore;
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
+    this.functions = getFunctions(app);
   }
 
   async createSOS(
@@ -117,5 +122,28 @@ export class FirebaseSOSProvider implements SOSProvider {
     if (snap.empty) return null;
     const d = snap.docs[0];
     return fromFirestore(d.id, d.data() as StoredSOS);
+  }
+
+  subscribeResponses(userId: string, sosId: string, onChange: (responses: SosResponse[]) => void): () => void {
+    return onSnapshot(
+      doc(sosCol(this.db, userId), sosId),
+      (snap) => {
+        const acks = (snap.get('acks') ?? {}) as Record<string, { name?: string; at?: Timestamp }>;
+        onChange(
+          Object.values(acks)
+            .filter((a) => a.name && a.at)
+            .map((a) => ({ name: a.name as string, at: (a.at as Timestamp).toDate() })),
+        );
+      },
+      () => onChange([]),
+    );
+  }
+
+  async acknowledgeSOS(ownerId: string, sosId: string): Promise<AcknowledgeOutcome> {
+    const call = httpsCallable<{ ownerId: string; sosId: string }, { status: AcknowledgeOutcome }>(
+      this.functions,
+      'acknowledgeSos',
+    );
+    return (await call({ ownerId, sosId })).data.status;
   }
 }

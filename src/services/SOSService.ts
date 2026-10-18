@@ -1,7 +1,7 @@
 import type { SOSProvider } from '../providers/SOSProvider';
 import type { JourneyProvider } from '../providers/JourneyProvider';
 import type { NetworkProvider } from '../providers/NetworkProvider';
-import type { SOSEvent } from '../models/SOS';
+import type { SOSEvent, AcknowledgeOutcome, SosResponse } from '../models/SOS';
 import type { Coordinates } from '../models/Journey';
 import type { OfflineSyncService } from './OfflineSyncService';
 
@@ -86,6 +86,16 @@ export class SOSService {
    */
   async triggerDuress(userId: string, sosId: string): Promise<void> {
     await this.sos.markDuress(userId, sosId);
+  }
+
+  /** Who has said "I'm on it" to one of this user's own SOS, live. */
+  subscribeResponses(userId: string, sosId: string, onChange: (responses: SosResponse[]) => void): () => void {
+    return this.sos.subscribeResponses(userId, sosId, onChange);
+  }
+
+  /** "I'm on it" to someone else's SOS. */
+  acknowledgeSOS(ownerId: string, sosId: string): Promise<AcknowledgeOutcome> {
+    return this.sos.acknowledgeSOS(ownerId, sosId);
   }
 
   async getActiveSOS(userId: string): Promise<SOSEvent | null> {
