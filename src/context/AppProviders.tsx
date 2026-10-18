@@ -50,6 +50,7 @@ import { MockDeviceIntegrityProvider } from '../implementations/security/MockDev
 import { GooglePlacesProvider } from '../implementations/places/GooglePlacesProvider';
 import { MockPlacesProvider } from '../implementations/places/MockPlacesProvider';
 import { PlatformGeocoderPlacesProvider } from '../implementations/places/PlatformGeocoderPlacesProvider';
+import { MapKitPlacesProvider } from '../implementations/places/MapKitPlacesProvider';
 import { FirebaseSavedPlaceProvider } from '../implementations/places/FirebaseSavedPlaceProvider';
 import { MockSavedPlaceProvider } from '../implementations/places/MockSavedPlaceProvider';
 import { FirebaseSafetyCheckProvider } from '../implementations/safetyCheck/FirebaseSafetyCheckProvider';
@@ -68,6 +69,7 @@ import { ExpoContactPickerProvider } from '../implementations/deviceContacts/Exp
 import { MockContactPickerProvider } from '../implementations/deviceContacts/MockContactPickerProvider';
 import { isNearbyPlacesAvailable } from '../../modules/nearby-places';
 import { isWalkingDirectionsAvailable } from '../../modules/walking-directions';
+import { isPlaceSearchAvailable } from '../../modules/place-search';
 
 import { FakeCallService } from '../services/FakeCallService';
 import { DataExportService } from '../services/DataExportService';
@@ -257,11 +259,16 @@ const routingService = new RoutingService(routingProvider);
 // This keys off the API key rather than Firebase config because the two are
 // provisioned independently — a Places key is not implied by having a backend.
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
+// On iOS, MapKit search sits between them: place names and suggestions as
+// you type, like Google, for free. It hands dropped-pin naming back to the
+// geocoder, which does that well.
 const placesProvider = GOOGLE_PLACES_API_KEY
   ? new GooglePlacesProvider(GOOGLE_PLACES_API_KEY)
-  : nativeMapsAvailable
-    ? new PlatformGeocoderPlacesProvider()
-    : new MockPlacesProvider();
+  : isPlaceSearchAvailable
+    ? new MapKitPlacesProvider(new PlatformGeocoderPlacesProvider())
+    : nativeMapsAvailable
+      ? new PlatformGeocoderPlacesProvider()
+      : new MockPlacesProvider();
 const placesService = new PlacesService(placesProvider);
 
 const savedPlaceProvider = devMode

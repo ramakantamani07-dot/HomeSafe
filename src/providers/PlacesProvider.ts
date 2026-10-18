@@ -9,6 +9,8 @@ import type { Place, PlaceSuggestion } from '../models/Place';
  * Concrete implementations:
  *  - MockPlacesProvider   — local fixtures, no key, no network (dev / CI)
  *  - GooglePlacesProvider — Places API (New): Autocomplete + Place Details
+ *  - MapKitPlacesProvider — Apple MapKit: suggestions as you type, free (iOS)
+ *  - PlatformGeocoderPlacesProvider — the OS geocoder: addresses and postcodes
  *
  * A UK-postcode-only provider (getAddress.io, Ideal Postcodes, OS Places)
  * fits the same interface: `searchPlaces` returns the addresses at a
