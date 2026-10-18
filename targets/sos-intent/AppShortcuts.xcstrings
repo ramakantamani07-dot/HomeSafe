@@ -1,0 +1,65 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "${applicationName} help me": {
+      "localizations": {
+        "hi": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "${applicationName} मदद करो",
+              "${applicationName} बचाओ"
+            ]
+          }
+        },
+        "en-IN": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "${applicationName} help me",
+              "${applicationName} bachao",
+              "${applicationName} madad karo"
+            ]
+          }
+        }
+      }
+    },
+    "Help me with ${applicationName}": {
+      "localizations": {
+        "hi": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "${applicationName} से मदद चाहिए"
+            ]
+          }
+        }
+      }
+    },
+    "${applicationName} SOS": {
+      "localizations": {
+        "hi": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "${applicationName} एसओएस"
+            ]
+          }
+        }
+      }
+    },
+    "Send ${applicationName} SOS": {
+      "localizations": {
+        "hi": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "${applicationName} एसओएस भेजो"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

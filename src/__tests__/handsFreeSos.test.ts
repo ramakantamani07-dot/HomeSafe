@@ -4,7 +4,13 @@ import * as path from 'path';
 import { HandsFreeSosService, HandsFreeSosUnavailableError } from '../services/HandsFreeSosService';
 import { MemorySosVault } from '../implementations/handsFreeSos/MemorySosVault';
 import { MockHandsFreeSosProvider } from '../implementations/handsFreeSos/MockHandsFreeSosProvider';
-import { LOCATION_SAVE_INTERVAL_MS, SIRI_PHRASES, TEST_WINDOW_MS } from '../models/HandsFreeSos';
+import {
+  LOCATION_SAVE_INTERVAL_MS,
+  SIRI_PHRASES,
+  SIRI_PHRASES_HINDI,
+  SIRI_PHRASES_INDIAN_ENGLISH,
+  TEST_WINDOW_MS,
+} from '../models/HandsFreeSos';
 
 function setup(available = true) {
   const server = new MockHandsFreeSosProvider();
@@ -80,5 +86,18 @@ describe('the phrases Settings shows', () => {
     const block = swift.slice(swift.indexOf('phrases: ['), swift.indexOf('shortTitle'));
     const listened = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1].replace('\\(.applicationName)', 'WayLoc'));
     expect(listened).toEqual([...SIRI_PHRASES]);
+  });
+
+  it('include exactly the Hindi and Indian English ones in the string catalog', () => {
+    const catalog = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../../targets/sos-intent/AppShortcuts.xcstrings'), 'utf8'),
+    ) as { strings: Record<string, { localizations: Record<string, { stringSet: { values: string[] } }> }> };
+    const inLocale = (locale: string) =>
+      Object.values(catalog.strings)
+        .flatMap((s) => s.localizations[locale]?.stringSet.values ?? [])
+        .map((v) => v.replace('${applicationName}', 'WayLoc'));
+    expect(inLocale('hi')).toEqual([...SIRI_PHRASES_HINDI]);
+    // Indian English also keeps the plain English phrase.
+    expect(inLocale('en-IN')).toEqual(['WayLoc help me', ...SIRI_PHRASES_INDIAN_ENGLISH]);
   });
 });

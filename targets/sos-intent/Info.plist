@@ -7,6 +7,12 @@
 		<key>EXExtensionPointIdentifier</key>
 		<string>com.apple.appintents-extension</string>
 	</dict>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>en-IN</string>
+		<string>hi</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>WayLoc includes your location in an SOS so your trusted contacts can find you.</string>
 </dict>

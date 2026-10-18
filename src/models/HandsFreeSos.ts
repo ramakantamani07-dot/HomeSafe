@@ -11,6 +11,19 @@ export const SIRI_PHRASES = [
   'Send WayLoc SOS',
 ] as const;
 
+/**
+ * Also heard when Siri's language is Hindi, or English (India). Must match
+ * targets/sos-intent/AppShortcuts.xcstrings.
+ */
+export const SIRI_PHRASES_HINDI = [
+  'WayLoc मदद करो',
+  'WayLoc बचाओ',
+  'WayLoc से मदद चाहिए',
+  'WayLoc एसओएस',
+  'WayLoc एसओएस भेजो',
+] as const;
+export const SIRI_PHRASES_INDIAN_ENGLISH = ['WayLoc bachao', 'WayLoc madad karo'] as const;
+
 /** How long "Test hands-free SOS" makes Siri triggers alert nobody. */
 export const TEST_WINDOW_MS = 10 * 60 * 1000;
 

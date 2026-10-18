@@ -8,7 +8,8 @@ module.exports = (config) => ({
   type: 'app-intent',
   name: 'sos_intent',
   displayName: 'WayLoc SOS',
-  deploymentTarget: '16.0',
+  // App Intents extensions are ExtensionKit extensions: iOS 17 and later.
+  deploymentTarget: '17.0',
   frameworks: ['AppIntents', 'CoreLocation'],
   bundleIdentifier: '.sos-intent',
   entitlements: {

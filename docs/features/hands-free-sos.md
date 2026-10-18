@@ -83,10 +83,20 @@ server, the active journey's last position if newer. When the fix is more than
 5 minutes older than the SOS, the alert says when it was taken — "Last known
 location (21:42)".
 
+**Languages.** Hindi and English (India) phrases are in
+`targets/sos-intent/AppShortcuts.xcstrings` (Siri uses them when its language
+is set to one of those): "WayLoc मदद करो", "WayLoc बचाओ", "WayLoc से मदद
+चाहिए", "WayLoc एसओएस", "WayLoc एसओएस भेजो", and in Indian English "WayLoc
+bachao", "WayLoc madad karo". Xcode validates the catalog at build time; a
+test keeps it and Settings in step.
+
+**Needs iOS 17.** App Intents extensions are ExtensionKit extensions, so the
+Siri action exists from iOS 17; on older phones Settings says so instead of
+offering a switch that does nothing.
+
 **Not built:** sending a text by itself when offline (iPhone does not allow
 it); an SOS queued on the phone for later (an extension cannot run again on
-its own); Hindi phrases (need a localised App Shortcuts strings catalog —
-next).
+its own).
 
 ## Phase 0 — the app lock never holds an SOS back
 

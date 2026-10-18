@@ -7,7 +7,11 @@ import { FONTS, SPACING, TYPOGRAPHY, type ThemeColors } from '../../src/config/t
 import { localEmergencyNumber } from '../../src/config/markets';
 import { useGoBack } from '../../src/hooks/useGoBack';
 import { useHandsFreeSos } from '../../src/hooks/useHandsFreeSos';
-import { SIRI_PHRASES } from '../../src/models/HandsFreeSos';
+import {
+  SIRI_PHRASES,
+  SIRI_PHRASES_HINDI,
+  SIRI_PHRASES_INDIAN_ENGLISH,
+} from '../../src/models/HandsFreeSos';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { ListRow, Section } from '../../src/components/ui/Section';
 import { Button } from '../../src/components/ui/Button';
@@ -56,7 +60,7 @@ export default function HandsFreeSosScreen() {
           <Section>
             <View style={styles.card}>
               <Text style={styles.body}>
-                Hands-free SOS works through Siri on iPhone. It isn't available on this phone yet.
+                Hands-free SOS works through Siri on iPhone, with iOS 17 or later. It isn't available on this phone yet.
                 The SOS button and the Lock Screen widget still work.
               </Text>
             </View>
@@ -81,6 +85,15 @@ export default function HandsFreeSosScreen() {
 
             <Section title="Say to Siri">
               {SIRI_PHRASES.map((phrase) => (
+                <ListRow key={phrase} icon="mic" title={`“Siri, ${phrase}”`} />
+              ))}
+            </Section>
+
+            <Section
+              title="In Hindi, or Indian English"
+              footer="Heard when Siri's language is Hindi or English (India). Change it in Settings › Siri › Language."
+            >
+              {[...SIRI_PHRASES_HINDI, ...SIRI_PHRASES_INDIAN_ENGLISH].map((phrase) => (
                 <ListRow key={phrase} icon="mic" title={`“Siri, ${phrase}”`} />
               ))}
             </Section>
