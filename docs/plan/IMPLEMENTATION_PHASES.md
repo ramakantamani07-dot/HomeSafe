@@ -15,7 +15,7 @@ compound.
 
 ---
 
-## Status at 10 Oct 2026
+## Status at 18 Oct 2026
 
 | Phase | State | What is left |
 |---|---|---|
@@ -30,6 +30,17 @@ compound.
 | 6 · Network location | **6.1–6.6 done, against mocks** (resend D26, safe zones D27, SOS and check-ins by text or missed call D28) | Real operator, SMS and voice providers (G3) · device verification on Firebase |
 | 7 · Sign-in | **Built against mocks (10 Oct)**, to the v8 boards `AN1`–`AN4` (D29) | Look on a device · code auto-fill needs real SMS, so real phone auth first (Firebase test plan step 0) |
 | 8 · Hardening | **Desk work done (9 Oct)** | Battery walk on a release build (`docs/reference/OPERATIONS.md`) · log-based metrics and alerts set up once Firebase is live |
+
+**Built since 10 Oct** — each has its own section below, or its own doc:
+
+| Work | State | What is left |
+|---|---|---|
+| App Check (`APP_CHECK.md`) | **Server side built (10 Oct)** — the five app-called functions record it, enforce on `APP_CHECK_MODE=enforce` | App side: Firebase config file + native library (with real phone sign-in); then enforce |
+| Account protection (`ACCOUNT_PROTECTION.md`) | **Built (10 Oct)** — Face ID before sensitive changes, app lock offered at sign-in, new-phone warning, monthly "who can see you" | SMS region policy in the console; new-phone warning on the real backend |
+| Walking routes and place search, iPhone | **Built (11 Oct)** — Apple MapKit, free | Android: Google (see "Android map services"); travel mode still ignored (known gap) |
+| Hands-free SOS (`features/hands-free-sos.md`) | **Phase 0 + 1 built (18 Oct)** — the app lock never holds back an SOS; "Siri, WayLoc help me", Action Button, Back Tap, Hindi and Indian English phrases; iOS 17+ | Install and try on the iPhone; whole path on the deployed backend; Phase 2 Android |
+| SOS acknowledgements and escalation (same doc) | **Built (18 Oct)** — "I'm on it" from contacts and family; reminders at 2 and 5 min; nothing to the traveller's phone under duress | Real notifications between two phones on the deployed backend; DLT template for the reminder text |
+| Proposals, not built | Recorded | Keep less on the server (`DATA_RETENTION.md`); rides by deep link; safer routes; ideas beyond journey sharing — sections below |
 
 `AI5` was started early and deliberately: `AI4`'s "Feeling uneasy?" pill needs a
 destination, and a button that goes nowhere is worse than no button. It ships
@@ -209,7 +220,9 @@ walk on a release build.
 mocks and the Firestore emulator, and has never run on Firebase or between two
 real phones: trusted-contact SMS and test alerts, consent SMS / STOP / locate (6.3), resend consent, safe-zone checks, SOS and check-ins by text or missed call, revocation
 layer 3, retention clean-up, live family status, watch presence, Ask "OK?",
-the invitation push, and the "On wayLoc" lookup. Getting there needs a
+the invitation push, the "On wayLoc" lookup, App Check monitoring, the
+new-phone warning, hands-free SOS (`registerSosKey` / `deviceSos`), and SOS
+acknowledgements and escalation (`acknowledgeSos` / `escalateSos`). Getting there needs a
 Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 (`docs/reference/RUNNING.md`), and a Firestore TTL policy on `smsInbound`.
 **This is the highest-value next step.**
@@ -221,6 +234,8 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
 | Firebase console: SMS region policy (UK, India only) — `docs/reference/ACCOUNT_PROTECTION.md` | 8 |
 | Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
+| **Install the 18 Oct build on the iPhone** (native rebuild — new Siri extension): app lock never blocks SOS (widget with the lock on), Settings › Hands-free SOS, "Siri, WayLoc help me" on a locked phone (says "development build" until the backend is live) | — |
+| Hands-free SOS Phase 2, Android: Quick Settings tile with the SOS key, then "WayLoc, help me" listening during journeys — needs an Android phone and a listening-engine decision (`DEPENDENCIES.md`: Vosk is free; Picovoice is paid) | — |
 | **Android map services** — the map is blank, routes are OSRM driving, nearby safe places are fixtures. Plan in "Android map services" below | 3 |
 
 **Waiting on a decision or an input**
@@ -303,6 +318,31 @@ checkable instead: "a better-lit route", "busier streets", "passes 3 open
 places". Related, already built: nearby safe places on "Feeling uneasy?"
 (`SafePlace`, safest kinds first), and "Open places on the way" behind its
 flag (D4).
+
+**Rides — cab, auto, bike taxi (proposal, decided 13–17 Oct 2026, not built).**
+WayLoc stays the safety layer around any journey, not a ride-hailing app.
+
+- **Ride options, never price comparison** (decided). Show Uber, Ola, Rapido,
+  street auto, walk, own car, metro or bus as options; never prices side by
+  side — Uber's API terms forbid comparing its prices with other providers,
+  and "cheapest" is not what a safety app should push. A provider's own fare
+  after the person has picked it is not a comparison; check each provider's
+  terms if APIs come.
+- **Deep links first**: free, no approval, every provider; can carry an
+  affiliate id (Ola documents one). APIs (prices, booking in-app, driver
+  details) only once there is volume to negotiate with.
+- **The Safe Journey starts before the hand-off** — a deep link sends nothing
+  back, so it is the one moment WayLoc can be sure of. On return: "Did you
+  book? Add the vehicle number" or end the journey; if they never return, a
+  gentle "Are you in your ride?" that never alerts the family by itself.
+- **"Protect any ride"** (street autos, taxis, any app) matters more than
+  booking, and needs no partner.
+- **Prerequisite:** mode-aware journeys — route, ETA (plus a pickup
+  allowance), alert thresholds and tracking rate per mode (see the travel-mode
+  known gap).
+- Order: launch basics → mode-aware journeys + "Protect any ride" → deep
+  links (Uber first) → provider APIs with numbers in hand. Provider names as
+  text until logo permission; vehicle numbers and DPDP to the legal review.
 
 **Ideas beyond journey sharing (recorded 18 Oct 2026).** Journey sharing is
 now table stakes — WhatsApp, Google Maps and the ride apps all do it. Ideas
