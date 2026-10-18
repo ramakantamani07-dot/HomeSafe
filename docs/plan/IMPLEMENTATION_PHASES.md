@@ -128,10 +128,13 @@ replacing it and never covers the SOS path. **Phase 1 (built, iPhone):**
 "Siri, WayLoc help me", the Action Button and Back Tap run an App Intents
 extension (`targets/sos-intent`) that sends the SOS itself with a scoped SOS
 key (`registerSosKey`, `deviceSos`, `revokeSosKey`); the server writes the
-same SOS record as the app, so the usual alerts go out. Still to do: device
-check against the deployed backend; Hindi phrases; Phase 2 Android (tile with
-the key, then "WayLoc, help me" listening during journeys); SOS
-acknowledgements and escalation as their own feature.
+same SOS record as the app, so the usual alerts go out. Hindi and Indian
+English phrases done; needs iOS 17. **SOS acknowledgements and escalation
+(done, every SOS):** "I'm on it" from contacts and family; a reminder to
+everyone at 2 min and family at 5 min if nobody responds; never anything to
+the traveller's phone under duress. Still to do: device check against the
+deployed backend; Phase 2 Android (tile with the key, then "WayLoc, help me"
+listening during journeys).
 
 ### Account protection (10 Oct 2026)
 
