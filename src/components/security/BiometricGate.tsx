@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { usePathname } from 'expo-router';
 
 import { useTheme } from '../../context/ThemeContext';
 import { SPACING, TYPOGRAPHY } from '../../config/theme';
@@ -7,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { usePrivacy } from '../../hooks/usePrivacy';
 import { Icon } from '../ui/Icon';
 import { Button } from '../ui/Button';
+import { isNeverLocked } from './lockPolicy';
 import type { ThemeColors } from '../../config/theme';
 
 /**
@@ -24,12 +26,15 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [authenticating, setAuthenticating] = useState(false);
 
+  const pathname = usePathname();
   const shouldLock = Boolean(
     user &&
     !isLoading &&
     biometricLockEnabled &&
     biometricAvailable &&
-    !unlocked
+    !unlocked &&
+    // An SOS — from the widget, the tile or Siri — is never held behind the lock.
+    !isNeverLocked(pathname)
   );
 
   const handleUnlock = async () => {
@@ -50,34 +55,49 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (!shouldLock) {
-    return <>{children}</>;
-  }
-
+  // The lock *covers* the app rather than replacing it. Replacing it
+  // unmounted every screen beneath — including an SOS route about to send —
+  // and threw away navigation on unlock. Underneath, the app stays mounted but
+  // untouchable and hidden from screen readers while the lock is up.
   return (
-    <View style={styles.screen}>
-      <View style={styles.logoCircle}>
-        <Icon name="shield" size={40} color={theme.textOnColor} />
+    <View style={styles.fill}>
+      <View
+        style={styles.fill}
+        pointerEvents={shouldLock ? 'none' : 'auto'}
+        accessibilityElementsHidden={shouldLock}
+        importantForAccessibility={shouldLock ? 'no-hide-descendants' : 'auto'}
+      >
+        {children}
       </View>
-      <Text style={styles.appName}>wayLoc</Text>
-      <Text style={styles.subtitle}>Unlock to continue</Text>
+      {shouldLock && (
+        <View style={[StyleSheet.absoluteFill, styles.screen]}>
+          <View style={styles.logoCircle}>
+            <Icon name="shield" size={40} color={theme.textOnColor} />
+          </View>
+          <Text style={styles.appName}>wayLoc</Text>
+          <Text style={styles.subtitle}>Unlock to continue</Text>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error}>{error}</Text>}
 
-      <Button
-        label="Unlock with Biometrics"
-        icon="lock"
-        onPress={handleUnlock}
-        loading={authenticating}
-        fullWidth={false}
-        style={styles.unlockButton}
-      />
+          <Button
+            label="Unlock with Biometrics"
+            icon="lock"
+            onPress={handleUnlock}
+            loading={authenticating}
+            fullWidth={false}
+            style={styles.unlockButton}
+          />
+        </View>
+      )}
     </View>
   );
 }
 
 function getStyles(theme: ThemeColors) {
   return StyleSheet.create({
+    fill: {
+      flex: 1,
+    },
     screen: {
       flex: 1,
       backgroundColor: theme.background,

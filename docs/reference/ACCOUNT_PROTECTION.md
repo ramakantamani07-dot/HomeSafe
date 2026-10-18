@@ -63,6 +63,15 @@ default, where few people would find it. A stolen unlocked phone otherwise
 opens straight onto everyone's locations. Not on the AN3 board; recorded here
 as the reason.
 
+**The lock never covers the SOS path** (fixed 18 Oct 2026). An SOS from the
+Lock Screen widget or the Quick Settings tile opens the app at
+`/sos-trigger`; with the lock on, the lock screen replaced the whole app and
+nothing was sent until the person passed Face ID. Now the lock *covers* the
+app instead of replacing it — screens beneath stay mounted but untouchable
+and hidden from screen readers — and never covers `/sos-trigger`, `/sos`,
+`/emergency-mode` or the fake-call screens (`lockPolicy.ts`, tested in
+`sosNeverLocked.test.tsx`). Ending an SOS still asks for Face ID.
+
 ### 3 · Warning when the account signs in on a new phone
 
 - Each installation records itself once, under
