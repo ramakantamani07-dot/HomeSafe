@@ -1208,6 +1208,17 @@ describeWithEmulator('Firestore security rules', () => {
       setDoc(doc(b, 'users', 'user-a', 'devices', 'install-5'), { platform: 'ios', pushToken: null, lastSeenAt: new Date() }),
     );
   });
+
+  // ── Hands-free SOS keys ────────────────────────────────────────────────────
+
+  test('no phone can read, create or change an SOS key, not even its owner', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, getDoc, setDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-a').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'sosKeys', 'some-key-id-000000');
+    await assertFails(getDoc(ref));
+    await assertFails(setDoc(ref, { userId: 'user-a', hash: 'x', revokedAt: null }));
+  });
 });
 
 // ─── Static rule validation (always runs) ────────────────────────────────────

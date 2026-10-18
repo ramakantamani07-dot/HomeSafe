@@ -21,7 +21,8 @@ export type MetricName =
   | 'push_failed'          // kind, code
   | 'contact_sms'          // template, requested, sent, failed
   | 'app_check'            // fn, mode, outcome (verified | missing)
-  | 'new_device';          // otherDevices, family, reached, attempted
+  | 'new_device'           // otherDevices, family, reached, attempted
+  | 'hands_free_sos';      // outcome, platform, location (device | journey | none)
 
 export function metric(name: MetricName, fields: Record<string, string | number | boolean | null>): void {
   logger.info(`metric:${name}`, { metric: name, ...fields });

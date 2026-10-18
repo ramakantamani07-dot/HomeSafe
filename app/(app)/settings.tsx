@@ -150,6 +150,12 @@ export default function SettingsScreen() {
         <Section title="Safety tools">
           <SosHoldRow />
           <ListRow
+            icon="mic"
+            title="Hands-free SOS"
+            subtitle="“Siri, WayLoc help me”, without unlocking"
+            onPress={() => router.push('/(app)/hands-free-sos')}
+          />
+          <ListRow
             icon="call"
             title="Fake call"
             subtitle="Set the caller name and delay"

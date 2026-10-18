@@ -11,6 +11,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../shared/firebase';
 import { getAlertRecipients, sendAlerts } from '../shared/messaging';
 import { mapLink, textContacts } from './contactSms';
+import { localTime, marketForNumber } from '../networkLocation/config';
 import type {
   StoredJourney,
   StoredSOS,
@@ -58,18 +59,21 @@ export const onSOSTriggered = onDocumentCreated(
 
     logger.info(`SOS triggered; notifying ${tokens.length} by push, ${sms.length} by text`, { sosId });
 
+    // A hands-free SOS may carry an older fix (the journey's last position);
+    // say when, rather than let an old point read as where they are now.
+    const when = staleFixTime(sos, user?.phone ?? '');
     const link = mapLink(sos.location);
     await textContacts(
       sms,
       'contact-sos',
-      `wayLoc SOS: ${userName} needs help.${link ? ` Last location: ${link}` : ''} Call them now — if you can't reach them, call the emergency services.`,
+      `wayLoc SOS: ${userName} needs help.${link ? ` Last location${when}: ${link}` : ''} Call them now — if you can't reach them, call the emergency services.`,
     );
 
     await sendAlerts(
       tokens,
       '🚨 SOS Alert',
       location
-        ? `${userName} has triggered an SOS! Last known location: ${location}`
+        ? `${userName} has triggered an SOS! Last known location${when}: ${location}`
         : `${userName} has triggered an SOS alert!`,
       {
         type: 'SOS_TRIGGERED',
@@ -229,3 +233,14 @@ export const onSafetyCheckEscalated = onDocumentUpdated(
 );
 
 export { onJourneyStarted, onTrustedContactAdded, sendTestAlert } from './contacts';
+
+/** How far behind the SOS a fix may be and still be called simply "last location". */
+const STALE_FIX_MS = 5 * 60 * 1000;
+
+/** " (10:42)" when the SOS's location was observed well before it; "" otherwise. */
+export function staleFixTime(sos: StoredSOS, ownerPhone: string): string {
+  const at = sos.locationObservedAt?.toDate();
+  if (!at || !sos.location) return '';
+  if (sos.triggeredAt.toDate().getTime() - at.getTime() < STALE_FIX_MS) return '';
+  return ` (${localTime(at, marketForNumber(ownerPhone))})`;
+}

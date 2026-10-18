@@ -7,6 +7,7 @@ import Constants from 'expo-constants';
 import { useTheme } from '../../src/context/ThemeContext';
 import { FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
 import { useAuth } from '../../src/hooks/useAuth';
+import { useHandsFreeSos } from '../../src/hooks/useHandsFreeSos';
 import { useContacts } from '../../src/hooks/useContacts';
 import { usePlaces } from '../../src/hooks/usePlaces';
 import { useGoBack } from '../../src/hooks/useGoBack';
@@ -30,6 +31,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const goBack = useGoBack();
   const { user, signOut, updateProfile } = useAuth();
+  const handsFree = useHandsFreeSos();
   const { contacts } = useContacts();
   const { savedPlaces } = usePlaces();
   const { preferences } = useSafetyPreferences();
@@ -59,7 +61,13 @@ export default function ProfileScreen() {
   const confirmSignOut = () =>
     Alert.alert('Sign out?', "You won't get alerts on this phone until you sign in again.", [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        // Revoke this phone's hands-free SOS key while the session can still
+        // prove who is asking; the phone's copy is wiped on sign-out anyway.
+        onPress: () => void handsFree.disable().catch(() => {}).finally(() => void signOut()),
+      },
     ]);
 
   const displayName = user?.name?.trim() || 'Your name';

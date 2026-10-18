@@ -18,6 +18,7 @@
  *   networkLocation/  basic-phone members: consent SMS, STOP webhook, locate
  *   family/     Ask "OK?", invitee lookup, invitation push
  *   security/   new-device sign-in warning
+ *   sos/        hands-free SOS: SOS keys and the device endpoint
  *
  * Side-effect import order matters only in that `shared/firebase` must be
  * initialised before anything touches Firestore; every module imports it, and
@@ -48,3 +49,4 @@ export {
 } from './networkLocation';
 export { askMemberOk, lookupInvitee, onFamilyInvitationCreated } from './family';
 export { onDeviceRegistered } from './security/newDevice';
+export { registerSosKey, revokeSosKey, deviceSos } from './sos';

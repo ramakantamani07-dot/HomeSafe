@@ -184,6 +184,13 @@ service cloud.firestore {
     // ─── Users ───────────────────────────────────────────────────────────────
     // Stores: fcmToken (written by NotificationService on every sign-in)
     // User profile (name, phone, settings) is stored in SecureStore, NOT Firestore.
+    // ── Hands-free SOS keys ─────────────────────────────────────────────────
+    // Server-only: issued by registerSosKey, checked by deviceSos. Only a hash
+    // is stored, and no phone may read or write one.
+    match /sosKeys/{keyId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       allow read:   if isOwner(userId);
       allow create: if isOwner(userId);

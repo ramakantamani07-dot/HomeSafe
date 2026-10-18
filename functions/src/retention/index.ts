@@ -17,6 +17,7 @@ import {
   deleteRefsInBatches,
   purgeLocationUpdates,
 } from '../shared/batch';
+import { deleteKeysFor } from '../sos/handsFree';
 
 /**
  * Data retention and account deletion.
@@ -192,6 +193,8 @@ export const onUserAccountDeleted = functionsV1.auth.user().onDelete(async (user
   await deleteAllDocsInCollection(userRef.collection('familyStatus'));
   // Registered phones and their push tokens (account protection).
   await deleteAllDocsInCollection(userRef.collection('devices'));
+  // Hands-free SOS keys live at the top level, keyed by id, not under the user.
+  await deleteKeysFor(uid);
   await userRef.delete();
 
   // Family connections are cancelled, not hard-deleted — consistent with the

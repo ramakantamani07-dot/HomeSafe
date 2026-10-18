@@ -21,6 +21,7 @@ docs govern *how*.
 | Document | Status |
 |---|---|
 | [`features/option15-ui-spec.md`](features/option15-ui-spec.md) | Partly built — `AI1`–`AI4`, `AI6` done; `AI5` partial; `AI7`–`AI12` to build |
+| [`features/hands-free-sos.md`](features/hands-free-sos.md) | Built (iPhone, Phase 1) — "Siri, WayLoc help me" sends the existing SOS without unlocking |
 | [`features/network-location-spec.md`](features/network-location-spec.md) | To build — Phase 6 |
 | [`features/journey-flow-spec.md`](features/journey-flow-spec.md) | Built — screens 01–10 |
 | [`features/design-handoff.md`](features/design-handoff.md) | Superseded by Option 15 (**G1**, resolved 2 Oct). Kept for the palette's history only. |

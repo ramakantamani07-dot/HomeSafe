@@ -30,6 +30,11 @@ import { FirebaseNotificationProvider } from '../implementations/notification/Fi
 import { MockNotificationProvider } from '../implementations/notification/MockNotificationProvider';
 import { FirebaseDeviceRegistryProvider } from '../implementations/devices/FirebaseDeviceRegistryProvider';
 import { MockDeviceRegistryProvider } from '../implementations/devices/MockDeviceRegistryProvider';
+import { FirebaseHandsFreeSosProvider } from '../implementations/handsFreeSos/FirebaseHandsFreeSosProvider';
+import { MockHandsFreeSosProvider } from '../implementations/handsFreeSos/MockHandsFreeSosProvider';
+import { NativeSosVault } from '../implementations/handsFreeSos/NativeSosVault';
+import { HandsFreeSosService } from '../services/HandsFreeSosService';
+import { HandsFreeSosStateProvider } from './HandsFreeSosContext';
 import { NetInfoNetworkProvider } from '../implementations/network/NetInfoNetworkProvider';
 import { AsyncStorageOfflineQueueProvider } from '../implementations/offlineQueue/AsyncStorageOfflineQueueProvider';
 import { OSRMRoutingProvider } from '../implementations/routing/OSRMRoutingProvider';
@@ -214,6 +219,13 @@ const deviceRegistryProvider = devMode
   ? new MockDeviceRegistryProvider()
   : new FirebaseDeviceRegistryProvider(firebaseApp!);
 const notificationService = new NotificationService(notificationProvider, deviceRegistryProvider);
+
+// Hands-free SOS: "Siri, WayLoc help me". The key lives in the iPhone
+// Keychain, shared with the Siri extension; the server issues and revokes it.
+const handsFreeSosService = new HandsFreeSosService(
+  devMode ? new MockHandsFreeSosProvider() : new FirebaseHandsFreeSosProvider(firebaseApp!),
+  new NativeSosVault(),
+);
 
 // The map is the one provider that must NOT follow `devMode`.
 //
@@ -485,6 +497,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
             automatically as the journey lifecycle changes.
           */}
           <LocationTrackingProvider trackingService={trackingService}>
+          <HandsFreeSosStateProvider service={handsFreeSosService}>
             {/*
               RoutingStateProvider must be inside LocationTrackingProvider so it
               can read currentLocation for off-route detection, and inside
@@ -531,6 +544,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
             </CheckInStateProvider>
             </SafetyCheckStateProvider>
             </RoutingStateProvider>
+          </HandsFreeSosStateProvider>
           </LocationTrackingProvider>
         </JourneyStateProvider>
         </SafePlaceStateProvider>

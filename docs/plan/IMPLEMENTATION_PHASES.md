@@ -120,6 +120,19 @@ unreferenced images were deleted on 10 Oct (still in git history).
 - **Battery** needs a walk on a release build; the procedure and pass mark
   are in `OPERATIONS.md`.
 
+### Hands-free SOS (18 Oct 2026) — `docs/features/hands-free-sos.md`
+
+**Phase 0 (done):** the Face ID app lock held back an SOS from the widget or
+tile until the person unlocked; the lock now covers the app instead of
+replacing it and never covers the SOS path. **Phase 1 (built, iPhone):**
+"Siri, WayLoc help me", the Action Button and Back Tap run an App Intents
+extension (`targets/sos-intent`) that sends the SOS itself with a scoped SOS
+key (`registerSosKey`, `deviceSos`, `revokeSosKey`); the server writes the
+same SOS record as the app, so the usual alerts go out. Still to do: device
+check against the deployed backend; Hindi phrases; Phase 2 Android (tile with
+the key, then "WayLoc, help me" listening during journeys); SOS
+acknowledgements and escalation as their own feature.
+
 ### Account protection (10 Oct 2026)
 
 Built against mocks and the emulator — `docs/reference/ACCOUNT_PROTECTION.md`:
@@ -205,7 +218,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Battery walk on a release build — procedure in `docs/reference/OPERATIONS.md` | 8 |
 | Firebase console: SMS region policy (UK, India only) — `docs/reference/ACCOUNT_PROTECTION.md` | 8 |
 | Sign-in on the phone: sign out, walk AN1 → AN3, check the story animates and stops behind the code screen, and the still shows with Reduce Motion on | 7 |
-| **Walking routes on Android.** iOS now uses Apple's walking directions (`modules/walking-directions`, `MapKitWalkingRoutingProvider`, 11 Oct). Android still falls back to `OSRMRoutingProvider`, which asks for `/route/v1/driving/` from `router.project-osrm.org`, a volunteer demo whose usage policy rules out production use — car routes and car times. Needs a self-hosted OSRM with the `foot` profile, or another walking source, before an Android release | 3 |
+| **Android map services** — the map is blank, routes are OSRM driving, nearby safe places are fixtures. Plan in "Android map services" below | 3 |
 
 **Waiting on a decision or an input**
 
@@ -214,6 +227,7 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Pocket mode (D14) | What it should do |
 | Open places on the way (D4) | Per-journey Places cost measured before the flag is turned on |
 | Real network location, SMS (G3) | Operator aggregator, SMS providers, TRAI DLT, legal review |
+| Android map services (Google) | A Google Cloud project with billing on and a budget alert; Maps SDK for Android, Places API (New) and Routes API enabled; one key restricted to the Android package and signing certificate, in `.env`. See "Android map services" below |
 | App Check, app side: send tokens from the app (App Attest / Play Integrity), then enforce | `GoogleService-Info.plist` from the Firebase console, App Attest registered there; same native library as real phone sign-in (step 0). Server side built 10 Oct — see `docs/reference/APP_CHECK.md` |
 | Keep less on the server: delete the location trail on arrival; a "history on this phone only" setting | Your decision — proposals and trade-offs in `docs/reference/DATA_RETENTION.md` ("Proposed, not built") |
 | Revocation offline window; short-lived operator grants on the Phase 8 list? | Two open checkboxes in the revocation design |
@@ -228,6 +242,41 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Support email is `hello@homesafeapp.com` | Terms, Privacy | Survived the rename — the domain is a real-world decision, not ours to invent |
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
+| **Low-battery promise not kept** (principle 4) | `review-journey.tsx` ("Battery under 10% → Send last location"), `AlertRules.lowBatteryPercent`, `LocationTrackingService` | Found 18 Oct. Nothing reads `lowBatteryPercent`: at `LOW_BATTERY_THRESHOLD` (15%, a different number) tracking only slows down, and no last-location message goes to anyone. Either send it (one push or text to the family with the last position, once per journey) or change the row to what happens. One threshold for both |
+| Travel mode is ignored by routing | `RoutingProvider`, `review-journey` | Walk / Bus / Bike / Car is chosen on screen 04, but `getRoute` takes no mode: every route is a walking route on iPhone (it was driving for all before). ETAs for Bus, Bike and Car are therefore walking ETAs. MapKit offers walking, driving and transit times; pass the mode through the port when this matters |
+| Place search on iPhone is Apple's (11 Oct) | `MapKitPlacesProvider`, `modules/place-search` | Place names and suggestions as you type, free. Thinner than Google for small local shops in India; Google Places still takes over if a key is set. Android keeps the system geocoder (addresses and postcodes only) |
+
+### Android map services (decided 13 Oct 2026)
+
+India is mostly Android, and Android is the weak side today. iPhone uses
+Apple's free services for all four map jobs; Android has none of them:
+
+| Job | iPhone (built) | Android today | Android plan |
+|---|---|---|---|
+| The map | Apple Maps | **Blank grid** — `react-native-maps` uses Google Maps there and `GOOGLE_MAPS_API_KEY` is unset | Maps SDK for Android: free for in-app maps, needs the key. No code |
+| Search: places and addresses | MapKit (`MapKitPlacesProvider`) | System geocoder: addresses and postcodes only | Places API (New) — `GooglePlacesProvider` already exists and takes over when its key is set. No code |
+| Walking routes | MapKit (`MapKitWalkingRoutingProvider`) | OSRM demo server, **driving** profile | Routes API, walking — a new `RoutingProvider` adapter |
+| Nearby safe places | MapKit (`MapKitSafePlaceProvider`) | **Fixtures** | Places API Nearby Search — a new `SafePlaceProvider` adapter, reusing the category policy in `models/SafePlace.ts` |
+
+**Why Google for Android.** Best coverage in India, including small local
+shops (where Apple is thin); one key, one bill, one set of terms for all four
+jobs; the map component already uses it, so the map needs only a key. The
+connectors let the platforms differ: iPhone keeps Apple (free), Android uses
+Google, and no screen changes. Google charges Places and Routes per request
+with a monthly free allowance per service (it replaced the $200 monthly credit
+in 2025) — check current prices; a budget alert from day one.
+
+**Alternatives considered.** Ola Maps (Krutrim): India-specific, generous free
+tier, but a young platform and a company WayLoc may also negotiate rides with.
+Mappls (MapmyIndia): strongest Indian address data, paid. MapLibre with
+OpenStreetMap: free and independent, more work, thin on Indian shops and safe
+places. Self-hosted OSRM or GraphHopper `foot`: free walking routes, a server
+to run.
+
+**Order.** (1) Google Cloud project and key — the map appears. (2) Places key
+— search improves with no code. (3) The two adapters — walking routes and
+nearby safe places. (4) Test on a real Android phone, ideally in India; Android
+has not been device-tested yet.
 
 ### Future — recorded, not planned (11 Oct 2026)
 
@@ -251,6 +300,28 @@ checkable instead: "a better-lit route", "busier streets", "passes 3 open
 places". Related, already built: nearby safe places on "Feeling uneasy?"
 (`SafePlace`, safest kinds first), and "Open places on the way" behind its
 flag (D4).
+
+**Ideas beyond journey sharing (recorded 18 Oct 2026).** Journey sharing is
+now table stakes — WhatsApp, Google Maps and the ride apps all do it. Ideas
+that would set WayLoc apart, each building on something already here:
+
+| Idea | What it is | Builds on | Why |
+|---|---|---|---|
+| **"Everyone home?" — group journeys** | One person starts it after a party, a shift or college; each friend's arrival ticks off; anyone who doesn't arrive or answer is nudged, then the group is told | Journeys, arrival detection, family status | Nobody does group arrival well; each group brings 4–5 new users. **Top pick for growth** |
+| **Journeys that start themselves** | "Weekdays, when I leave the office after 6 pm, start a journey home" — the OS geofence notices the departure | Background location; OS geofencing (battery-friendly) | People forgetting to tap Start is the biggest risk to the product. **Top pick for habit** |
+| **Daily "I'm OK" for elderly parents** | "Mum texts OK, or taps I'm OK, by 10 am; if not, I'm told" — works on a basic phone | Basic-phone check-in words, SMS, server timers | A large, worried audience location apps ignore. **Top pick for India** |
+| **SOS without opening the app** | iPhone: "Hey Siri, I feel unsafe", Action Button, Back Tap (App Intents). Android: Quick Settings tile | The SOS widget; `withSOSQuickSettingsTile.js` | Unlocking and finding an app is too slow in an emergency |
+| **Date or meet-up safety** | A friend knows where and when; check-ins at chosen times; a pre-scheduled fake call as an exit; friend told if "all fine" isn't confirmed by the end | Fake call, check-ins, contacts | A clear use case beyond walking home |
+| **Safe spots** | Shops, pharmacies, petrol pumps that agree to help someone who walks in, shown in "Feeling uneasy?" — like "Ask for Angela" | Nearby safe places | Real people, verifiable; a partnership and community angle |
+| Watch check-ins | "I'm OK" and SOS from Apple Watch / Wear OS | Check-in actions | Reachable when the phone is in a bag |
+| Guardian "start a journey?" nudge | If the usual time passes with no journey, family can ask — with consent | Ask "OK?" | Helps the habit without automatic tracking |
+| Evidence recording during SOS | Audio saved and uploaded securely | SOS | Powerful but sensitive: privacy and legal design first |
+| "Phone dying" last message | At low battery, send the last position and "my phone is about to die" | Battery tiers | Also fixes the low-battery gap above |
+
+**Not pursued:** "safest route" or "safe area" scores (principle 4 — see Safer
+routes); crash or fall detection (iOS does not expose its own to other apps,
+and a home-made one would raise false alarms); silent automatic texts on
+Android (Google Play restricts SMS permissions).
 
 ---
 

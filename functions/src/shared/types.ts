@@ -15,6 +15,10 @@ export interface StoredSOS {
   location: { latitude: number; longitude: number } | null;
   status: 'ACTIVE' | 'RESOLVED';
   triggeredAt: Timestamp;
+  /** "hands-free" when Siri, the Action Button or a tile started it. Absent from the app. */
+  source?: string;
+  /** When `location` was observed, when it may be older than the SOS (hands-free). */
+  locationObservedAt?: Timestamp | null;
 }
 
 export interface StoredJourney {

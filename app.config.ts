@@ -64,6 +64,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Supplied via APPLE_TEAM_ID so it isn't committed; find it in Xcode under
     // Signing & Capabilities, or at developer.apple.com → Membership.
     ...(APPLE_TEAM_ID ? { appleTeamId: APPLE_TEAM_ID } : {}),
+    // Hands-free SOS: the app and the Siri extension (targets/sos-intent) list
+    // the same group first, so the SOS key the app saves is the one Siri
+    // reads (modules/hands-free-sos/ios/SosVault.swift).
+    entitlements: {
+      'keychain-access-groups': [`$(AppIdentifierPrefix)${BUNDLE_ID}.shared`],
+    },
     infoPlist: {
       NSFaceIDUsageDescription:
         'wayLoc uses Face ID to protect your personal safety data.',
