@@ -17,6 +17,8 @@ interface RideWaitingCardProps {
   address: string | null;
   onConfirm(bookedWith: RideBookedWith | null): Promise<void>;
   onChangeTravel(): void;
+  /** "Still waiting ↗": back to the ride app WayLoc opened. Only when it opened one. */
+  onReopenApp(app: RideApp): void;
   onCopyAddress(address: string): void;
 }
 
@@ -28,8 +30,8 @@ interface RideWaitingCardProps {
  * cannot see ride status until Phase 4 (rides.md), so this says only what is
  * true today: the Safe Journey is on while they wait.
  *
- * "Still waiting" (reopen the ride app) arrives with the provider hand-off in
- * Phase 3; with no app to reopen it would be a button that does nothing.
+ * "Still waiting ↗" reopens the ride app WayLoc opened; with no app opened
+ * ("I'll sort it myself") there is nothing to reopen, so it is not shown.
  */
 export function RideWaitingCard({
   question,
@@ -37,6 +39,7 @@ export function RideWaitingCard({
   address,
   onConfirm,
   onChangeTravel,
+  onReopenApp,
   onCopyAddress,
 }: RideWaitingCardProps) {
   const theme = useTheme();
@@ -82,7 +85,23 @@ export function RideWaitingCard({
         onPress={() => (openedApp ? setAsking(true) : void confirm(null))}
         loading={busy}
       />
-      <Button label="Change travel" variant="secondary" onPress={onChangeTravel} disabled={busy} />
+      <View style={styles.row}>
+        {openedApp && (
+          <View style={styles.half}>
+            <Button
+              label="Still waiting"
+              icon="link"
+              variant="secondary"
+              onPress={() => onReopenApp(openedApp)}
+              disabled={busy}
+              accessibilityHint={`Opens ${RIDE_APP_NAMES[openedApp]} again`}
+            />
+          </View>
+        )}
+        <View style={styles.half}>
+          <Button label="Change travel" variant="secondary" onPress={onChangeTravel} disabled={busy} />
+        </View>
+      </View>
       {address && (
         <TouchableOpacity
           onPress={() => onCopyAddress(address)}

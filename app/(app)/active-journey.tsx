@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useTheme } from '../../src/context/ThemeContext';
 import { ELEVATION, FONTS, RADIUS, SPACING, type ThemeColors } from '../../src/config/theme';
@@ -37,7 +37,9 @@ import { RideBanner } from '../../src/components/journey/RideBanner';
 import { RidePanel } from '../../src/components/journey/RidePanel';
 import { ChangeTravelOptions, ChangeTravelSheet } from '../../src/components/journey/ChangeTravelSheet';
 import { MODE_ICON } from '../../src/components/journey/modeIcon';
-import { rideHeadline, rideSubtitle } from '../../src/models/Ride';
+import { RideHandoffSheet } from '../../src/components/journey/RideHandoffSheet';
+import { useRideHandoff } from '../../src/hooks/useRideHandoff';
+import { RIDE_APP_NAMES, rideActivity, rideHeadline, rideSubtitle, type RideApp } from '../../src/models/Ride';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { SAFETY_CHECK_EXTENSION_MINUTES } from '../../src/models/SafetyCheck';
 import { currentLeg, formatDistance } from '../../src/models/RouteResult';
@@ -86,7 +88,19 @@ export default function ActiveJourneyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { activeJourney, isLoading, endJourney, cancelJourney, shareJourney, changeTravelMode } = useJourney();
+  const { activeJourney, isLoading, endJourney, cancelJourney, shareJourney, changeTravelMode, clearOpenedApp } =
+    useJourney();
+  const { openRideApp } = useRideHandoff();
+  // AP2: arriving straight from "Start Safe Journey & open Uber". Taken once,
+  // then cleared from the route, so coming back to this screen never reopens it.
+  const { handoff } = useLocalSearchParams<{ handoff?: string }>();
+  const [handoffApp, setHandoffApp] = useState<RideApp | null>(
+    handoff && handoff in RIDE_APP_NAMES ? (handoff as RideApp) : null,
+  );
+  const endHandoff = useCallback(() => {
+    setHandoffApp(null);
+    router.setParams({ handoff: undefined });
+  }, [router]);
   const {
     isTracking,
     currentLocation,
@@ -525,6 +539,24 @@ export default function ActiveJourneyScreen() {
           </View>
         )}
       </BottomSheet>
+
+      {handoffApp && journey.ride?.openedApp === handoffApp && (
+        <RideHandoffSheet
+          app={handoffApp}
+          doing={rideActivity(journey.travelMode, journey.destination, journey.destinationLabel)}
+          open={() =>
+            journey.destination
+              ? openRideApp(handoffApp, journey.destination)
+              : Promise.resolve('invalid_destination' as const)
+          }
+          onOpened={endHandoff}
+          onGiveUp={() => {
+            endHandoff();
+            // The journey keeps waiting; it just no longer claims an app was opened.
+            void clearOpenedApp().catch(() => {});
+          }}
+        />
+      )}
 
       <ChangeTravelSheet
         visible={changingTravel}

@@ -1,7 +1,8 @@
 # Rides — cab, auto, bike taxi (India)
 
-**Status (19 Oct 2026):** Phases 1 (mode-aware journeys) and 2 (ride state,
-AP3 / AP4) built and tested; Phases 3–7 not built. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
+**Status (19 Oct 2026):** Phases 1–3 built and tested — mode-aware journeys,
+ride state (AP3 / AP4), and the hand-off to Uber (and Ola, once Ola issues a
+token). Phases 4–7 not built. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
 plan `WAYLOC_MOBILITY_DEEPLINK_PLAN.md`. This doc records where the build
 follows that plan and where it deliberately does not.
 
@@ -46,6 +47,9 @@ it never books, prices or compares rides.
 | 9 | AP3 "Mum & Alex see 'getting an auto' until you say yes"; AP4 "Shared only with Mum & Alex" | "Your Safe Journey is on while you wait"; "Kept with this journey · deleted with its trail" | Family cannot see ride details until Phase 4. The board's wording returns with it |
 | 10 | AP3 "Still waiting ↗" | Not shown until Phase 3 | It reopens the ride app; with no app opened it would do nothing |
 | 11 | AP3 / AP4 drop "Feeling uneasy?" | Kept | A safety control is never hidden to make room |
+| 13 | AP1 "Uber" preselected | Nothing preselected; "I'll sort it myself" until an app is picked | Nothing about the journey leaves WayLoc unless the traveller chooses |
+| 14 | Plan §2 opens the Rapido store page | Rapido is a line of advice, no button | The plan's own Rule 0.3 ("no button") supersedes §2; Copy address does the job |
+| 15 | Plan §3 `canOpenURL` for `olacabs://`, plus `LSApplicationQueriesSchemes` / `<queries>` | `openURL` only; a refusal falls through to the next link | Opening a link needs no declared scheme; asking first would — a native change for an answer `openURL` already gives |
 | 12 | — | "Copy address for a ride app" on AP3 | For Rapido, a street auto, or a friend booking. The street address only, never the place's name |
 
 ## States
@@ -60,10 +64,10 @@ the journey.
 |---|---|---|---|
 | 1 ✅ | **Mode-aware journeys** (built 19 Oct — `models/TravelModeProfile.ts`, `__tests__/travelModes.test.ts`; bus and bike times are distance estimates, labelled so on screen 04) — modes `cab · auto · bikeTaxi`; routing receives the mode (Apple driving routes for rides and Car); ETA "~10 min pickup + 14 min drive"; alert rules per mode (rides: 20 min stopped, wider off-route margin); tracking rate per mode; tests in `models/` | ~1 week | — (needed anyway: Bus / Bike / Car show walking ETAs today) |
 | 2 ✅ | **Ride state + "I'll sort it myself"** (built 19 Oct — `models/Ride.ts`, `components/journey/Ride*`, `ChangeTravelSheet`, `__tests__/rides.test.ts`) — `ride: { provider, state, confirmedAt, vehicleNumber }`; AP3 / AP4 on the journey screen; "Still waiting?" never alerts family by itself; vehicle number: free text, upper-cased, ≤12 chars, deleted with the trail | 3–4 days | — |
-| 3 | **Provider hand-off** — ride port + Uber / Ola / Rapido adapters with pure link builders and exact-URL tests; AP1 list and AP2 sheet; a failed link keeps the journey in `getting_ride` | 3–4 days | `UBER_CLIENT_ID`; `OLA_XAPP_TOKEN` |
+| 3 ✅ | **Provider hand-off** (built 19 Oct — `providers/RideAppProvider.ts`, `implementations/rides/`, `services/RideHandoffService.ts`, `RideAppPicker`, `RideHandoffSheet`, `__tests__/rideHandoff.test.ts`) — ride port + Uber / Ola / Rapido adapters with pure link builders and exact-URL tests; AP1 list and AP2 sheet; a failed link keeps the journey in `getting_ride` | 3–4 days | `UBER_CLIENT_ID`; `OLA_XAPP_TOKEN` |
 | 4 | **Mum's view (AP5)** — ride fields in the shared family status; a ride timeline on Watch live | 2–3 days | — |
 | 5 | **Server** — rules for ride fields; "getting an auto home" journey-start wording; vehicle number in SOS alerts; retention | 1–2 days | — |
-| 6 | **Native** — `olacabs` in `LSApplicationQueriesSchemes`; Android `<queries>` (`expo-clipboard` added in Phase 2) | 1 day | Rebuild |
+| 6 | **Native** — nothing left on iOS (`expo-clipboard` added in Phase 2; no schemes needed, departure 15). Android: check `openURL` to `olacabs://` on Android 11+ | 1 day | Rebuild |
 | 7 | **Real devices** — the designer's QA list (§10), iPhone and **Android**, in India | — | Android phones |
 
 ## Decided 19 Oct
@@ -86,3 +90,25 @@ the journey.
 - *Change travel* (AP3 card, and journey Options for any journey): a new mode
   without ending the journey; re-routes; a new ride mode waits afresh.
 - Firestore rules do not yet validate `ride` (Phase 5).
+
+## Phase 3 as built
+
+- **AP1:** for a ride mode, "Book the auto with (optional)" lists the apps
+  whose credential is set (`UBER_CLIENT_ID`, `OLA_XAPP_TOKEN` via
+  `app.config.ts` extra), Rapido as advice, and "I'll sort it myself". The
+  start button becomes "Start Safe Journey & open Uber".
+- **Order:** the journey is created with `ride.openedApp = 'uber'`, then the
+  journey screen shows AP2 ("Safe Journey started · Opening Uber now…", the
+  pickup allowance, "Only your destination goes to Uber") and opens the link
+  after 1.2 s.
+- **Links:** Uber's universal link (`m.uber.com/ul`, `pickup=my_location`,
+  drop-off coordinates and street address, brackets percent-encoded), then
+  Uber's web booking. Ola's `olacabs://` app link, then its universal link.
+  Exact URLs are tested.
+- **Failure:** "Uber didn't open" with *Try again* / *I'll book another way*.
+  The journey stays in `getting_ride`; giving up clears `openedApp`, so *Yes,
+  I'm in* will not ask about an app that never came up.
+- **Back in WayLoc:** AP3 adds *Still waiting ↗* (reopens the app) when one
+  was opened, and *Yes, I'm in* asks "Uber / Other".
+- Double taps open once (`busy`). Not yet checked on a device: that Uber
+  accepts a test-environment Client ID.

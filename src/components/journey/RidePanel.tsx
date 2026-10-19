@@ -2,9 +2,10 @@ import React, { useCallback } from 'react';
 import { AccessibilityInfo, Alert } from 'react-native';
 
 import { useJourney } from '../../hooks/useJourney';
+import { useRideHandoff } from '../../hooks/useRideHandoff';
 import type { Journey } from '../../models/Journey';
-import type { RideBookedWith } from '../../models/Ride';
-import { rideDestinationAddress, rideQuestion } from '../../models/Ride';
+import type { RideApp, RideBookedWith } from '../../models/Ride';
+import { RIDE_APP_NAMES, rideDestinationAddress, rideQuestion } from '../../models/Ride';
 import { copyText } from '../../utils/clipboard';
 import { haptics } from '../../utils/haptics';
 import { RideWaitingCard } from './RideWaitingCard';
@@ -23,6 +24,7 @@ interface RidePanelProps {
  */
 export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
   const { confirmInRide, setVehicleNumber } = useJourney();
+  const { openRideApp } = useRideHandoff();
   const ride = journey.ride;
 
   const confirm = useCallback(
@@ -46,6 +48,16 @@ export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
     }
   }, []);
 
+  const reopenApp = useCallback(
+    async (app: RideApp) => {
+      const result = journey.destination ? await openRideApp(app, journey.destination) : 'failed';
+      if (result !== 'opened' && result !== 'busy') {
+        Alert.alert(`${RIDE_APP_NAMES[app]} didn't open`, 'Your Safe Journey is still on.');
+      }
+    },
+    [journey.destination, openRideApp],
+  );
+
   if (!ride) return null;
 
   if (ride.state === 'getting_ride') {
@@ -56,6 +68,7 @@ export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
         address={rideDestinationAddress(journey.destination)}
         onConfirm={confirm}
         onChangeTravel={onChangeTravel}
+        onReopenApp={(app) => void reopenApp(app)}
         onCopyAddress={(a) => void copyAddress(a)}
       />
     );

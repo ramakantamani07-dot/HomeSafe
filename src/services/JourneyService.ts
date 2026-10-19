@@ -6,7 +6,7 @@ import type { AlertRules } from '../models/AlertRules';
 import { DEFAULT_ALERT_RULES } from '../models/AlertRules';
 import type { Place, TravelMode } from '../models/Place';
 import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../models/Place';
-import type { Ride, RideBookedWith } from '../models/Ride';
+import type { Ride, RideApp, RideBookedWith } from '../models/Ride';
 import { confirmInRide, initialRide, normaliseVehicleNumber, rideAfterModeChange } from '../models/Ride';
 import type { OfflineSyncService } from './OfflineSyncService';
 
@@ -19,6 +19,8 @@ export interface StartJourneyOptions {
   destination: Place;
   savedPlaceId?: string | null;
   travelMode?: TravelMode;
+  /** The ride app WayLoc is about to open, for a ride (rides AP2). */
+  rideApp?: RideApp | null;
   alertRules?: AlertRules;
   arrivalRadiusMeters?: number;
   checkInIntervalMinutes?: number | null;
@@ -63,7 +65,7 @@ export class JourneyService {
       destination,
       savedPlaceId: options.savedPlaceId ?? null,
       travelMode,
-      ride: initialRide(travelMode),
+      ride: initialRide(travelMode, options.rideApp ?? null),
       alertRules: options.alertRules ?? DEFAULT_ALERT_RULES,
       arrivalRadiusMeters: options.arrivalRadiusMeters ?? DEFAULT_ARRIVAL_RADIUS_METERS,
     });
@@ -112,6 +114,16 @@ export class JourneyService {
   async confirmInRide(userId: string, journey: Journey, bookedWith: RideBookedWith | null, now = new Date()): Promise<Journey> {
     if (!journey.ride || journey.ride.state !== 'getting_ride') return journey;
     return this.saveTravel(userId, journey, journey.travelMode, confirmInRide(journey.ride, now, bookedWith));
+  }
+
+  /**
+   * The ride app could not be opened after the journey started: the journey
+   * stays in getting_ride, and it no longer claims an app was opened — so
+   * "Yes, I'm in" will not ask "Uber or other?" about an app that never came up.
+   */
+  async clearOpenedApp(userId: string, journey: Journey): Promise<Journey> {
+    if (!journey.ride?.openedApp) return journey;
+    return this.saveTravel(userId, journey, journey.travelMode, { ...journey.ride, openedApp: null });
   }
 
   /** Adds, changes or (with an empty string) removes the vehicle number. */

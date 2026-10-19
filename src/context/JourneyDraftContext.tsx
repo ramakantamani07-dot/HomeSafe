@@ -3,6 +3,8 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import type { Coordinates } from '../models/Journey';
 import type { Place, PlaceSuggestion, TravelMode } from '../models/Place';
 import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../models/Place';
+import type { RideApp } from '../models/Ride';
+import { isRide } from '../models/TravelModeProfile';
 
 /** Which screen opened Review (04) — spec: "04 Back returns to whichever screen opened it". */
 export type DraftOrigin = 'home' | 'where-to';
@@ -12,6 +14,12 @@ export interface JourneyDraft {
   /** Set when the destination came from a saved place, so arrival radius and naming follow it. */
   savedPlaceId: string | null;
   travelMode: TravelMode;
+  /**
+   * The ride app to open once the journey starts (AP1). Null is "I'll sort it
+   * myself" — and the default: nothing leaves WayLoc until the traveller picks
+   * an app. Always null for a mode that is not a ride.
+   */
+  rideApp: RideApp | null;
   arrivalRadiusMeters: number;
   /** State of screen 04's "Save as a place" switch. Only meaningful for unsaved places. */
   saveAsPlace: boolean;
@@ -22,6 +30,7 @@ const EMPTY_DRAFT: JourneyDraft = {
   destination: null,
   savedPlaceId: null,
   travelMode: 'walk',
+  rideApp: null,
   arrivalRadiusMeters: DEFAULT_ARRIVAL_RADIUS_METERS,
   saveAsPlace: false,
   origin: 'home',
@@ -35,6 +44,7 @@ interface JourneyDraftContextValue {
     options?: { savedPlaceId?: string | null; origin?: DraftOrigin; arrivalRadiusMeters?: number },
   ): void;
   setTravelMode(mode: TravelMode): void;
+  setRideApp(app: RideApp | null): void;
   setSaveAsPlace(save: boolean): void;
   reset(): void;
 
@@ -79,6 +89,7 @@ const JourneyDraftContext = createContext<JourneyDraftContextValue>({
   draft: EMPTY_DRAFT,
   setDestination: notMounted,
   setTravelMode: notMounted,
+  setRideApp: notMounted,
   setSaveAsPlace: notMounted,
   reset: notMounted,
   search: { query: '', results: [] },
@@ -142,7 +153,9 @@ export function JourneyDraftStateProvider({ children }: { children: React.ReactN
     () => ({
       draft,
       setDestination,
-      setTravelMode: (travelMode) => setDraft((c) => ({ ...c, travelMode })),
+      setTravelMode: (travelMode) =>
+        setDraft((c) => ({ ...c, travelMode, rideApp: isRide(travelMode) ? c.rideApp : null })),
+      setRideApp: (rideApp) => setDraft((c) => ({ ...c, rideApp: isRide(c.travelMode) ? rideApp : null })),
       setSaveAsPlace: (saveAsPlace) => setDraft((c) => ({ ...c, saveAsPlace })),
       reset: () => {
         setDraft(EMPTY_DRAFT);

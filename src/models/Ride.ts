@@ -104,6 +104,11 @@ function shortDestination(destination: Place | null, label: string): string {
   return destination?.postcode ?? destination?.name ?? label;
 }
 
+/** "getting an auto to 560001" — what a waiting ride journey is doing (AP2). */
+export function rideActivity(mode: TravelMode, destination: Place | null, label: string): string {
+  return `getting ${rideNoun(mode)} to ${shortDestination(destination, label)}`;
+}
+
 /** AP3 / AP4 headline: "Getting an auto" / "In an auto to NN2 8ET". */
 export function rideHeadline(ride: Ride, mode: TravelMode, destination: Place | null, label: string): string {
   const noun = rideNoun(mode);

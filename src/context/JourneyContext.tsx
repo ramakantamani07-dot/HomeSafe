@@ -25,6 +25,8 @@ interface JourneyContextValue {
   missedCheckIn(): Promise<void>;
   /** "Yes, I'm in" (AP3). `bookedWith` is the traveller's answer, when asked. */
   confirmInRide(bookedWith: RideBookedWith | null): Promise<void>;
+  /** The ride app did not open: the journey keeps waiting, with no app claimed. */
+  clearOpenedApp(): Promise<void>;
   /** Adds, changes or (empty) removes the ride's vehicle number (AP4). */
   setVehicleNumber(input: string): Promise<void>;
   /** "Change travel": another mode, the journey keeps running. */
@@ -59,6 +61,7 @@ export const JourneyContext = createContext<JourneyContextValue>({
   cancelJourney: async () => {},
   missedCheckIn: async () => {},
   confirmInRide: async () => {},
+  clearOpenedApp: async () => {},
   setVehicleNumber: async () => {},
   changeTravelMode: async () => {},
   clearJourneyForSOS: () => {},
@@ -177,6 +180,11 @@ export function JourneyStateProvider({
     setActiveJourney(await journeyService.confirmInRide(userId, activeJourney, bookedWith));
   }, [userId, activeJourney, journeyService]);
 
+  const clearOpenedApp = useCallback(async () => {
+    if (!userId || !activeJourney) return;
+    setActiveJourney(await journeyService.clearOpenedApp(userId, activeJourney));
+  }, [userId, activeJourney, journeyService]);
+
   const setVehicleNumber = useCallback(async (input: string) => {
     if (!userId || !activeJourney) return;
     setActiveJourney(await journeyService.setVehicleNumber(userId, activeJourney, input));
@@ -245,6 +253,7 @@ export function JourneyStateProvider({
       cancelJourney,
       missedCheckIn,
       confirmInRide,
+      clearOpenedApp,
       setVehicleNumber,
       changeTravelMode,
       clearJourneyForSOS,
@@ -264,6 +273,7 @@ export function JourneyStateProvider({
       cancelJourney,
       missedCheckIn,
       confirmInRide,
+      clearOpenedApp,
       setVehicleNumber,
       changeTravelMode,
       clearJourneyForSOS,

@@ -24,10 +24,13 @@ import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Button } from '../../src/components/ui/Button';
 import { Icon, type IconName } from '../../src/components/ui/Icon';
 import { MODE_ICON } from '../../src/components/journey/modeIcon';
+import { RideAppPicker } from '../../src/components/journey/RideAppPicker';
+import { useRideHandoff } from '../../src/hooks/useRideHandoff';
+import { RIDE_APP_NAMES } from '../../src/models/Ride';
 import { AppMapView } from '../../src/components/map/AppMapView';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { TRAVEL_MODES, type TravelMode } from '../../src/models/Place';
-import { alertRulesFor, pickupAllowanceMinutes } from '../../src/models/TravelModeProfile';
+import { alertRulesFor, isRide, pickupAllowanceMinutes } from '../../src/models/TravelModeProfile';
 
 /**
  * What the route on screen is. Only what is true: there is no bus or cycling
@@ -56,8 +59,9 @@ export default function ReviewJourneyScreen() {
   const styles = getStyles(theme);
   const router = useRouter();
 
-  const { draft, setTravelMode, setSaveAsPlace, reset } = useJourneyDraft();
+  const { draft, setTravelMode, setRideApp, setSaveAsPlace, reset } = useJourneyDraft();
   const { startJourney, journeyPreferences } = useJourney();
+  const { availableApps } = useRideHandoff();
 
   // Shown, not edited — the rules this journey will inherit from Settings.
   const alertRules = journeyPreferences.alertRules;
@@ -127,12 +131,20 @@ export default function ReviewJourneyScreen() {
         destination,
         savedPlaceId: draft.savedPlaceId,
         travelMode: draft.travelMode,
+        rideApp: draft.rideApp,
         alertRules: alertRules,
         arrivalRadiusMeters: draft.arrivalRadiusMeters,
       });
 
+      // The journey is running; the ride app opens from the journey screen
+      // (AP2), so a failed link is shown where the journey is.
+      const handoff = draft.rideApp;
       reset();
-      router.replace('/(app)/active-journey');
+      router.replace(
+        handoff
+          ? { pathname: '/(app)/active-journey', params: { handoff } }
+          : '/(app)/active-journey',
+      );
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Could not start the journey. Please try again.',
@@ -230,6 +242,15 @@ export default function ReviewJourneyScreen() {
             );
           })}
         </View>
+
+        {isRide(draft.travelMode) && availableApps.length > 0 && (
+          <RideAppPicker
+            mode={draft.travelMode}
+            apps={availableApps}
+            selected={draft.rideApp}
+            onSelect={setRideApp}
+          />
+        )}
 
         {/* "Save as a place" — only meaningful for a destination not already saved */}
         {!alreadySaved && (
@@ -338,7 +359,9 @@ export default function ReviewJourneyScreen() {
             <ActivityIndicator color={theme.strongText} />
           ) : (
             <>
-              <Text style={styles.startButtonLabel}>Start journey</Text>
+              <Text style={styles.startButtonLabel}>
+                {draft.rideApp ? `Start Safe Journey & open ${RIDE_APP_NAMES[draft.rideApp]}` : 'Start journey'}
+              </Text>
               <Text style={styles.startButtonSubtitle}>{startSubtitle}</Text>
             </>
           )}

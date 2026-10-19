@@ -193,6 +193,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(APPLE_TEAM_ID ? ['@bacons/apple-targets' as const] : []),
   ],
   extra: {
+    // Ride hand-off (docs/features/rides.md). Not secrets: each goes into every
+    // link WayLoc opens. A missing one hides that ride app.
+    uberClientId: process.env.UBER_CLIENT_ID,
+    olaXappToken: process.env.OLA_XAPP_TOKEN,
     firebaseApiKey: process.env.FIREBASE_API_KEY,
     firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID,

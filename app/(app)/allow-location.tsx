@@ -74,12 +74,18 @@ export default function AllowLocationScreen() {
         destination,
         savedPlaceId: draft.savedPlaceId,
         travelMode: draft.travelMode,
+        rideApp: draft.rideApp,
         alertRules: journeyPreferences.alertRules,
         arrivalRadiusMeters: draft.arrivalRadiusMeters,
       });
 
+      const handoff = draft.rideApp;
       reset();
-      router.replace('/(app)/active-journey');
+      router.replace(
+        handoff
+          ? { pathname: '/(app)/active-journey', params: { handoff } }
+          : '/(app)/active-journey',
+      );
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Could not start the journey. Please try again.',

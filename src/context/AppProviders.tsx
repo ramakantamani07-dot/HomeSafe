@@ -85,6 +85,11 @@ import { AuthService } from '../services/AuthService';
 import { ContactService } from '../services/ContactService';
 import { PrivacyService } from '../services/PrivacyService';
 import { JourneyService } from '../services/JourneyService';
+import { RideHandoffService } from '../services/RideHandoffService';
+import { UberRideApp } from '../implementations/rides/UberRideApp';
+import { OlaRideApp } from '../implementations/rides/OlaRideApp';
+import { ReactNativeLinkOpener } from '../implementations/rides/ReactNativeLinkOpener';
+import { RIDE_APP_CONFIG } from '../config/rides';
 import { LocationTrackingService } from '../services/LocationTrackingService';
 import { CheckInService } from '../services/CheckInService';
 import { SOSService } from '../services/SOSService';
@@ -104,6 +109,7 @@ import { ContactStateProvider } from './ContactContext';
 import { MapStateProvider } from './MapContext';
 import { PrivacyStateProvider } from './PrivacyContext';
 import { JourneyStateProvider } from './JourneyContext';
+import { RideHandoffStateProvider } from './RideHandoffContext';
 import { SafePlaceStateProvider } from './SafePlaceContext';
 import { SafetyPreferencesProvider } from './SafetyPreferencesContext';
 import { LocationTrackingProvider } from './LocationTrackingContext';
@@ -219,6 +225,14 @@ const deviceRegistryProvider = devMode
   ? new MockDeviceRegistryProvider()
   : new FirebaseDeviceRegistryProvider(firebaseApp!);
 const notificationService = new NotificationService(notificationProvider, deviceRegistryProvider);
+
+// Ride hand-off (rides AP1 / AP2). Not split on devMode: there is no backend,
+// only links — a mock-data build opens the real Uber, which is what is tested.
+// Order is AP1's order; an app without its credential is simply not offered.
+const rideHandoffService = new RideHandoffService(
+  [new UberRideApp(RIDE_APP_CONFIG.uberClientId), new OlaRideApp(RIDE_APP_CONFIG.olaXappToken)],
+  new ReactNativeLinkOpener(),
+);
 
 // Hands-free SOS: "Siri, WayLoc help me". The key lives in the iPhone
 // Keychain, shared with the Siri extension; the server issues and revokes it.
@@ -486,6 +500,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
         {/* Independent of the journey tree — AI5 is reachable with or
             without a journey running. */}
         <SafePlaceStateProvider safePlaceProvider={safePlaceProvider}>
+        <RideHandoffStateProvider rideHandoffService={rideHandoffService}>
         <JourneyStateProvider
           journeyService={journeyService}
           walkFeedbackProvider={walkFeedbackProvider}
@@ -547,6 +562,7 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
           </HandsFreeSosStateProvider>
           </LocationTrackingProvider>
         </JourneyStateProvider>
+        </RideHandoffStateProvider>
         </SafePlaceStateProvider>
       </MapStateProvider>
       </SafetyPreferencesProvider>
