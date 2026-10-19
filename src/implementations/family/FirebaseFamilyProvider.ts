@@ -31,6 +31,7 @@ import type {
   SharedFamilyView,
   Watcher,
 } from '../../models/Family';
+import type { SharedRide } from '../../models/Ride';
 import type { Coordinates } from '../../models/Journey';
 import {
   computeConnectionId,
@@ -82,6 +83,7 @@ type StoredStatus = {
   routePath?: Coordinates[] | null;
   lastCheckInAt?: Timestamp | null;
   nextCheckInAt?: Timestamp | null;
+  ride?: StoredSharedRide | null;
   updatedAt: Timestamp;
 };
 
@@ -99,6 +101,13 @@ type StoredSharedStatus = {
   routePath?: Coordinates[] | null;
   lastCheckInAt?: Timestamp | null;
   nextCheckInAt?: Timestamp | null;
+  ride?: StoredSharedRide | null;
+};
+
+/** A shared ride with its dates as Timestamps. Absent on documents before rides. */
+type StoredSharedRide = Omit<SharedRide, 'confirmedAt' | 'journeyStartedAt'> & {
+  confirmedAt: Timestamp | null;
+  journeyStartedAt: Timestamp;
 };
 
 /** The journey fields shared status gained in Phase 5b, both directions. */
@@ -108,6 +117,13 @@ function journeyFieldsFromFirestore(data: StoredSharedStatus | StoredStatus) {
     routePath: data.routePath ?? null,
     lastCheckInAt: data.lastCheckInAt ? data.lastCheckInAt.toDate() : null,
     nextCheckInAt: data.nextCheckInAt ? data.nextCheckInAt.toDate() : null,
+    ride: data.ride
+      ? {
+          ...data.ride,
+          confirmedAt: data.ride.confirmedAt ? data.ride.confirmedAt.toDate() : null,
+          journeyStartedAt: data.ride.journeyStartedAt.toDate(),
+        }
+      : null,
   };
 }
 
@@ -116,12 +132,20 @@ function journeyFieldsToFirestore(view: {
   routePath: Coordinates[] | null;
   lastCheckInAt: Date | null;
   nextCheckInAt: Date | null;
+  ride: SharedRide | null;
 }) {
   return {
     journeyProgress: view.journeyProgress,
     routePath: view.routePath,
     lastCheckInAt: view.lastCheckInAt ? Timestamp.fromDate(view.lastCheckInAt) : null,
     nextCheckInAt: view.nextCheckInAt ? Timestamp.fromDate(view.nextCheckInAt) : null,
+    ride: view.ride
+      ? {
+          ...view.ride,
+          confirmedAt: view.ride.confirmedAt ? Timestamp.fromDate(view.ride.confirmedAt) : null,
+          journeyStartedAt: Timestamp.fromDate(view.ride.journeyStartedAt),
+        }
+      : null,
   };
 }
 

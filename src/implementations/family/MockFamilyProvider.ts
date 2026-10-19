@@ -112,6 +112,19 @@ export class MockFamilyProvider implements FamilyProvider {
         routePath: isTravelling ? DEMO_ROUTE : null,
         lastCheckInAt: isTravelling ? new Date(Date.now() - 2 * 60 * 1000) : null,
         nextCheckInAt: isTravelling ? new Date(Date.now() + 8 * 60 * 1000) : null,
+        // Rides board AP5: waiting for an auto she opened Uber for, so Family
+        // and Watch live show "getting an auto" in a mock-data build.
+        ride: isTravelling
+          ? {
+              mode: 'auto',
+              state: 'getting_ride',
+              openedApp: 'uber',
+              bookedWith: null,
+              confirmedAt: null,
+              vehicleNumber: null,
+              journeyStartedAt: new Date(Date.now() - 4 * 60 * 1000),
+            }
+          : null,
       });
     }
   }

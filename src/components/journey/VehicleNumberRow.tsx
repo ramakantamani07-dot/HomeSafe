@@ -11,6 +11,8 @@ import { VEHICLE_NUMBER_MAX_CHARS, normaliseVehicleNumber } from '../../models/R
 
 interface VehicleNumberRowProps {
   vehicleNumber: string | null;
+  /** "Mum & Alex" — family who see the ride. Null when nobody does. */
+  watchers: string | null;
   /** Saves (or, with '', removes) the number. Throws when it could not be saved. */
   onSave(input: string): Promise<void>;
 }
@@ -19,11 +21,10 @@ interface VehicleNumberRowProps {
  * "Add vehicle number (optional)" (rides board AP4), once the traveller is in
  * the ride.
  *
- * The board says "Shared only with Mum & Alex". Family see ride details from
- * Phase 4 (rides.md); until then it is kept with the journey only, and the row
- * says so.
+ * "Shared only with Mum & Alex" names the family who see journey details;
+ * with nobody, it is kept with the journey only, and the row says that.
  */
-export function VehicleNumberRow({ vehicleNumber, onSave }: VehicleNumberRowProps) {
+export function VehicleNumberRow({ vehicleNumber, watchers, onSave }: VehicleNumberRowProps) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const [editing, setEditing] = useState(false);
@@ -68,7 +69,7 @@ export function VehicleNumberRow({ vehicleNumber, onSave }: VehicleNumberRowProp
               {vehicleNumber ?? 'Add vehicle number (optional)'}
             </Text>
             <Text style={styles.note} numberOfLines={1}>
-              Kept with this journey · deleted with its trail
+              {watchers ? `Shared only with ${watchers}` : 'Kept with this journey · deleted with its trail'}
             </Text>
           </View>
           <Icon name="chevronRight" size={18} color={theme.textTertiary} />
@@ -79,7 +80,9 @@ export function VehicleNumberRow({ vehicleNumber, onSave }: VehicleNumberRowProp
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>Vehicle number</Text>
           <Text style={styles.sheetBody}>
-            As it is on the number plate. Kept with this journey and deleted with its trail.
+            {watchers
+              ? `As it is on the number plate. Shared only with ${watchers}, and deleted with the journey's trail.`
+              : 'As it is on the number plate. Kept with this journey and deleted with its trail.'}
           </Text>
           <TextInput
             value={draft}

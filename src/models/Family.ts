@@ -1,5 +1,6 @@
 import type { Coordinates } from './Journey';
 import { haversineMeters } from './Place';
+import type { SharedRide } from './Ride';
 
 export type FamilyStatusType =
   /**
@@ -184,6 +185,8 @@ export interface FamilyStatusSnapshot {
   lastCheckInAt: Date | null;
   /** When the next check-in is due. Null when check-ins are off. */
   nextCheckInAt: Date | null;
+  /** The ride, on a cab / auto / bike-taxi journey (rides AP5). Null otherwise. */
+  ride: SharedRide | null;
   updatedAt: Date;
 }
 
@@ -222,6 +225,7 @@ export interface FamilyMember {
   routePath: Coordinates[] | null;
   lastCheckInAt: Date | null;
   nextCheckInAt: Date | null;
+  ride: SharedRide | null;
   /** When their shared status was last written — "updated 10 s ago". */
   updatedAt: Date | null;
 }
@@ -238,6 +242,20 @@ export function statusAllowedBy(permissions: FamilyPermissions, hasActiveJourney
   if (mode === 'SHARE_ALWAYS') return permissions.shareStatus;
   if (mode === 'SHARE_DURING_JOURNEY') return hasActiveJourney && permissions.shareStatus;
   return permissions.shareStatus;
+}
+
+/**
+ * The family members who see this journey's details while it runs — and so
+ * its ride (`deriveSharedView`). Only active connections whose sharing I have
+ * left on for journeys.
+ */
+export function seesJourneyDetails(members: readonly FamilyMember[]): FamilyMember[] {
+  return members.filter(
+    (m) =>
+      m.connectionStatus === 'ACTIVE' &&
+      statusAllowedBy(m.myPermissions, true) &&
+      m.myPermissions.shareJourneyDetails,
+  );
 }
 
 /**
@@ -260,6 +278,7 @@ export interface SharedFamilyView {
   routePath: Coordinates[] | null;
   lastCheckInAt: Date | null;
   nextCheckInAt: Date | null;
+  ride: SharedRide | null;
 }
 
 /**
@@ -286,6 +305,7 @@ export function deriveSharedView(
       routePath: null,
       lastCheckInAt: null,
       nextCheckInAt: null,
+      ride: null,
     };
   }
   // Everything about the journey itself — how far along, which way, when they
@@ -304,6 +324,8 @@ export function deriveSharedView(
     routePath: journey && permissions.shareLocation ? raw.routePath : null,
     lastCheckInAt: journey ? raw.lastCheckInAt : null,
     nextCheckInAt: journey ? raw.nextCheckInAt : null,
+    // How they are travelling, and the vehicle number, are journey details.
+    ride: journey ? raw.ride : null,
   };
 }
 

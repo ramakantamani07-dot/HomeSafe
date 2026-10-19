@@ -1,3 +1,4 @@
+import { shareRide } from '../models/Ride';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
@@ -174,6 +175,7 @@ export function FamilyStateProvider({
         routePath,
         lastCheckInAt,
         nextCheckInAt,
+        ride: shareRide(activeJourney),
       }, wasTravelling, journeyJustCompleted)
       .catch(() => {});
     // Re-publishes on every currentLocation change too — that stream is
@@ -193,6 +195,9 @@ export function FamilyStateProvider({
     routePath,
     lastCheckInAt?.getTime(),
     nextCheckInAt?.getTime(),
+    // A ride confirmed, a vehicle number added, travel changed: family see it then.
+    activeJourney?.travelMode,
+    activeJourney?.ride,
   ]);
 
   // ─── Live status, only while a family screen is open ─────────────────────────

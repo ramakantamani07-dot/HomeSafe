@@ -18,6 +18,8 @@ interface RideHandoffSheetProps {
   app: RideApp;
   /** "getting an auto to 560001" — what the journey is now doing. */
   doing: string;
+  /** "Mum & Alex" — family who see the ride. Null when nobody does. */
+  watchers: string | null;
   open(): Promise<RideHandoffResult>;
   /** The app opened; the sheet goes. */
   onOpened(): void;
@@ -32,10 +34,10 @@ interface RideHandoffSheetProps {
  * A link that will not open leaves the journey running in `getting_ride` and
  * says so, with a retry — never a silent nothing, never a journey ended.
  *
- * The board's "Mum & Alex can see you're getting an auto" waits for Phase 4;
- * family see the journey, not yet the ride.
+ * "Mum & Alex can see you're getting an auto" names only family who see
+ * journey details (`seesJourneyDetails`).
  */
-export function RideHandoffSheet({ app, doing, open, onOpened, onGiveUp }: RideHandoffSheetProps) {
+export function RideHandoffSheet({ app, doing, watchers, open, onOpened, onGiveUp }: RideHandoffSheetProps) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const name = RIDE_APP_NAMES[app];
@@ -63,7 +65,7 @@ export function RideHandoffSheet({ app, doing, open, onOpened, onGiveUp }: RideH
         <Text style={styles.body}>
           {state === 'failed'
             ? `Your Safe Journey is still on, ${doing}. Try again, or book another way.`
-            : `You're ${doing}. Opening ${name} now…`}
+            : `${watchers ? `${watchers} can see you're` : "You're"} ${doing}. Opening ${name} now…`}
         </Text>
 
         {state === 'opening' ? (

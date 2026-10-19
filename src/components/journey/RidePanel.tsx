@@ -3,9 +3,12 @@ import { AccessibilityInfo, Alert } from 'react-native';
 
 import { useJourney } from '../../hooks/useJourney';
 import { useRideHandoff } from '../../hooks/useRideHandoff';
+import { useFamily } from '../../hooks/useFamily';
+import { seesJourneyDetails } from '../../models/Family';
+import { joinGuardianNames } from '../../utils/guardians';
 import type { Journey } from '../../models/Journey';
 import type { RideApp, RideBookedWith } from '../../models/Ride';
-import { RIDE_APP_NAMES, rideDestinationAddress, rideQuestion } from '../../models/Ride';
+import { RIDE_APP_NAMES, rideDestinationAddress, rideNoun, rideQuestion } from '../../models/Ride';
 import { copyText } from '../../utils/clipboard';
 import { haptics } from '../../utils/haptics';
 import { RideWaitingCard } from './RideWaitingCard';
@@ -25,6 +28,10 @@ interface RidePanelProps {
 export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
   const { confirmInRide, setVehicleNumber } = useJourney();
   const { openRideApp } = useRideHandoff();
+  const { members } = useFamily();
+  // Only family who actually see journey details are named (rides AP3 / AP4).
+  const watching = seesJourneyDetails(members);
+  const watchers = watching.length > 0 ? joinGuardianNames(watching) : null;
   const ride = journey.ride;
 
   const confirm = useCallback(
@@ -64,6 +71,8 @@ export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
     return (
       <RideWaitingCard
         question={rideQuestion(journey.travelMode, journey.startedAt, now)}
+        noun={rideNoun(journey.travelMode)}
+        watchers={watchers}
         openedApp={ride.openedApp}
         address={rideDestinationAddress(journey.destination)}
         onConfirm={confirm}
@@ -74,5 +83,5 @@ export function RidePanel({ journey, now, onChangeTravel }: RidePanelProps) {
     );
   }
 
-  return <VehicleNumberRow vehicleNumber={ride.vehicleNumber} onSave={setVehicleNumber} />;
+  return <VehicleNumberRow vehicleNumber={ride.vehicleNumber} watchers={watchers} onSave={setVehicleNumber} />;
 }

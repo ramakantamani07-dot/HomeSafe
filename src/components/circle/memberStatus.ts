@@ -1,4 +1,5 @@
 import type { AskOkOutcome, FamilyMember } from '../../models/Family';
+import { guardianRideStatus } from '../../models/Ride';
 
 /**
  * How an app member's status reads in a list — Home's circle and Family.
@@ -14,6 +15,8 @@ export function describeMemberStatus(member: FamilyMember): string {
     case 'AT_SCHOOL':
       return 'At school';
     case 'TRAVELLING':
+      // "Getting an auto to Home" until they say they are in (rides AP5).
+      if (member.ride) return guardianRideStatus(member.ride, member.activeJourneyDestination);
       return member.activeJourneyDestination
         ? `On the way to ${member.activeJourneyDestination}`
         : 'On the way';

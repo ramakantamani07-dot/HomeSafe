@@ -11,10 +11,14 @@ import { RIDE_APP_NAMES, type RideApp, type RideBookedWith } from '../../models/
 interface RideWaitingCardProps {
   /** "Are you in the auto now?" / "Still waiting for your auto?" — `rideQuestion`. */
   question: string;
+  /** "an auto", "a cab" — `rideNoun`. */
+  noun: string;
   /** The app WayLoc opened, when it opened one — then "Yes" asks which app it was. */
   openedApp: RideApp | null;
   /** The address to copy for a ride app, never a nickname. Null hides Copy. */
   address: string | null;
+  /** "Mum & Alex" — family who see the ride (`seesJourneyDetails`). Null when nobody does. */
+  watchers: string | null;
   onConfirm(bookedWith: RideBookedWith | null): Promise<void>;
   onChangeTravel(): void;
   /** "Still waiting ↗": back to the ride app WayLoc opened. Only when it opened one. */
@@ -26,17 +30,19 @@ interface RideWaitingCardProps {
  * "Are you in the auto now?" (rides board AP3), shown while the journey is
  * `getting_ride`.
  *
- * The board says "Mum & Alex see 'getting an auto' until you say yes". Family
- * cannot see ride status until Phase 4 (rides.md), so this says only what is
- * true today: the Safe Journey is on while they wait.
+ * "Mum & Alex see 'getting an auto' until you say yes" names only the family
+ * who do see journey details; with nobody, it says only that the Safe Journey
+ * is on.
  *
  * "Still waiting ↗" reopens the ride app WayLoc opened; with no app opened
  * ("I'll sort it myself") there is nothing to reopen, so it is not shown.
  */
 export function RideWaitingCard({
   question,
+  noun,
   openedApp,
   address,
+  watchers,
   onConfirm,
   onChangeTravel,
   onReopenApp,
@@ -78,7 +84,11 @@ export function RideWaitingCard({
       <Text style={styles.title} accessibilityRole="header">
         {question}
       </Text>
-      <Text style={styles.body}>Your Safe Journey is on while you wait.</Text>
+      <Text style={styles.body}>
+        {watchers
+          ? `${watchers} see “getting ${noun}” until you say yes.`
+          : 'Your Safe Journey is on while you wait.'}
+      </Text>
       <Button
         label="Yes, I'm in"
         icon="check"

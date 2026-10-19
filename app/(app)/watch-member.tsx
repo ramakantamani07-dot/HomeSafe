@@ -16,6 +16,8 @@ import { Icon, type IconName } from '../../src/components/ui/Icon';
 import { JourneyProgressBar } from '../../src/components/family/JourneyProgressBar';
 import { describeAskOkOutcome, describeMemberStatus } from '../../src/components/circle/memberStatus';
 import { callNumber, textNumber } from '../../src/utils/deviceLinks';
+import { GuardianRideTimeline } from '../../src/components/family/GuardianRideTimeline';
+import { guardianRideSubtitle, guardianRideTimeline } from '../../src/models/Ride';
 
 /** "updated 10 s ago" needs seconds, so this ticks faster than Family's list. */
 const LIVE_TICK_MS = 5_000;
@@ -92,7 +94,13 @@ export default function WatchMemberScreen() {
   // Their app listens for watchers only while they are on a journey, so the
   // line is true only then.
   const seesWatchers = member.status === 'TRAVELLING' || member.status === 'SOS_ACTIVE';
-  const subline = [member.batteryLevel !== null ? `battery ${Math.round(member.batteryLevel * 100)}%` : null]
+  // On a ride, what WayLoc knows about it ("Started 21:44 · Uber opened · not
+  // confirmed yet") leads; battery follows.
+  const ride = travelling ? member.ride : null;
+  const subline = [
+    ride ? guardianRideSubtitle(ride) : null,
+    member.batteryLevel !== null ? `battery ${Math.round(member.batteryLevel * 100)}%` : null,
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -130,6 +138,14 @@ export default function WatchMemberScreen() {
             {subline ? <Text style={styles.subline}>{subline}</Text> : null}
           </View>
         </View>
+
+        {ride && (
+          <View style={styles.card}>
+            <GuardianRideTimeline
+              steps={guardianRideTimeline(ride, name, member.activeJourneyDestination, member.activeJourneyEta)}
+            />
+          </View>
+        )}
 
         {(member.journeyProgress || details.length > 0 || checkIn.length > 0) && (
           <View style={styles.card}>

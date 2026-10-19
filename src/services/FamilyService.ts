@@ -20,6 +20,7 @@ import {
   simplifyPath,
 } from '../models/Family';
 import type { Coordinates } from '../models/Journey';
+import type { SharedRide } from '../models/Ride';
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
@@ -35,6 +36,8 @@ export interface PublishStatusInput {
   routePath: readonly Coordinates[] | null;
   lastCheckInAt: Date | null;
   nextCheckInAt: Date | null;
+  /** `shareRide(activeJourney)`. */
+  ride: SharedRide | null;
 }
 
 /** The live part of a FamilyMember — everything that comes from their shared view. */
@@ -79,6 +82,7 @@ export function memberStatusFromView(
     routePath: wasShared && !isStale ? view!.routePath : null,
     lastCheckInAt: wasShared ? view!.lastCheckInAt : null,
     nextCheckInAt: wasShared ? view!.nextCheckInAt : null,
+    ride: wasShared ? view!.ride : null,
     updatedAt: wasShared ? view!.lastSeen : null,
   };
 }
@@ -368,6 +372,7 @@ export class FamilyService {
       routePath: input.activeJourneyId && input.routePath ? simplifyPath(input.routePath) : null,
       lastCheckInAt: input.activeJourneyId ? input.lastCheckInAt : null,
       nextCheckInAt: input.activeJourneyId ? input.nextCheckInAt : null,
+      ride: input.activeJourneyId ? input.ride : null,
       updatedAt: now,
     };
 

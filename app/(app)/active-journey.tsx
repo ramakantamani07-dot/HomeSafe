@@ -17,7 +17,7 @@ import { useJourney } from '../../src/hooks/useJourney';
 import { useSafetyCheck } from '../../src/hooks/useSafetyCheck';
 import { useFamily } from '../../src/hooks/useFamily';
 import { useInterval } from '../../src/hooks/useInterval';
-import { describeWatchers, presentWatchers } from '../../src/models/Family';
+import { describeWatchers, presentWatchers, seesJourneyDetails } from '../../src/models/Family';
 import { useBatteryStatus } from '../../src/hooks/useBatteryStatus';
 import { useActiveJourneyLocation } from '../../src/hooks/useActiveJourneyLocation';
 import { useJourneyMap } from '../../src/hooks/useJourneyMap';
@@ -145,6 +145,11 @@ export default function ActiveJourneyScreen() {
   useInterval(() => forceTick((n) => n + 1), FRESHNESS_TICK_MS);
 
   const guardians = useMemo(() => joinGuardianNames(members), [members]);
+  // Family who see this journey's details — and so its ride (rides AP2).
+  const rideWatchers = useMemo(() => {
+    const watching = seesJourneyDetails(members);
+    return watching.length > 0 ? joinGuardianNames(watching) : null;
+  }, [members]);
 
   // Spec §3: "06 Back does NOT end the journey. It goes to 07." The nav stack
   // would otherwise unwind into the destination picker this journey was
@@ -544,6 +549,7 @@ export default function ActiveJourneyScreen() {
         <RideHandoffSheet
           app={handoffApp}
           doing={rideActivity(journey.travelMode, journey.destination, journey.destinationLabel)}
+          watchers={rideWatchers}
           open={() =>
             journey.destination
               ? openRideApp(handoffApp, journey.destination)

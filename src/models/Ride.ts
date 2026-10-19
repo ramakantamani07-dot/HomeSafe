@@ -193,3 +193,104 @@ export function normaliseVehicleNumber(input: string): string | null {
   }
   return out.trim();
 }
+
+// ── What family see (rides board AP5, Phase 4) ─────────────────────────────
+
+/**
+ * The ride as it is shared with family, under the journey-details permission
+ * (`deriveSharedView`). Everything in it is what WayLoc did or the traveller
+ * said — family see "getting an auto" until she says she is in.
+ */
+export interface SharedRide {
+  mode: TravelMode;
+  state: RideState;
+  openedApp: RideApp | null;
+  bookedWith: RideBookedWith | null;
+  confirmedAt: Date | null;
+  vehicleNumber: string | null;
+  /** When the journey began — the pickup allowance counts from here. */
+  journeyStartedAt: Date;
+}
+
+export function shareRide(
+  journey: { travelMode: TravelMode; ride: Ride | null; startedAt: Date } | null,
+): SharedRide | null {
+  if (!journey?.ride) return null;
+  return { ...journey.ride, mode: journey.travelMode, journeyStartedAt: journey.startedAt };
+}
+
+/** "Getting an auto to Home" / "In an auto to Home" — family lists and Watch live. */
+export function guardianRideStatus(ride: SharedRide, destination: string | null): string {
+  const noun = rideNoun(ride.mode);
+  const to = destination ? ` to ${destination}` : '';
+  return ride.state === 'getting_ride' ? `Getting ${noun}${to}` : `In ${noun}${to}`;
+}
+
+/**
+ * The line under it: "Started 21:44 · Uber opened · not confirmed yet", or
+ * "Confirmed 21:52 · booked with Uber · KA 01 AB 1234". The board's "booked
+ * with Uber" before confirmation is not something WayLoc knows — Uber was
+ * opened, that is all.
+ */
+export function guardianRideSubtitle(ride: SharedRide): string {
+  if (ride.state === 'getting_ride') {
+    return [
+      `Started ${clock(ride.journeyStartedAt)}`,
+      ride.openedApp ? `${RIDE_APP_NAMES[ride.openedApp]} opened` : null,
+      'not confirmed yet',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  return [
+    ride.confirmedAt ? `Confirmed ${clock(ride.confirmedAt)}` : 'Confirmed',
+    ride.bookedWith && ride.bookedWith !== 'other' ? `booked with ${RIDE_APP_NAMES[ride.bookedWith]}` : null,
+    ride.vehicleNumber,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export interface RideTimelineStep {
+  title: string;
+  detail: string | null;
+  /** "21:44", "now", or "—" for a step that has not happened. */
+  meta: string;
+  state: 'done' | 'now' | 'pending';
+}
+
+/** AP5's timeline. "In the auto" is shown only once the traveller says so. */
+export function guardianRideTimeline(
+  ride: SharedRide,
+  name: string,
+  destination: string | null,
+  eta: Date | null,
+): RideTimelineStep[] {
+  const waiting = ride.state === 'getting_ride';
+  const noun = rideNounBare(ride.mode);
+  const allowanceEnds = new Date(ride.journeyStartedAt.getTime() + PICKUP_ALLOWANCE_MINUTES * 60_000);
+  return [
+    // Not "Walking to the pickup": WayLoc does not know that (rides.md, departure 2).
+    { title: 'Safe Journey started', detail: null, meta: clock(ride.journeyStartedAt), state: 'done' },
+    {
+      title: `Getting ${rideNoun(ride.mode)}`,
+      detail: `Pickup allowance until ${clock(allowanceEnds)}`,
+      meta: waiting ? 'now' : '',
+      state: waiting ? 'now' : 'done',
+    },
+    waiting
+      ? { title: `In the ${noun}`, detail: `Shown when ${name} confirms`, meta: '—', state: 'pending' }
+      : {
+          title: `In the ${noun}`,
+          detail: ride.vehicleNumber ? `Vehicle ${ride.vehicleNumber}` : `${name} confirmed`,
+          meta: ride.confirmedAt ? clock(ride.confirmedAt) : 'now',
+          state: 'now',
+        },
+    {
+      title: destination ?? 'Destination',
+      detail: eta ? `Arrive by about ${clock(eta)}` : null,
+      meta: '—',
+      state: 'pending',
+    },
+  ];
+}

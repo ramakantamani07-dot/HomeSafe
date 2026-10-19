@@ -62,6 +62,7 @@ describe('deriveSharedView — the new journey fields follow permissions', () =>
     routePath: route,
     lastCheckInAt: new Date(),
     nextCheckInAt: new Date(),
+    ride: null,
     updatedAt: new Date(),
   };
   const perms = { ...defaultFamilyPermissions(), sharingMode: 'SHARE_ALWAYS' as const };
@@ -131,6 +132,7 @@ describe('live member status', () => {
         routePath: null,
         lastCheckInAt: null,
         nextCheckInAt: null,
+        ride: null,
       });
 
     await publish('j1');

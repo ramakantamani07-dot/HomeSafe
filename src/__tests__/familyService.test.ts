@@ -236,6 +236,7 @@ test('getFamilyMembers hides status when member sets NEVER_SHARE', async () => {
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -323,6 +324,7 @@ test('getFamilyMembers shows journey details when SHARE_ALWAYS with shareJourney
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -370,6 +372,7 @@ test('getFamilyMembers exposes live location only when shareLocation is true', a
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -415,6 +418,7 @@ test('getFamilyMembers hides location when shareLocation is false, even with oth
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -458,6 +462,7 @@ test('getFamilyMembers hides location once the shared view is stale, unlike othe
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -505,6 +510,7 @@ test('SHARE_DURING_JOURNEY mode hides status when no active journey', async () =
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
@@ -530,6 +536,7 @@ test('publishStatus derives TRAVELLING when activeJourneyId is set', async () =>
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -550,6 +557,7 @@ test('publishStatus derives SOS_ACTIVE when activeSosId is set', async () => {
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -569,6 +577,7 @@ test('publishStatus says only "not on a journey" when no journey and no SOS — 
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const snapshot = await provider.getOwnStatus(USER_A.id);
@@ -590,6 +599,7 @@ test('publishStatus derives ARRIVED when journey just completed', async () => {
       routePath: null,
       lastCheckInAt: null,
       nextCheckInAt: null,
+      ride: null,
     },
     true, // wasTravelling
     true, // journeyJustCompleted
@@ -637,6 +647,7 @@ test('getFamilyMembers treats member as OFFLINE when lastSeen > 30 minutes ago',
     routePath: null,
     lastCheckInAt: null,
     nextCheckInAt: null,
+    ride: null,
   });
 
   const members = await service.getFamilyMembers(USER_A.id);
