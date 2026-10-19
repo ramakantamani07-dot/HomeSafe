@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { Coordinates } from '../../models/Journey';
@@ -9,6 +9,7 @@ import {
   type NetworkLocationProvider,
   type NetworkLocationResult,
 } from '../../providers/NetworkLocationProvider';
+import { getAppFunctions } from '../../config/firebase';
 
 interface LocateResponse {
   latitude: number;
@@ -40,7 +41,7 @@ export class FirebaseNetworkLocationProvider implements NetworkLocationProvider 
   private readonly functions: Functions;
 
   constructor(app: FirebaseApp) {
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
   }
 
   async retrieve(memberId: string, _reason: LocateReason): Promise<NetworkLocationResult> {

@@ -20,10 +20,13 @@
  *   security/   new-device sign-in warning
  *   sos/        hands-free SOS: SOS keys and the device endpoint
  *
- * Side-effect import order matters only in that `shared/firebase` must be
- * initialised before anything touches Firestore; every module imports it, and
+ * Side-effect import order matters twice: `shared/region` must come first, so
+ * every function is defined in Mumbai; and `shared/firebase` must be
+ * initialised before anything touches Firestore — every module imports it, and
  * Node's module cache makes that a single `initializeApp()`.
  */
+
+import './shared/region';
 
 export {
   onSOSTriggered,

@@ -15,11 +15,12 @@ import {
   type DocumentReference,
 } from 'firebase/firestore';
 import type { FirebaseApp } from 'firebase/app';
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 
 import type { SOSProvider } from '../../providers/SOSProvider';
 import type { AcknowledgeOutcome, SOSEvent, SOSStatus, SosResponse } from '../../models/SOS';
 import type { Coordinates } from '../../models/Journey';
+import { getAppFunctions } from '../../config/firebase';
 
 type StoredSOS = {
   userId: string;
@@ -57,7 +58,7 @@ export class FirebaseSOSProvider implements SOSProvider {
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
   }
 
   async createSOS(

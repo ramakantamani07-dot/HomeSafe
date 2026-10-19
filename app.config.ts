@@ -193,6 +193,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(APPLE_TEAM_ID ? ['@bacons/apple-targets' as const] : []),
   ],
   extra: {
+    // Where Cloud Functions run — Mumbai for the India launch. Must match
+    // functions/src/shared/region.ts.
+    firebaseFunctionsRegion: process.env.FIREBASE_FUNCTIONS_REGION ?? 'asia-south1',
     // Ride hand-off (docs/features/rides.md). Not secrets: each goes into every
     // link WayLoc opens. A missing one hides that ride app.
     uberClientId: process.env.UBER_CLIENT_ID,

@@ -15,7 +15,7 @@ import {
   Timestamp,
   Firestore,
 } from 'firebase/firestore';
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { FamilyProvider, InviteMemberInput, CreateConnectionInput } from '../../providers/FamilyProvider';
@@ -38,6 +38,7 @@ import {
   defaultFamilyPermissions,
   INVITATION_EXPIRY_DAYS,
 } from '../../models/Family';
+import { getAppFunctions } from '../../config/firebase';
 
 // ─── Firestore document shapes ────────────────────────────────────────────────
 
@@ -246,7 +247,7 @@ export class FirebaseFamilyProvider implements FamilyProvider {
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
   }
 
   // ─── Invitations ────────────────────────────────────────────────────────────

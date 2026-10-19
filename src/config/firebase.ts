@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { initializeApp, getApps, FirebaseApp } from '@firebase/app';
+import { getFunctions, type Functions } from 'firebase/functions';
 
 const {
   firebaseApiKey,
@@ -8,7 +9,20 @@ const {
   firebaseStorageBucket,
   firebaseMessagingSenderId,
   firebaseAppId,
+  firebaseFunctionsRegion,
 } = Constants.expoConfig?.extra ?? {};
+
+/**
+ * Where Cloud Functions run: Mumbai, beside the database (India launch). Must
+ * match functions/src/shared/region.ts. Without it the SDK calls us-central1,
+ * where nothing is deployed.
+ */
+export const FUNCTIONS_REGION: string = (firebaseFunctionsRegion as string | undefined) ?? 'asia-south1';
+
+/** The app's Cloud Functions, in their region. Use this, never `getFunctions(app)`. */
+export function getAppFunctions(app: FirebaseApp): Functions {
+  return getFunctions(app, FUNCTIONS_REGION);
+}
 
 const firebaseConfig = {
   apiKey: firebaseApiKey as string,

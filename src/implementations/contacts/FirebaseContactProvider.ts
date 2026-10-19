@@ -12,12 +12,13 @@ import {
   orderBy,
   Firestore,
 } from 'firebase/firestore';
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { ContactProvider, NewContact, ContactUpdates, TestAlertOutcome } from '../../providers/ContactProvider';
 import type { Contact, ContactAlerts } from '../../models/Contact';
 import { DEFAULT_CONTACT_ALERTS, normaliseRelationship } from '../../models/Contact';
+import { getAppFunctions } from '../../config/firebase';
 
 type StoredContact = {
   name: string;
@@ -58,7 +59,7 @@ export class FirebaseContactProvider implements ContactProvider {
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
   }
 
   async sendTestAlert(): Promise<TestAlertOutcome> {

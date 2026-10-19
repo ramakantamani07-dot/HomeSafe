@@ -1,17 +1,15 @@
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { HandsFreeSosProvider, SosKeyGrant } from '../../providers/HandsFreeSosProvider';
-
-/** Cloud Functions runs in the default region (no region is set in functions/). */
-const FUNCTIONS_REGION = 'us-central1';
+import { getAppFunctions, FUNCTIONS_REGION } from '../../config/firebase';
 
 export class FirebaseHandsFreeSosProvider implements HandsFreeSosProvider {
   private readonly functions: Functions;
   readonly endpoint: string;
 
   constructor(app: FirebaseApp) {
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
     this.endpoint = `https://${FUNCTIONS_REGION}-${app.options.projectId}.cloudfunctions.net/deviceSos`;
   }
 

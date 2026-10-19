@@ -15,7 +15,7 @@ import {
   writeBatch,
   type Firestore,
 } from 'firebase/firestore';
-import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { httpsCallable, type Functions } from 'firebase/functions';
 import type { FirebaseApp } from 'firebase/app';
 
 import type { BasicPhoneMember, NewBasicPhoneMember } from '../../models/BasicPhoneMember';
@@ -31,6 +31,7 @@ import type { NewSafeZone, SafeZone, ZoneState } from '../../models/SafeZone';
 import type { MemberEvent } from '../../models/MemberEvent';
 import type { BasicPhoneMemberProvider } from '../../providers/BasicPhoneMemberProvider';
 import type { Unsubscribe } from '../../providers/types';
+import { getAppFunctions } from '../../config/firebase';
 
 type StoredMember = {
   displayName: string;
@@ -88,7 +89,7 @@ export class FirebaseBasicPhoneMemberProvider implements BasicPhoneMemberProvide
 
   constructor(app: FirebaseApp) {
     this.db = getFirestore(app);
-    this.functions = getFunctions(app);
+    this.functions = getAppFunctions(app);
   }
 
   subscribeMembers(ownerId: string, onChange: (members: BasicPhoneMember[]) => void): Unsubscribe {
