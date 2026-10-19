@@ -95,6 +95,18 @@ reports exit 0.
 A new local native module under `modules/` (such as `walking-directions`)
 needs `pod install` before it is linked; a JS reload is not enough.
 
+**Install fails: "Expected executable at … sos_intent.appex/sos_intent to have
+a `__swift5_entry` section"** (seen 19 Oct 2026, first install of the Siri SOS
+extension). The build succeeds; the phone refuses it. An App Intents extension
+is an ExtensionKit extension and must have an `@main` type conforming to
+`AppIntentsExtension` — `targets/sos-intent/SosIntentExtension.swift`. A
+compile-only check (`CODE_SIGNING_ALLOWED=NO`) cannot catch this; only an
+install can.
+
+**"Could not connect to development server"** after the Mac changes network:
+the launch URL carries the Mac's address. Check it with
+`ipconfig getifaddr en0` and launch with that address in `--payload-url`.
+
 ### What mock mode gives you
 
 | Area | Mock behaviour |
