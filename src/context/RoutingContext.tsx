@@ -8,6 +8,7 @@ import type { RoutingService } from '../services/RoutingService';
 import type { JourneyService } from '../services/JourneyService';
 import { useJourney } from '../hooks/useJourney';
 import { useActiveJourneyLocation } from '../hooks/useActiveJourneyLocation';
+import { expectedArrival, offRouteThresholdMeters } from '../models/TravelModeProfile';
 
 export interface RoutingContextValue {
   /**
@@ -87,6 +88,9 @@ export function RoutingStateProvider({
   // the mode changed (it can't change mid-journey anyway).
   const travelModeRef = useRef(travelMode);
   travelModeRef.current = travelMode;
+  // When the journey began — a ride's pickup allowance counts from here.
+  const startedAtRef = useRef<Date>(new Date());
+  startedAtRef.current = activeJourney?.startedAt ?? startedAtRef.current;
 
   // ── Effect 1: calculate route when the journey starts or destination changes ──
   useEffect(() => {
@@ -114,8 +118,9 @@ export function RoutingStateProvider({
         setRoute(result);
         setIsLoading(false);
         // Persist route summary to the journey document (best-effort).
-        // Anchor ETA to calculatedAt so the stored value is stable.
-        const eta = routingService.computeEta(result.durationSeconds, result.calculatedAt);
+        // Anchor ETA to calculatedAt so the stored value is stable. A ride's
+        // drive starts no earlier than the end of its pickup allowance.
+        const eta = expectedArrival(travelMode, result.durationSeconds, result.calculatedAt, startedAtRef.current);
         void journeyService
           .saveRouteData(userId, jId, result.distanceMeters, result.durationSeconds, eta)
           .catch(() => {});
@@ -145,7 +150,7 @@ export function RoutingStateProvider({
     if (routingService.isOnCooldown()) return;
 
     const needsRecalc =
-      routingService.isOffRoute(currentLocation, currentRoute) ||
+      routingService.isOffRoute(currentLocation, currentRoute, offRouteThresholdMeters(travelModeRef.current)) ||
       routingService.isStale(currentRoute);
     if (!needsRecalc) return;
 
@@ -167,7 +172,9 @@ export function RoutingStateProvider({
 
   // ── Derived values ────────────────────────────────────────────────────────
   // Anchor ETA to calculatedAt — otherwise new Date() on every render drifts the arrival time.
-  const eta = route ? routingService.computeEta(route.durationSeconds, route.calculatedAt) : null;
+  const eta = route
+    ? expectedArrival(travelMode, route.durationSeconds, route.calculatedAt, startedAtRef.current)
+    : null;
   const formattedEta = eta ? routingService.formatEta(eta) : '—';
   const formattedDistance = route
     ? routingService.formatDistance(route.distanceMeters)

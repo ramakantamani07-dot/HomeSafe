@@ -1,5 +1,7 @@
 import type { RouteResult, RouteStep } from '../models/RouteResult';
-import { computeEta, formatDuration } from '../models/RouteResult';
+import { formatDuration } from '../models/RouteResult';
+import { expectedArrival } from './TravelModeProfile';
+import type { TravelMode } from './Place';
 
 /** A row in the Route screen's timeline (Option 15 `AI3`). */
 export interface TimelineEntry {
@@ -39,8 +41,10 @@ export function buildJourneyTimeline(
   route: RouteResult | null,
   destinationName: string,
   startedAt: Date = new Date(),
+  mode: TravelMode = 'walk',
 ): TimelineEntry[] {
-    const arrivalAt = route ? computeEta(route.durationSeconds, startedAt) : null;
+    // A ride's drive starts after its pickup allowance (TravelModeProfile).
+    const arrivalAt = route ? expectedArrival(mode, route.durationSeconds, startedAt, startedAt) : null;
 
     const start: TimelineEntry = {
       kind: 'start',

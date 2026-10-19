@@ -1,7 +1,7 @@
 # Rides — cab, auto, bike taxi (India)
 
-**Status (19 Oct 2026):** decided, not built. Phase 1 (mode-aware journeys)
-started. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
+**Status (19 Oct 2026):** Phase 1 (mode-aware journeys) built and tested;
+Phases 2–7 not built. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
 plan `WAYLOC_MOBILITY_DEEPLINK_PLAN.md`. This doc records where the build
 follows that plan and where it deliberately does not.
 
@@ -54,7 +54,7 @@ the journey.
 
 | # | Work | Size | Needs |
 |---|---|---|---|
-| 1 | **Mode-aware journeys** — modes `cab · auto · bikeTaxi`; routing receives the mode (Apple driving routes for rides and Car); ETA "~10 min pickup + 14 min drive"; alert rules per mode (rides: 20 min stopped, wider off-route margin); tracking rate per mode; tests in `models/` | ~1 week | — (needed anyway: Bus / Bike / Car show walking ETAs today) |
+| 1 ✅ | **Mode-aware journeys** (built 19 Oct — `models/TravelModeProfile.ts`, `__tests__/travelModes.test.ts`; bus and bike times are distance estimates, labelled so on screen 04) — modes `cab · auto · bikeTaxi`; routing receives the mode (Apple driving routes for rides and Car); ETA "~10 min pickup + 14 min drive"; alert rules per mode (rides: 20 min stopped, wider off-route margin); tracking rate per mode; tests in `models/` | ~1 week | — (needed anyway: Bus / Bike / Car show walking ETAs today) |
 | 2 | **Ride state + "I'll sort it myself"** — `ride: { provider, state, confirmedAt, vehicleNumber }`; AP3 / AP4 on the journey screen; "Still waiting?" never alerts family by itself; vehicle number: free text, upper-cased, ≤12 chars, deleted with the trail | 3–4 days | — |
 | 3 | **Provider hand-off** — ride port + Uber / Ola / Rapido adapters with pure link builders and exact-URL tests; AP1 list and AP2 sheet; a failed link keeps the journey in `getting_ride` | 3–4 days | `UBER_CLIENT_ID`; `OLA_XAPP_TOKEN` |
 | 4 | **Mum's view (AP5)** — ride fields in the shared family status; a ride timeline on Watch live | 2–3 days | — |

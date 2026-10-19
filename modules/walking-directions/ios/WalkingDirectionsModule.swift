@@ -24,12 +24,15 @@ public class WalkingDirectionsModule: Module {
         fromLongitude: Double,
         toLatitude: Double,
         toLongitude: Double,
-        includeSteps: Bool
+        includeSteps: Bool,
+        transport: String
       ) -> [String: Any] in
       try await Self.route(
         from: CLLocationCoordinate2D(latitude: fromLatitude, longitude: fromLongitude),
         to: CLLocationCoordinate2D(latitude: toLatitude, longitude: toLongitude),
-        includeSteps: includeSteps
+        includeSteps: includeSteps,
+        // Walking for walks; driving for anything on wheels (TravelModeProfile.ts).
+        transportType: transport == "driving" ? .automobile : .walking
       )
     }
   }
@@ -37,12 +40,13 @@ public class WalkingDirectionsModule: Module {
   private static func route(
     from: CLLocationCoordinate2D,
     to: CLLocationCoordinate2D,
-    includeSteps: Bool
+    includeSteps: Bool,
+    transportType: MKDirectionsTransportType
   ) async throws -> [String: Any] {
     let request = MKDirections.Request()
     request.source = mapItem(at: from)
     request.destination = mapItem(at: to)
-    request.transportType = .walking
+    request.transportType = transportType
     request.requestsAlternateRoutes = false
 
     // Errors (no route, no network) propagate to JS as a rejected promise; the

@@ -64,6 +64,12 @@ function toSteps(route: OsrmRoute): RouteStep[] {
  * OSRM coordinate order: longitude first, then latitude.
  */
 export class OSRMRoutingProvider implements RoutingProvider {
+  /**
+   * The public demo server offers driving only, so a walking request gets a
+   * road route and the service derives the walking time from its distance.
+   */
+  readonly profilesSupported = ['driving'] as const;
+
   constructor(private readonly baseUrl: string) {}
 
   async getRoute(

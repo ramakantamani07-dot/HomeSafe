@@ -11,6 +11,9 @@ import type { RouteRequestOptions, RoutingProvider } from '../../providers/Routi
  * Only the two coordinates go to Apple, the same as any Maps lookup.
  */
 export class MapKitWalkingRoutingProvider implements RoutingProvider {
+  /** MapKit computes both: walking for walks, driving for everything on wheels. */
+  readonly profilesSupported = ['walking', 'driving'] as const;
+
   async getRoute(
     from: Coordinates,
     to: Coordinates,
@@ -20,7 +23,7 @@ export class MapKitWalkingRoutingProvider implements RoutingProvider {
     throwIfAborted(signal);
     // MapKit cannot be cancelled mid-flight from JS; a superseded request is
     // dropped when it lands, which is what the port asks for.
-    const native = await walkingRoute(from, to, options.includeSteps ?? false);
+    const native = await walkingRoute(from, to, options.includeSteps ?? false, options.profile ?? 'walking');
     throwIfAborted(signal);
     return toRouteResult(native, new Date());
   }

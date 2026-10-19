@@ -24,6 +24,7 @@ interface WalkingDirectionsNativeModule {
     toLatitude: number,
     toLongitude: number,
     includeSteps: boolean,
+    transport: 'walking' | 'driving',
   ): Promise<NativeWalkingRoute>;
 }
 
@@ -40,7 +41,8 @@ export function walkingRoute(
   from: { latitude: number; longitude: number },
   to: { latitude: number; longitude: number },
   includeSteps: boolean,
+  transport: 'walking' | 'driving' = 'walking',
 ): Promise<NativeWalkingRoute> {
-  if (!native) return Promise.reject(new Error('Walking directions are not available on this device.'));
-  return native.route(from.latitude, from.longitude, to.latitude, to.longitude, includeSteps);
+  if (!native) return Promise.reject(new Error('Directions are not available on this device.'));
+  return native.route(from.latitude, from.longitude, to.latitude, to.longitude, includeSteps, transport);
 }

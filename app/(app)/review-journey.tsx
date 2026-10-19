@@ -26,19 +26,30 @@ import { Icon, type IconName } from '../../src/components/ui/Icon';
 import { AppMapView } from '../../src/components/map/AppMapView';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { TRAVEL_MODES, type TravelMode } from '../../src/models/Place';
+import { alertRulesFor, pickupAllowanceMinutes } from '../../src/models/TravelModeProfile';
 
 const MODE_ICON: Record<TravelMode, IconName> = {
   walk: 'walk',
   bus: 'bus',
   bike: 'bike',
   car: 'car',
+  cab: 'car',
+  auto: 'car',
+  bikeTaxi: 'bike',
 };
 
+/**
+ * What the route on screen is. Only what is true: there is no bus or cycling
+ * router, so those are road routes with a time estimated at that pace.
+ */
 const MODE_ROUTE_LABEL: Record<TravelMode, string> = {
-  walk: 'Fastest walking route',
-  bus: 'Fastest bus route',
-  bike: 'Fastest cycling route',
-  car: 'Fastest driving route',
+  walk: 'Walking route',
+  bus: 'Road route, bus-pace estimate',
+  bike: 'Road route, cycling-pace estimate',
+  car: 'Driving route',
+  cab: 'Driving route',
+  auto: 'Driving route',
+  bikeTaxi: 'Driving route',
 };
 
 /**
@@ -59,6 +70,9 @@ export default function ReviewJourneyScreen() {
 
   // Shown, not edited — the rules this journey will inherit from Settings.
   const alertRules = journeyPreferences.alertRules;
+  // What the checks will actually be for this mode (more patient in a vehicle).
+  const modeRules = alertRulesFor(draft.travelMode, alertRules);
+  const pickupMinutes = pickupAllowanceMinutes(draft.travelMode);
   const { isAlreadySaved, savePlace } = usePlaces();
   const { locationStatus, locationBackgroundStatus } = usePrivacy();
   const { members } = useFamily();
@@ -190,7 +204,7 @@ export default function ReviewJourneyScreen() {
               </Text>
               <Text style={styles.routeSubtitle} numberOfLines={1}>
                 {preview.formattedDuration
-                  ? `${MODE_ROUTE_LABEL[draft.travelMode]} · ${preview.formattedDuration}`
+                  ? `${MODE_ROUTE_LABEL[draft.travelMode]} · ${preview.rideBreakdown ?? preview.formattedDuration}`
                   : "We'll still follow your location"}
               </Text>
             </View>
@@ -286,9 +300,16 @@ export default function ReviewJourneyScreen() {
                 to leave. */}
           </View>
 
+          {pickupMinutes > 0 && (
+            <RuleRow
+              styles={styles}
+              condition={`Up to ${pickupMinutes} min for the pickup`}
+              outcome="No “late” while I wait"
+            />
+          )}
           <RuleRow
             styles={styles}
-            condition={`${alertRules.lateMinutes} min late, or stopped ${alertRules.stoppedMinutes} min`}
+            condition={`${modeRules.lateMinutes} min late, or stopped ${modeRules.stoppedMinutes} min`}
             outcome="Ask if I'm OK"
           />
           <RuleRow
@@ -432,13 +453,17 @@ function getStyles(theme: ThemeColors) {
     },
     segmented: {
       flexDirection: 'row',
+      // Seven modes: wrap onto a second line rather than squeeze (AP1).
+      flexWrap: 'wrap',
       padding: 5,
       borderRadius: RADIUS.lg,
       backgroundColor: theme.border,
       gap: 4,
     },
     segment: {
-      flex: 1,
+      flexGrow: 1,
+      minWidth: 72,
+      paddingHorizontal: SPACING.sm,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',

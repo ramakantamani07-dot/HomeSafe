@@ -28,6 +28,7 @@ import type { LocationTrackingService } from '../services/LocationTrackingServic
 import { useAuthContext } from './AuthContext';
 import { useJourneyContext } from './JourneyContext';
 import { useBatteryContext } from './BatteryContext';
+import { trackingMotion } from '../models/TravelModeProfile';
 
 interface LocationTrackingContextValue {
   currentLocation: Coordinates | null;
@@ -121,11 +122,7 @@ export function LocationTrackingProvider({
    * Walking and cycling are pedestrian-ish duty cycles; bus and car are not.
    */
   const motion: TrackingMotion =
-    activeJourney === null
-      ? 'unknown'
-      : activeJourney.travelMode === 'walk' || activeJourney.travelMode === 'bike'
-        ? 'pedestrian'
-        : 'vehicle';
+    activeJourney === null ? 'unknown' : trackingMotion(activeJourney.travelMode);
 
   // Wire the service's downgrade callback once. New journey/session → reset the warning.
   useEffect(() => {

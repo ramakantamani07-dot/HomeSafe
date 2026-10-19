@@ -245,7 +245,7 @@ export class LocationTrackingService {
     }
 
     const mode = this.activeJourneyId ? 'JOURNEY' : 'NORMAL';
-    return getTrackingConfig(mode, this.batteryLevel, this.movementState);
+    return getTrackingConfig(mode, this.batteryLevel, this.movementState, this.motion);
   }
 
   private buildLocationOptions(config: TrackingConfig): LocationTrackingOptions {

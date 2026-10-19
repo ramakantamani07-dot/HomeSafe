@@ -1,12 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
@@ -27,6 +19,7 @@ import { useJourneyContext } from './JourneyContext';
 import { useLocationTrackingContext } from './LocationTrackingContext';
 import { useBatteryContext } from './BatteryContext';
 import { useRoutingContext } from './RoutingContext';
+import { alertRulesFor, offRouteThresholdMeters } from '../models/TravelModeProfile';
 
 interface SafetyCheckContextValue {
   /** Non-null while screen 08 should be showing. */
@@ -114,9 +107,17 @@ export function SafetyCheckStateProvider({
 
   const userId = user?.id ?? null;
   const journeyId = activeJourney?.status === 'ACTIVE' ? activeJourney.id : null;
-  const rules = activeJourney?.alertRules ?? null;
+  // The person's rules, made more patient for vehicles (a stop in traffic is
+  // not a reason to ask if someone is OK) — TravelModeProfile.alertRulesFor.
+  const travelMode = activeJourney?.travelMode ?? 'walk';
+  const rules = useMemo(
+    () => (activeJourney?.alertRules ? alertRulesFor(travelMode, activeJourney.alertRules) : null),
+    [activeJourney?.alertRules, travelMode],
+  );
 
   // Read by callbacks that must not re-subscribe when these change.
+  const travelModeRef = useRef(travelMode);
+  travelModeRef.current = travelMode;
   const latestRef = useRef({ route, eta, currentLocation, batteryPercent, rules, extraMinutes });
   latestRef.current = { route, eta, currentLocation, batteryPercent, rules, extraMinutes };
 
@@ -213,6 +214,7 @@ export function SafetyCheckStateProvider({
         ? new Date(latestRef.current.eta.getTime() + latestRef.current.extraMinutes * 60_000)
         : null,
       offRouteMeters: offRouteMeters === Infinity ? null : offRouteMeters,
+      offRouteThresholdMeters: offRouteThresholdMeters(travelModeRef.current),
       rules: currentRules,
       now: new Date(),
     });

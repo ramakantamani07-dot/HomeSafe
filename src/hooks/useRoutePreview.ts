@@ -4,7 +4,8 @@ import type { Coordinates } from '../models/Journey';
 import type { TravelMode } from '../models/Place';
 import type { RouteResult } from '../models/RouteResult';
 import { useRoutingContext } from '../context/RoutingContext';
-import { computeEta, formatDistance, formatDuration, formatEta } from '../models/RouteResult';
+import { formatDistance, formatDuration, formatEta } from '../models/RouteResult';
+import { expectedArrival, rideDurationLabel } from '../models/TravelModeProfile';
 
 export interface RoutePreview {
   route: RouteResult | null;
@@ -17,6 +18,8 @@ export interface RoutePreview {
   formattedDuration: string | null;
   /** "15:22" — arrival time if the journey started now. */
   formattedEta: string | null;
+  /** "~10 min pickup + 14 min drive" for a ride; null otherwise (AP1). */
+  rideBreakdown: string | null;
   /** Arrival Date, for persisting alongside the journey. */
   eta: Date | null;
 }
@@ -91,8 +94,9 @@ export function useRoutePreview(
   }, [fromLat, fromLng, toLat, toLng, mode, includeSteps, previewRoute]);
 
   // Anchored to calculatedAt so the displayed arrival time doesn't drift on
-  // every render the way `new Date()` would.
-  const eta = route ? computeEta(route.durationSeconds, route.calculatedAt) : null;
+  // every render the way `new Date()` would. A ride starting now includes its
+  // pickup allowance (TravelModeProfile).
+  const eta = route ? expectedArrival(mode, route.durationSeconds, route.calculatedAt, route.calculatedAt) : null;
 
   return {
     route,
@@ -101,6 +105,7 @@ export function useRoutePreview(
     formattedDistance: route ? formatDistance(route.distanceMeters) : null,
     formattedDuration: route ? formatDuration(route.durationSeconds) : null,
     formattedEta: eta ? formatEta(eta) : null,
+    rideBreakdown: route ? rideDurationLabel(mode, route.durationSeconds) : null,
     eta,
   };
 }

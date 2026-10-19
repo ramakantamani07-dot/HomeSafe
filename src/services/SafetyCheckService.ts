@@ -18,11 +18,13 @@ export interface DetectionInput {
   eta: Date | null;
   /** Straight-line metres from the nearest point of the planned route. Null when unrouted. */
   offRouteMeters: number | null;
+  /** How far off the route counts as off it, for this travel mode. Default: on foot. */
+  offRouteThresholdMeters?: number;
   rules: AlertRules;
   now: Date;
 }
 
-/** Distance from the route beyond which the traveller is treated as off it. */
+/** On foot: distance from the route beyond which the traveller is treated as off it. */
 const OFF_ROUTE_THRESHOLD_METERS = 300;
 
 /**
@@ -49,12 +51,13 @@ export class SafetyCheckService {
    */
   detect(input: DetectionInput): SafetyCheckReason | null {
     const { samples, eta, offRouteMeters, rules, now } = input;
+    const offRouteLimit = input.offRouteThresholdMeters ?? OFF_ROUTE_THRESHOLD_METERS;
 
     if (this.isStopped(samples, rules.stoppedMinutes, now)) return 'stopped';
 
     if (eta && now.getTime() > eta.getTime() + rules.lateMinutes * 60_000) return 'late';
 
-    if (offRouteMeters !== null && offRouteMeters > OFF_ROUTE_THRESHOLD_METERS) {
+    if (offRouteMeters !== null && offRouteMeters > offRouteLimit) {
       return 'off-route';
     }
 

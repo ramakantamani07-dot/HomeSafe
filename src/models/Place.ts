@@ -77,14 +77,23 @@ export interface PlaceSuggestion {
   resolved: Place | null;
 }
 
-/** How the user is travelling — drives routing profile and ETA (screen 04). */
-export type TravelMode = 'walk' | 'bus' | 'bike' | 'car';
+/**
+ * How the user is travelling — drives the route, the ETA and the safety
+ * checks (models/TravelModeProfile). `bike` is the person's own bicycle;
+ * `cab`, `auto` and `bikeTaxi` are rides someone else drives
+ * (docs/features/rides.md).
+ */
+export type TravelMode = 'walk' | 'bus' | 'bike' | 'car' | 'cab' | 'auto' | 'bikeTaxi';
 
+/** In the order AP1 shows them. */
 export const TRAVEL_MODES: Array<{ mode: TravelMode; label: string }> = [
   { mode: 'walk', label: 'Walk' },
   { mode: 'bus', label: 'Bus' },
   { mode: 'bike', label: 'Bike' },
   { mode: 'car', label: 'Car' },
+  { mode: 'cab', label: 'Cab' },
+  { mode: 'auto', label: 'Auto' },
+  { mode: 'bikeTaxi', label: 'Bike taxi' },
 ];
 
 /**

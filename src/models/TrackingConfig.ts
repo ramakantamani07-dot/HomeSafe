@@ -94,10 +94,20 @@ export function isUneasyBoostActive(startedAt: number | null, now: number): bool
   return now - startedAt < UNEASY_BOOST_MS;
 }
 
+/**
+ * On a journey in a vehicle, the phone reports ~4× less often by distance and
+ * 2× by time (about every 200 m or 60 s): a car covers 50 m in seconds, and
+ * walking cadence would cost battery and database writes for no extra safety.
+ * SOS, "Feeling uneasy" and the battery saver keep their own rates.
+ */
+export const VEHICLE_DISTANCE_FACTOR = 4;
+export const VEHICLE_TIME_FACTOR = 2;
+
 export function getTrackingConfig(
   mode: TrackingMode,
   batteryLevel: number,
   movementState: MovementState,
+  motion: 'pedestrian' | 'vehicle' | 'unknown' = 'unknown',
 ): TrackingConfig {
   if (mode === 'SOS') return TRACKING_CONFIGS.SOS;
 
@@ -119,7 +129,15 @@ export function getTrackingConfig(
     return base;
   }
 
-  const base = TRACKING_CONFIGS[mode];
+  const journeyBase = TRACKING_CONFIGS[mode];
+  const base =
+    mode === 'JOURNEY' && motion === 'vehicle'
+      ? {
+          ...journeyBase,
+          timeInterval: journeyBase.timeInterval * VEHICLE_TIME_FACTOR,
+          distanceInterval: journeyBase.distanceInterval * VEHICLE_DISTANCE_FACTOR,
+        }
+      : journeyBase;
   if (movementState === 'STATIONARY' && mode !== 'NORMAL') {
     return { ...base, timeInterval: base.timeInterval * 2, distanceInterval: base.distanceInterval * 2 };
   }

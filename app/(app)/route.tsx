@@ -52,8 +52,8 @@ export default function RouteScreen() {
 
   const guardians = useMemo(() => joinGuardianNames(members), [members]);
   const timeline = useMemo(
-    () => buildJourneyTimeline(preview.route, destination?.name ?? 'your destination'),
-    [preview.route, destination?.name],
+    () => buildJourneyTimeline(preview.route, destination?.name ?? 'your destination', new Date(), draft.travelMode),
+    [preview.route, destination?.name, draft.travelMode],
   );
 
   const handleStart = useCallback(async () => {
@@ -230,6 +230,10 @@ export default function RouteScreen() {
 /** "Walk to" / "Ride to" / "Drive to" — the design's header verb. */
 function modeVerb(mode: string): string {
   switch (mode) {
+    case 'cab':
+    case 'auto':
+    case 'bikeTaxi':
+      return 'Ride';
     case 'bike':
       return 'Ride';
     case 'car':

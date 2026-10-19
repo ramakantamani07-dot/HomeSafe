@@ -38,6 +38,7 @@ function delay(ms: number): Promise<void> {
 // ─── Spy provider ─────────────────────────────────────────────────────────────
 
 class SpyRoutingProvider implements RoutingProvider {
+  readonly profilesSupported = ['walking', 'driving'] as const;
   callCount = 0;
   shouldFail = false;
   responseDelayMs = 0;

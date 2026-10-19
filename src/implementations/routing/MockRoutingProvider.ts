@@ -2,6 +2,7 @@ import type { Coordinates } from '../../models/Journey';
 import { haversineMeters } from '../../models/Place';
 import type { RouteCoordinate, RouteResult, RouteStep } from '../../models/RouteResult';
 import type { RouteRequestOptions, RoutingProvider } from '../../providers/RoutingProvider';
+import { WALKING_SPEED_MPS } from '../../models/TravelModeProfile';
 
 function lerp(a: Coordinates, b: Coordinates, t: number): RouteCoordinate {
   return {
@@ -22,6 +23,8 @@ function abortError(): Error {
  * with a realistic road-distance factor applied.
  */
 export class MockRoutingProvider implements RoutingProvider {
+  readonly profilesSupported = ['walking', 'driving'] as const;
+
   async getRoute(
     from: Coordinates,
     to: Coordinates,
@@ -42,8 +45,11 @@ export class MockRoutingProvider implements RoutingProvider {
     const straightLine = haversineMeters(from, to);
     // Apply a 1.35× road-distance factor (roads are never perfectly straight)
     const distanceMeters = straightLine * 1.35;
-    // Assume ~40 km/h average speed (90 s per km)
-    const durationSeconds = Math.round((distanceMeters / 1_000) * 90);
+    // ~40 km/h by road (90 s per km); a steady walking pace on foot.
+    const durationSeconds =
+      options.profile === 'walking'
+        ? Math.round(distanceMeters / WALKING_SPEED_MPS)
+        : Math.round((distanceMeters / 1_000) * 90);
 
     // 5-point polyline: straight-line interpolation between start and destination
     const coordinates: RouteCoordinate[] = [

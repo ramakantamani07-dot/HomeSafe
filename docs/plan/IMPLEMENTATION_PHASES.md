@@ -37,9 +37,10 @@ compound.
 |---|---|---|
 | App Check (`APP_CHECK.md`) | **Server side built (10 Oct)** — the five app-called functions record it, enforce on `APP_CHECK_MODE=enforce` | App side: Firebase config file + native library (with real phone sign-in); then enforce |
 | Account protection (`ACCOUNT_PROTECTION.md`) | **Built (10 Oct)** — Face ID before sensitive changes, app lock offered at sign-in, new-phone warning, monthly "who can see you" | SMS region policy in the console; new-phone warning on the real backend |
-| Walking routes and place search, iPhone | **Built (11 Oct)** — Apple MapKit, free | Android: Google (see "Android map services"); travel mode still ignored (known gap) |
+| Walking routes and place search, iPhone | **Built (11 Oct)** — Apple MapKit, free | Android: Google (see "Android map services"). Travel mode fixed 19 Oct (rides Phase 1) |
 | Hands-free SOS (`features/hands-free-sos.md`) | **Phase 0 + 1 built (18 Oct)** — the app lock never holds back an SOS; "Siri, WayLoc help me", Action Button, Back Tap, Hindi and Indian English phrases; iOS 17+ | Install and try on the iPhone; whole path on the deployed backend; Phase 2 Android |
 | SOS acknowledgements and escalation (same doc) | **Built (18 Oct)** — "I'm on it" from contacts and family; reminders at 2 and 5 min; nothing to the traveller's phone under duress | Real notifications between two phones on the deployed backend; DLT template for the reminder text |
+| Rides Phase 1 — mode-aware journeys (`features/rides.md`) | **Built (19 Oct)** — Cab, Auto, Bike taxi modes; Walk gets walking routes, everything on wheels driving routes (Car no longer shows a walking ETA); bus and bike times from distance and labelled as estimates; rides get a 10-min pickup allowance, 20 min before "stopped", a wider off-route margin and slower tracking; `TravelModeProfile.ts`, tested | Phases 2–7: ride state, AP2–AP5, provider links, server, Android |
 | Proposals, not built | Recorded | Keep less on the server (`DATA_RETENTION.md`); rides by deep link; safer routes; ideas beyond journey sharing — sections below |
 
 ## India launch (decided 19 Oct 2026)
@@ -290,7 +291,6 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
 | **Low-battery promise not kept** (principle 4) | `review-journey.tsx` ("Battery under 10% → Send last location"), `AlertRules.lowBatteryPercent`, `LocationTrackingService` | Found 18 Oct. Nothing reads `lowBatteryPercent`: at `LOW_BATTERY_THRESHOLD` (15%, a different number) tracking only slows down, and no last-location message goes to anyone. Either send it (one push or text to the family with the last position, once per journey) or change the row to what happens. One threshold for both |
-| Travel mode is ignored by routing | `RoutingProvider`, `review-journey` | Walk / Bus / Bike / Car is chosen on screen 04, but `getRoute` takes no mode: every route is a walking route on iPhone (it was driving for all before). ETAs for Bus, Bike and Car are therefore walking ETAs. MapKit offers walking, driving and transit times; pass the mode through the port when this matters |
 | Place search on iPhone is Apple's (11 Oct) | `MapKitPlacesProvider`, `modules/place-search` | Place names and suggestions as you type, free. Thinner than Google for small local shops in India; Google Places still takes over if a key is set. Android keeps the system geocoder (addresses and postcodes only) |
 
 ### Android map services (decided 13 Oct 2026)

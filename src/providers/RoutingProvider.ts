@@ -1,5 +1,6 @@
 import type { Coordinates } from '../models/Journey';
 import type { RouteResult } from '../models/RouteResult';
+import type { RoutingProfile } from '../models/TravelModeProfile';
 
 /**
  * Abstraction over any routing API.
@@ -25,9 +26,18 @@ export interface RouteRequestOptions {
    * has no use for them.
    */
   includeSteps?: boolean;
+  /**
+   * Walking or road route. A provider that cannot serve the profile asked for
+   * returns its own and says so in `profilesSupported`; the service then
+   * derives the time from distance instead of trusting it.
+   */
+  profile?: RoutingProfile;
 }
 
 export interface RoutingProvider {
+  /** The route kinds this provider really computes (OSRM's demo: driving only). */
+  readonly profilesSupported: readonly RoutingProfile[];
+
   /**
    * Returns the best route between `from` and `to`.
    * Must respect the AbortSignal if supplied: throw an error with

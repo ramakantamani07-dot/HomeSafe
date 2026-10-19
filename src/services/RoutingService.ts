@@ -7,27 +7,22 @@ import {
   formatEta,
 } from '../models/RouteResult';
 import { haversineMeters, type TravelMode } from '../models/Place';
+import {
+  WALKING_SPEED_MPS,
+  derivedSpeedMps,
+  routingProfile,
+  type RoutingProfile,
+} from '../models/TravelModeProfile';
 import type { RouteRequestOptions, RoutingProvider } from '../providers/RoutingProvider';
 
-/**
- * Average speeds used to turn a route's distance into a per-mode duration,
- * in metres/second.
- *
- * The routing provider returns a driving duration. Re-deriving the other
- * modes from distance is an approximation — it doesn't know that a footpath
- * cuts the corner or that the bus waits at three stops — but it is a far
- * better ETA than showing a car's travel time to someone walking, and the
- * whole safety model (late/stopped thresholds) keys off that ETA. Swap in a
- * profile-aware routing instance (routed-foot / routed-bike) and this table
- * stops being consulted for those modes.
+/*
+ * Which route to fetch and how its time is read for each mode lives in
+ * models/TravelModeProfile.ts. The rule here: trust the router's time only
+ * when it served the kind of route asked for. MapKit serves both walking and
+ * driving; OSRM's demo serves driving only, so a walk planned with it has its
+ * time derived from distance. (Before 19 Oct this assumed every router returned
+ * a driving time — after MapKit walking routes, "Car" showed walking ETAs.)
  */
-const MODE_SPEED_MPS: Record<Exclude<TravelMode, 'car'>, number> = {
-  walk: 1.35,
-  bike: 4.2,
-  // Deliberately slower than a bike: includes waiting and stopping time,
-  // which is what makes a bus ETA honest rather than optimistic.
-  bus: 5.0,
-};
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 
@@ -131,7 +126,8 @@ export class RoutingService {
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const raw = await this.provider.getRoute(from, to, controller.signal);
+      const profile = routingProfile(mode);
+      const raw = await this.provider.getRoute(from, to, controller.signal, { profile });
 
       // A newer calculateRoute call started while we were waiting — discard this result
       if (this.requestSeq !== seq) {
@@ -140,7 +136,7 @@ export class RoutingService {
         throw err;
       }
 
-      const result = this.applyTravelMode(raw, mode);
+      const result = this.applyTravelMode(raw, mode, profile);
       this.cache.set(key, { result, cachedAt: Date.now() });
       this.lastCalcAt = Date.now();
       return result;
@@ -173,21 +169,29 @@ export class RoutingService {
       return cached.result;
     }
 
-    const raw = await this.provider.getRoute(from, to, signal, options);
-    const result = this.applyTravelMode(raw, mode);
+    const profile = routingProfile(mode);
+    const raw = await this.provider.getRoute(from, to, signal, { ...options, profile });
+    const result = this.applyTravelMode(raw, mode, profile);
     this.cache.set(key, { result, cachedAt: Date.now() });
     return result;
   }
 
   /**
-   * Rewrites the provider's driving duration into the chosen mode's. Distance
-   * and geometry are left alone — both are far less mode-sensitive than time,
-   * and re-deriving them would be inventing data.
+   * The mode's travel time. Bike and bus are derived from distance (no free
+   * router knows them); otherwise the router's own time when it served the
+   * profile asked for, and a walking pace over its distance when it did not.
+   * Distance and geometry are never rewritten — that would be inventing data.
    */
-  private applyTravelMode(route: RouteResult, mode: TravelMode): RouteResult {
-    if (mode === 'car') return route;
-    const speed = MODE_SPEED_MPS[mode];
-    return { ...route, durationSeconds: Math.round(route.distanceMeters / speed) };
+  private applyTravelMode(route: RouteResult, mode: TravelMode, asked: RoutingProfile): RouteResult {
+    const derived = derivedSpeedMps(mode);
+    if (derived !== null) {
+      return { ...route, durationSeconds: Math.round(route.distanceMeters / derived) };
+    }
+    if (this.provider.profilesSupported.includes(asked)) return route;
+    if (asked === 'walking') {
+      return { ...route, durationSeconds: Math.round(route.distanceMeters / WALKING_SPEED_MPS) };
+    }
+    return route;
   }
 
   /** Abort the in-flight request, if any. Call when the journey ends. */
@@ -216,13 +220,13 @@ export class RoutingService {
    * True when the nearest route waypoint is more than `offRouteMeters` away
    * from `current`. Returns false for empty routes (no waypoints to be off of).
    */
-  isOffRoute(current: Coordinates, route: RouteResult): boolean {
+  isOffRoute(current: Coordinates, route: RouteResult, thresholdMeters = this.offRouteMeters): boolean {
     if (route.coordinates.length === 0) return false;
     const minDist = route.coordinates.reduce(
       (min, coord) => Math.min(min, haversineMeters(current, coord)),
       Infinity,
     );
-    return minDist > this.offRouteMeters;
+    return minDist > thresholdMeters;
   }
 
   // ─── Formatting ───────────────────────────────────────────────────────────
