@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../context/ThemeContext';
 import { RADIUS, SPACING } from '../../config/theme';
@@ -23,7 +23,12 @@ export function BottomSheet({ visible, onDismiss, children }: BottomSheetProps) 
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
-      <View style={styles.overlay}>
+      {/* A text field in the sheet must stay above the keyboard. Android
+          resizes the window itself; iOS needs the padding. */}
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onDismiss}
@@ -35,7 +40,7 @@ export function BottomSheet({ visible, onDismiss, children }: BottomSheetProps) 
           {children}
           <View style={styles.bottomPad} />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

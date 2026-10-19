@@ -23,20 +23,11 @@ import { useRoutePreview } from '../../src/hooks/useRoutePreview';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Button } from '../../src/components/ui/Button';
 import { Icon, type IconName } from '../../src/components/ui/Icon';
+import { MODE_ICON } from '../../src/components/journey/modeIcon';
 import { AppMapView } from '../../src/components/map/AppMapView';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { TRAVEL_MODES, type TravelMode } from '../../src/models/Place';
 import { alertRulesFor, pickupAllowanceMinutes } from '../../src/models/TravelModeProfile';
-
-const MODE_ICON: Record<TravelMode, IconName> = {
-  walk: 'walk',
-  bus: 'bus',
-  bike: 'bike',
-  car: 'car',
-  cab: 'car',
-  auto: 'car',
-  bikeTaxi: 'bike',
-};
 
 /**
  * What the route on screen is. Only what is true: there is no bus or cycling

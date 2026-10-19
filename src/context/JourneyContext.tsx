@@ -8,6 +8,8 @@ import type { WalkRating } from '../models/WalkFeedback';
 import type { WalkFeedbackProvider } from '../providers/WalkFeedbackProvider';
 import type { UneasyEventProvider } from '../providers/UneasyEventProvider';
 import type { UneasyAction } from '../models/UneasyEvent';
+import type { TravelMode } from '../models/Place';
+import type { RideBookedWith } from '../models/Ride';
 import type { JourneyService, StartJourneyOptions } from '../services/JourneyService';
 import { useAuthContext } from './AuthContext';
 
@@ -21,6 +23,12 @@ interface JourneyContextValue {
   endJourney(): Promise<Journey | null>;
   cancelJourney(): Promise<void>;
   missedCheckIn(): Promise<void>;
+  /** "Yes, I'm in" (AP3). `bookedWith` is the traveller's answer, when asked. */
+  confirmInRide(bookedWith: RideBookedWith | null): Promise<void>;
+  /** Adds, changes or (empty) removes the ride's vehicle number (AP4). */
+  setVehicleNumber(input: string): Promise<void>;
+  /** "Change travel": another mode, the journey keeps running. */
+  changeTravelMode(mode: TravelMode): Promise<void>;
   /** Clears the local journey state when SOS is triggered. No Firestore write — SOSService handles that. */
   clearJourneyForSOS(): void;
   /** Creates a public tracking link for a guardian without the app. Returns the full shareable URL. */
@@ -50,6 +58,9 @@ export const JourneyContext = createContext<JourneyContextValue>({
   endJourney: async () => null,
   cancelJourney: async () => {},
   missedCheckIn: async () => {},
+  confirmInRide: async () => {},
+  setVehicleNumber: async () => {},
+  changeTravelMode: async () => {},
   clearJourneyForSOS: () => {},
   shareJourney: async () => { throw new Error('JourneyContext not mounted.'); },
   listHistory: async () => [],
@@ -158,6 +169,24 @@ export function JourneyStateProvider({
     setActiveJourney(null);
   }, [userId, activeJourney, journeyService]);
 
+  // Ride changes save first, then show what was saved — a ride the screen says
+  // is confirmed must be one the journey record says is confirmed. Failures
+  // throw to the screen, which says so.
+  const confirmInRide = useCallback(async (bookedWith: RideBookedWith | null) => {
+    if (!userId || !activeJourney) return;
+    setActiveJourney(await journeyService.confirmInRide(userId, activeJourney, bookedWith));
+  }, [userId, activeJourney, journeyService]);
+
+  const setVehicleNumber = useCallback(async (input: string) => {
+    if (!userId || !activeJourney) return;
+    setActiveJourney(await journeyService.setVehicleNumber(userId, activeJourney, input));
+  }, [userId, activeJourney, journeyService]);
+
+  const changeTravelMode = useCallback(async (mode: TravelMode) => {
+    if (!userId || !activeJourney) return;
+    setActiveJourney(await journeyService.changeTravelMode(userId, activeJourney, mode));
+  }, [userId, activeJourney, journeyService]);
+
   const clearJourneyForSOS = useCallback((): void => {
     setActiveJourney(null);
   }, []);
@@ -215,6 +244,9 @@ export function JourneyStateProvider({
       endJourney,
       cancelJourney,
       missedCheckIn,
+      confirmInRide,
+      setVehicleNumber,
+      changeTravelMode,
       clearJourneyForSOS,
       listHistory,
       saveWalkFeedback,
@@ -231,6 +263,9 @@ export function JourneyStateProvider({
       endJourney,
       cancelJourney,
       missedCheckIn,
+      confirmInRide,
+      setVehicleNumber,
+      changeTravelMode,
       clearJourneyForSOS,
       listHistory,
       saveWalkFeedback,

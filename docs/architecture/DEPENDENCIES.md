@@ -214,6 +214,21 @@ Android is not yet a tested target; when it is, either accept that prompt or
 use `Intent.ACTION_PICK` on `ContactsContract.CommonDataKinds.Phone`, which
 needs no permission.
 
+### `expo-clipboard` — added (19 Oct 2026)
+
+For "Copy address for a ride app" on a ride journey (`docs/features/rides.md`):
+Rapido has no deep link, and a street auto or a friend's phone needs the
+address typed in somewhere.
+
+- **OS check:** React Native's own `Clipboard` was removed from core; no
+  dependency in the repo writes the clipboard. Selectable text was the
+  alternative — rejected because selecting a long address on a phone at the
+  kerb is fiddly, and one tap is the point.
+- Expo-maintained, MIT, pinned by SDK 54 (`~8.0.8`), installed with
+  `npx expo install`. Native, so one rebuild (done 19 Oct).
+- Used through `src/utils/clipboard.ts` only, write-only and only on a tap —
+  WayLoc never reads the clipboard.
+
 ## Where native code belongs
 
 Swift/Kotlin is the right answer when the platform already does the work

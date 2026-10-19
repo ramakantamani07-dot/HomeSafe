@@ -1,5 +1,7 @@
 import type { Journey, JourneyStatus, StartJourneyInput } from '../models/Journey';
 import type { LocationUpdate } from '../models/LocationUpdate';
+import type { TravelMode } from '../models/Place';
+import type { Ride } from '../models/Ride';
 
 /** Statuses that terminate an active journey. */
 export type TerminalJourneyStatus = 'COMPLETED' | 'CANCELLED' | 'MISSED_CHECKIN';
@@ -58,6 +60,12 @@ export interface JourneyProvider {
   ): Promise<void>;
 
   /**
+   * Replaces how the journey is travelled: the mode and its ride ("Yes, I'm
+   * in", the vehicle number, "Change travel"). The journey keeps running.
+   */
+  updateTravel(userId: string, journeyId: string, travelMode: TravelMode, ride: Ride | null): Promise<void>;
+
+  /**
    * Returns all completed/cancelled/missed journeys for the user, newest first.
    * Used for user-controlled journey history deletion.
    */
@@ -65,7 +73,8 @@ export interface JourneyProvider {
 
   /**
    * Deletes all locationUpdates documents for a journey and clears the
-   * currentLocation field on the journey document.
+   * currentLocation field and the ride's vehicle number on the journey
+   * document.
    * The journey document itself is NOT deleted — only the detailed trail.
    */
   deleteJourneyLocationHistory(userId: string, journeyId: string): Promise<void>;

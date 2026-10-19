@@ -85,12 +85,14 @@ export function RoutingStateProvider({
   const travelMode = activeJourney?.travelMode ?? 'walk';
 
   // Read by the off-route effect, which must not re-subscribe just because
-  // the mode changed (it can't change mid-journey anyway).
+  // the mode changed ("Change travel" re-runs Effect 1, which re-routes).
   const travelModeRef = useRef(travelMode);
   travelModeRef.current = travelMode;
   // When the journey began — a ride's pickup allowance counts from here.
   const startedAtRef = useRef<Date>(new Date());
   startedAtRef.current = activeJourney?.startedAt ?? startedAtRef.current;
+  // When the traveller said they were in the ride: the pickup is over then.
+  const rideConfirmedAt = activeJourney?.ride?.confirmedAt ?? null;
 
   // ── Effect 1: calculate route when the journey starts or destination changes ──
   useEffect(() => {
@@ -173,7 +175,7 @@ export function RoutingStateProvider({
   // ── Derived values ────────────────────────────────────────────────────────
   // Anchor ETA to calculatedAt — otherwise new Date() on every render drifts the arrival time.
   const eta = route
-    ? expectedArrival(travelMode, route.durationSeconds, route.calculatedAt, startedAtRef.current)
+    ? expectedArrival(travelMode, route.durationSeconds, route.calculatedAt, startedAtRef.current, rideConfirmedAt)
     : null;
   const formattedEta = eta ? routingService.formatEta(eta) : '—';
   const formattedDistance = route

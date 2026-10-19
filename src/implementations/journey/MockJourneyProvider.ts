@@ -2,6 +2,8 @@ import type { JourneyProvider, TerminalJourneyStatus } from '../../providers/Jou
 import { TERMINAL_JOURNEY_STATUSES } from '../../providers/JourneyProvider';
 import type { Journey, StartJourneyInput } from '../../models/Journey';
 import type { LocationUpdate } from '../../models/LocationUpdate';
+import type { TravelMode } from '../../models/Place';
+import type { Ride } from '../../models/Ride';
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -39,6 +41,7 @@ export class MockJourneyProvider implements JourneyProvider {
       destination: input.destination ? { ...input.destination } : null,
       savedPlaceId: input.savedPlaceId,
       travelMode: input.travelMode,
+      ride: input.ride ? { ...input.ride } : null,
       alertRules: { ...input.alertRules },
       arrivalRadiusMeters: input.arrivalRadiusMeters,
       currentLocation: null,
@@ -132,6 +135,14 @@ export class MockJourneyProvider implements JourneyProvider {
     });
   }
 
+  async updateTravel(userId: string, journeyId: string, travelMode: TravelMode, ride: Ride | null): Promise<void> {
+    await delay(100);
+    const store = this.userStore(userId);
+    const existing = store.get(journeyId);
+    if (!existing) throw new Error('Journey not found.');
+    store.set(journeyId, { ...existing, travelMode, ride: ride ? { ...ride } : null });
+  }
+
   async listJourneyHistory(userId: string): Promise<import('../../models/Journey').Journey[]> {
     await delay(200);
     return [...this.userStore(userId).values()]
@@ -145,7 +156,11 @@ export class MockJourneyProvider implements JourneyProvider {
     const store = this.userStore(userId);
     const existing = store.get(journeyId);
     if (!existing) return;
-    store.set(journeyId, { ...existing, currentLocation: null });
+    store.set(journeyId, {
+      ...existing,
+      currentLocation: null,
+      ride: existing.ride ? { ...existing.ride, vehicleNumber: null } : null,
+    });
   }
 
   async createShareLink(_userId: string, _journeyId: string, _displayName: string): Promise<string> {

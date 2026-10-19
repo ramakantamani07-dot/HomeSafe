@@ -33,6 +33,11 @@ import { GlassPill, SafetyDock } from '../../src/components/glass';
 import { TurnBanner } from '../../src/components/journey/TurnBanner';
 import { EtaCapsule } from '../../src/components/journey/EtaCapsule';
 import { UneasyPill } from '../../src/components/journey/UneasyPill';
+import { RideBanner } from '../../src/components/journey/RideBanner';
+import { RidePanel } from '../../src/components/journey/RidePanel';
+import { ChangeTravelOptions, ChangeTravelSheet } from '../../src/components/journey/ChangeTravelSheet';
+import { MODE_ICON } from '../../src/components/journey/modeIcon';
+import { rideHeadline, rideSubtitle } from '../../src/models/Ride';
 import { joinGuardianNames } from '../../src/utils/guardians';
 import { SAFETY_CHECK_EXTENSION_MINUTES } from '../../src/models/SafetyCheck';
 import { currentLeg, formatDistance } from '../../src/models/RouteResult';
@@ -81,7 +86,7 @@ export default function ActiveJourneyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { activeJourney, isLoading, endJourney, cancelJourney, shareJourney } = useJourney();
+  const { activeJourney, isLoading, endJourney, cancelJourney, shareJourney, changeTravelMode } = useJourney();
   const {
     isTracking,
     currentLocation,
@@ -100,6 +105,14 @@ export default function ActiveJourneyScreen() {
   const [ending, setEnding] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [changingTravel, setChangingTravel] = useState(false);
+  // Options can switch to the travel choices in place: opening a second sheet
+  // while the first is still closing is unreliable on iOS.
+  const [optionsView, setOptionsView] = useState<'menu' | 'travel'>('menu');
+  const closeOptions = useCallback(() => {
+    setShowOptions(false);
+    setOptionsView('menu');
+  }, []);
   // The map follows the traveller until they drag it; then "Re-centre" hands
   // the camera back.
   const [following, setFollowing] = useState(true);
@@ -224,6 +237,8 @@ export default function ActiveJourneyScreen() {
   const journey = activeJourney;
   const destinationName = journey.destination?.name ?? journey.destinationLabel;
   const freshness = freshnessFor(isTracking, lastLocationUpdateAt);
+  const now = new Date();
+  const ride = journey.ride;
   const displayEta = adjustedEta ?? eta;
 
   const minutesRemaining = displayEta
@@ -397,7 +412,18 @@ export default function ActiveJourneyScreen() {
 
       {/* §D: the turn banner sits below the header, over the map. */}
       <View style={[styles.bannerSlot, { top: insets.top + 64 }]} pointerEvents="box-none">
-        <TurnBanner streetName={legName} remainingDistance={remainingDistance} />
+        {ride && (
+          <RideBanner
+            icon={MODE_ICON[journey.travelMode]}
+            headline={rideHeadline(ride, journey.travelMode, journey.destination, journey.destinationLabel)}
+            subtitle={rideSubtitle(ride, journey.startedAt, now)}
+            waiting={ride.state === 'getting_ride'}
+          />
+        )}
+        {/* Not while waiting at the kerb: the road under them is not a route yet. */}
+        {ride?.state !== 'getting_ride' && (
+          <TurnBanner streetName={legName} remainingDistance={remainingDistance} />
+        )}
         <LowBatteryBanner />
         {backgroundPermissionRevoked && (
           <TouchableOpacity
@@ -434,6 +460,8 @@ export default function ActiveJourneyScreen() {
             <Icon name="recentre" size={22} color={theme.accent} />
           </TouchableOpacity>
         )}
+        <RidePanel journey={journey} now={now} onChangeTravel={() => setChangingTravel(true)} />
+
         <EtaCapsule
           minutesLabel={minutesRemaining !== null ? `${minutesRemaining} min` : null}
           detail={etaDetail}
@@ -466,27 +494,44 @@ export default function ActiveJourneyScreen() {
         </View>
       </View>
 
-      <BottomSheet visible={showOptions} onDismiss={() => setShowOptions(false)}>
-        <View style={styles.optionsContent}>
-          <Text style={styles.optionsTitle}>Journey options</Text>
-          <Button
-            label="Share a tracking link"
-            icon="link"
-            variant="secondary"
-            onPress={handleShare}
-            loading={sharing}
-          />
-          <Button
-            label={`Add ${SAFETY_CHECK_EXTENSION_MINUTES} minutes`}
-            icon="time"
-            variant="secondary"
-            onPress={() => {
-              setShowOptions(false);
-              void addTime();
-            }}
-          />
-        </View>
+      <BottomSheet visible={showOptions} onDismiss={closeOptions}>
+        {optionsView === 'travel' ? (
+          <ChangeTravelOptions current={journey.travelMode} onDone={closeOptions} onChange={changeTravelMode} />
+        ) : (
+          <View style={styles.optionsContent}>
+            <Text style={styles.optionsTitle}>Journey options</Text>
+            <Button
+              label="Share a tracking link"
+              icon="link"
+              variant="secondary"
+              onPress={handleShare}
+              loading={sharing}
+            />
+            <Button
+              label="Change travel"
+              icon={MODE_ICON[journey.travelMode]}
+              variant="secondary"
+              onPress={() => setOptionsView('travel')}
+            />
+            <Button
+              label={`Add ${SAFETY_CHECK_EXTENSION_MINUTES} minutes`}
+              icon="time"
+              variant="secondary"
+              onPress={() => {
+                setShowOptions(false);
+                void addTime();
+              }}
+            />
+          </View>
+        )}
       </BottomSheet>
+
+      <ChangeTravelSheet
+        visible={changingTravel}
+        current={journey.travelMode}
+        onDismiss={() => setChangingTravel(false)}
+        onChange={changeTravelMode}
+      />
     </View>
   );
 }

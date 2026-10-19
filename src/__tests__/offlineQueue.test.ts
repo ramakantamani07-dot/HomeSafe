@@ -92,6 +92,10 @@ class SpyJourneyProvider implements JourneyProvider {
     // Not exercised by offline-queue tests
   }
 
+  async updateTravel(): Promise<void> {
+    // Not exercised by offline-queue tests
+  }
+
   async listJourneyHistory(_userId: string): Promise<import('../models/Journey').Journey[]> {
     return [];
   }

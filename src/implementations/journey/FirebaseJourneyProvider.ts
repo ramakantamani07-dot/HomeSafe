@@ -25,6 +25,7 @@ import type { AlertRules } from '../../models/AlertRules';
 import { DEFAULT_ALERT_RULES } from '../../models/AlertRules';
 import type { Place, TravelMode } from '../../models/Place';
 import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../../models/Place';
+import type { Ride, RideApp, RideBookedWith, RideState } from '../../models/Ride';
 
 /**
  * Flattened so the whole destination round-trips through one Firestore map
@@ -62,6 +63,37 @@ function fromStoredPlace(stored: StoredPlace | undefined): Place | null {
   };
 }
 
+/** Nulls rather than absent keys, so an update replaces the whole map cleanly. */
+type StoredRide = {
+  state: RideState;
+  openedApp: RideApp | null;
+  bookedWith: RideBookedWith | null;
+  confirmedAt: Timestamp | null;
+  vehicleNumber: string | null;
+};
+
+function toStoredRide(ride: Ride | null): StoredRide | null {
+  if (!ride) return null;
+  return {
+    state: ride.state,
+    openedApp: ride.openedApp,
+    bookedWith: ride.bookedWith,
+    confirmedAt: ride.confirmedAt ? Timestamp.fromDate(ride.confirmedAt) : null,
+    vehicleNumber: ride.vehicleNumber,
+  };
+}
+
+function fromStoredRide(stored: StoredRide | null | undefined): Ride | null {
+  if (!stored) return null;
+  return {
+    state: stored.state,
+    openedApp: stored.openedApp ?? null,
+    bookedWith: stored.bookedWith ?? null,
+    confirmedAt: stored.confirmedAt ? stored.confirmedAt.toDate() : null,
+    vehicleNumber: stored.vehicleNumber ?? null,
+  };
+}
+
 type StoredJourney = {
   userId: string;
   destinationLabel: string;
@@ -71,6 +103,8 @@ type StoredJourney = {
   destination?: StoredPlace;
   savedPlaceId?: string;
   travelMode?: TravelMode;
+  /** Absent on journeys before rides existed; null when not a ride. */
+  ride?: StoredRide | null;
   alertRules?: AlertRules;
   arrivalRadiusMeters?: number;
   /** Set by tracking updates — absent on initial creation. */
@@ -107,6 +141,7 @@ function fromFirestore(id: string, data: StoredJourney): Journey {
     // Journeys written before these fields existed read back with the same
     // defaults a new journey would get, so no screen has to null-check them.
     travelMode: data.travelMode ?? 'walk',
+    ride: fromStoredRide(data.ride),
     alertRules: data.alertRules ?? DEFAULT_ALERT_RULES,
     arrivalRadiusMeters: data.arrivalRadiusMeters ?? DEFAULT_ARRIVAL_RADIUS_METERS,
     currentLocation: data.currentLocation ?? null,
@@ -146,6 +181,7 @@ export class FirebaseJourneyProvider implements JourneyProvider {
       ...(input.destination ? { destination: toStoredPlace(input.destination) } : {}),
       ...(input.savedPlaceId ? { savedPlaceId: input.savedPlaceId } : {}),
       travelMode: input.travelMode,
+      ride: toStoredRide(input.ride),
       alertRules: input.alertRules,
       arrivalRadiusMeters: input.arrivalRadiusMeters,
       status: 'ACTIVE',
@@ -242,6 +278,10 @@ export class FirebaseJourneyProvider implements JourneyProvider {
     });
   }
 
+  async updateTravel(userId: string, journeyId: string, travelMode: TravelMode, ride: Ride | null): Promise<void> {
+    await updateDoc(journeyRef(this.db, userId, journeyId), { travelMode, ride: toStoredRide(ride) });
+  }
+
   async listJourneyHistory(userId: string): Promise<import('../../models/Journey').Journey[]> {
     const q = query(
       journeysCol(this.db, userId),
@@ -255,10 +295,14 @@ export class FirebaseJourneyProvider implements JourneyProvider {
   async deleteJourneyLocationHistory(userId: string, journeyId: string): Promise<void> {
     const jRef = journeyRef(this.db, userId, journeyId);
 
-    // Clear the tracked position from the journey summary document.
+    // Clear the tracked position from the journey summary document, and the
+    // vehicle number with it — it identifies a ride as surely as the trail.
+    const snap = await getDoc(jRef).catch(() => null);
+    const hasVehicleNumber = Boolean((snap?.data() as StoredJourney | undefined)?.ride?.vehicleNumber);
     await updateDoc(jRef, {
       currentLocation: deleteField(),
       lastLocationAt: deleteField(),
+      ...(hasVehicleNumber ? { 'ride.vehicleNumber': null } : {}),
     }).catch(() => {});
 
     // Page through locationUpdates sub-collection in batches (Firestore limit: 500 ops/batch).

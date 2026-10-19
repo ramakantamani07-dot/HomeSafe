@@ -1,5 +1,6 @@
 import type { AlertRules } from './AlertRules';
 import type { Place, TravelMode } from './Place';
+import type { Ride } from './Ride';
 
 export type JourneyStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'MISSED_CHECKIN' | 'SOS_TRIGGERED';
 
@@ -27,6 +28,8 @@ export interface Journey {
   savedPlaceId: string | null;
   /** How the user is travelling — drives the routing profile and ETA. */
   travelMode: TravelMode;
+  /** The ride, for cab / auto / bike taxi journeys (models/Ride.ts). Null otherwise. */
+  ride: Ride | null;
   /** Thresholds that raise a safety check. */
   alertRules: AlertRules;
   /** Metres from the destination that counts as arrived. */
@@ -58,6 +61,7 @@ export type StartJourneyInput = {
   destination: Place | null;
   savedPlaceId: string | null;
   travelMode: TravelMode;
+  ride: Ride | null;
   alertRules: AlertRules;
   arrivalRadiusMeters: number;
 };

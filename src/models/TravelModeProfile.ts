@@ -59,16 +59,20 @@ export function pickupAllowanceMinutes(mode: TravelMode): number {
 
 /**
  * Expected arrival. For a ride waiting to be picked up, the drive starts no
- * earlier than the end of the pickup allowance.
+ * earlier than the end of the pickup allowance. Once the traveller says they
+ * are in (`rideConfirmedAt`), the allowance is over: the drive starts then.
  */
 export function expectedArrival(
   mode: TravelMode,
   driveSeconds: number,
   calculatedAt: Date,
   journeyStartedAt: Date,
+  rideConfirmedAt: Date | null = null,
 ): Date {
-  const allowanceEnds = journeyStartedAt.getTime() + pickupAllowanceMinutes(mode) * 60_000;
-  const departs = Math.max(calculatedAt.getTime(), allowanceEnds);
+  const pickupDone = rideConfirmedAt
+    ? rideConfirmedAt.getTime()
+    : journeyStartedAt.getTime() + pickupAllowanceMinutes(mode) * 60_000;
+  const departs = Math.max(calculatedAt.getTime(), pickupDone);
   return new Date(departs + driveSeconds * 1000);
 }
 

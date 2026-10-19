@@ -61,7 +61,8 @@ export type IconName =
   | 'layers'
   | 'recentre'
   | 'pin'
-  | 'alertCircle';
+  | 'alertCircle'
+  | 'copy';
 
 const IONICON_MAP: Record<IconName, keyof typeof Ionicons.glyphMap> = {
   sos: 'alert',
@@ -115,6 +116,7 @@ const IONICON_MAP: Record<IconName, keyof typeof Ionicons.glyphMap> = {
   layers: 'layers-outline',
   recentre: 'navigate-outline',
   pin: 'location',
+  copy: 'copy-outline',
   alertCircle: 'alert-circle-outline',
 };
 
