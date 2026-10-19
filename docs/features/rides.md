@@ -110,5 +110,7 @@ the journey.
   I'm in* will not ask about an app that never came up.
 - **Back in WayLoc:** AP3 adds *Still waiting ↗* (reopens the app) when one
   was opened, and *Yes, I'm in* asks "Uber / Other".
-- Double taps open once (`busy`). Not yet checked on a device: that Uber
-  accepts a test-environment Client ID.
+- Double taps open once (`busy`).
+- **Checked on the iPhone (19 Oct):** with a test-environment Client ID, Uber
+  opens with the destination filled in as the drop-off. Switch to the
+  production Client ID before launch.
