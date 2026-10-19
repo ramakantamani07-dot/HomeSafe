@@ -6,8 +6,9 @@ import { Timestamp } from 'firebase-admin/firestore';
 
 import { db } from '../shared/firebase';
 import { getAlertRecipients, sendAlerts } from '../shared/messaging';
-import type { StoredContact, StoredUser } from '../shared/types';
+import type { StoredContact, StoredJourney, StoredUser } from '../shared/types';
 import { textContacts } from './contactSms';
+import { journeyStartWording } from './rideWording';
 
 /** One test alert per hour: enough to check, too few to become a nuisance. */
 export const TEST_ALERT_MIN_INTERVAL_MS = 60 * 60 * 1_000;
@@ -22,10 +23,10 @@ async function nameOf(userId: string): Promise<string> {
   return user?.name?.trim() || 'Someone';
 }
 
-interface StoredJourneyStart {
+type StoredJourneyStart = Pick<StoredJourney, 'travelMode' | 'ride'> & {
   status: string;
   destinationLabel?: string;
-}
+};
 
 /**
  * "I start a journey" (Phase 5c) — only to contacts who switched it on, which
@@ -41,8 +42,10 @@ export const onJourneyStarted = onDocumentCreated('users/{userId}/journeys/{jour
 
   const userName = await nameOf(userId);
   const to = journey.destinationLabel?.trim() || 'a destination';
-  await textContacts(sms, 'contact-journey', `wayLoc: ${userName} started a journey to ${to}. You'll be told if they miss a check-in.`);
-  await sendAlerts(tokens, `${userName} is on the way`, `Heading to ${to}.`, {
+  // "Priya is getting an auto to Home" for a ride (rides.md, Phase 5).
+  const words = journeyStartWording(userName, to, journey);
+  await textContacts(sms, 'contact-journey', words.sms);
+  await sendAlerts(tokens, words.title, words.body, {
     type: 'JOURNEY_STARTED',
     userId,
     userName,

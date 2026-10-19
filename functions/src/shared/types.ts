@@ -28,6 +28,16 @@ export interface StoredJourney {
   destinationLabel: string;
   /** Latest tracked position. Absent until the first location update lands. */
   currentLocation?: { latitude: number; longitude: number };
+  /** 'walk' when absent (journeys before travel modes). */
+  travelMode?: string;
+  /** A cab / auto / bike-taxi ride (src/models/Ride.ts). Absent or null otherwise. */
+  ride?: StoredRide | null;
+}
+
+/** The ride as the app stores it on the journey — the fields the server reads. */
+export interface StoredRide {
+  state: 'getting_ride' | 'in_ride';
+  vehicleNumber: string | null;
 }
 
 export interface StoredContact {

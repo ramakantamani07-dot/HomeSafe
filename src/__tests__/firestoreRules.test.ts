@@ -505,6 +505,53 @@ describeWithEmulator('Firestore security rules', () => {
     );
   });
 
+  // ── 17b. Rides and the low-battery mark (rides.md Phase 5) ─────────────────
+
+  test('a ride journey is stored, confirmed and given a vehicle number', async () => {
+    const { assertSucceeds } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, Timestamp } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-ride').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-ride', 'journeys', 'j-ride');
+    const ride = { state: 'getting_ride', openedApp: 'uber', bookedWith: null, confirmedAt: null, vehicleNumber: null };
+    await assertSucceeds(
+      setDoc(ref, { userId: 'user-ride', status: 'ACTIVE', destinationLabel: 'Home', createdAt: new Date(), travelMode: 'auto', ride }),
+    );
+    await assertSucceeds(
+      updateDoc(ref, { ride: { ...ride, state: 'in_ride', bookedWith: 'uber', confirmedAt: Timestamp.now(), vehicleNumber: 'KA 01 AB 1234' } }),
+    );
+    await assertSucceeds(updateDoc(ref, { travelMode: 'walk', ride: null }));
+  });
+
+  test('a ride that is not the app\'s shape is refused', async () => {
+    const { assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-ride2').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-ride2', 'journeys', 'j-ride');
+    const ride = { state: 'getting_ride', openedApp: null, bookedWith: null, confirmedAt: null, vehicleNumber: null };
+    await setDoc(ref, { userId: 'user-ride2', status: 'ACTIVE', destinationLabel: 'Home', createdAt: new Date(), travelMode: 'auto', ride });
+    await assertFails(updateDoc(ref, { ride: { ...ride, state: 'arrived' } }));
+    await assertFails(updateDoc(ref, { ride: { ...ride, vehicleNumber: '<script>' } }));
+    await assertFails(updateDoc(ref, { ride: { ...ride, vehicleNumber: 'A'.repeat(40) } }));
+    await assertFails(updateDoc(ref, { ride: { ...ride, driverPhone: '+919800000000' } }));
+    await assertFails(updateDoc(ref, { ride: { ...ride, openedApp: 'some-other-app' } }));
+    await assertFails(updateDoc(ref, { travelMode: 'helicopter' }));
+  });
+
+  test('the low-battery mark can be set once and never cleared or moved', async () => {
+    const { assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
+    const { doc, setDoc, updateDoc, deleteField, Timestamp } = require('firebase/firestore');
+    const db = testEnv.authenticatedContext('user-batt').firestore() as import('firebase/firestore').Firestore;
+    const ref = doc(db, 'users', 'user-batt', 'journeys', 'j-batt');
+    await setDoc(ref, { userId: 'user-batt', status: 'ACTIVE', destinationLabel: 'Home', createdAt: new Date() });
+    const mark = { percent: 9, at: Timestamp.now() };
+    await assertSucceeds(updateDoc(ref, { lowBattery: mark }));
+    // Clearing then re-setting would text the contacts again.
+    await assertFails(updateDoc(ref, { lowBattery: deleteField() }));
+    await assertFails(updateDoc(ref, { lowBattery: { percent: 5, at: Timestamp.now() } }));
+    // Other updates still work.
+    await assertSucceeds(updateDoc(ref, { status: 'COMPLETED' }));
+  });
+
   // ── 18. Journey Shares — public guardian tracking links ─────────────────────
 
   test('owner can create a journeyShare for their own journey', async () => {

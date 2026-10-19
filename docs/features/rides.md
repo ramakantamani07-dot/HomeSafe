@@ -1,8 +1,9 @@
 # Rides — cab, auto, bike taxi (India)
 
-**Status (19 Oct 2026):** Phases 1–4 built and tested — mode-aware journeys,
+**Status (19 Oct 2026):** Phases 1–5 built and tested — mode-aware journeys,
 ride state (AP3 / AP4), the hand-off to Uber (and Ola, once Ola issues a
-token), and what family see (AP5). Phases 5–7 not built. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
+token), what family see (AP5), and the server side. Phase 6 is Android only;
+Phase 7 is device QA in India. Boards: `assets/wayloc-rides-v2/` (`AP1`–`AP5`), with the designer's
 plan `WAYLOC_MOBILITY_DEEPLINK_PLAN.md`. This doc records where the build
 follows that plan and where it deliberately does not.
 
@@ -67,7 +68,7 @@ the journey.
 | 2 ✅ | **Ride state + "I'll sort it myself"** (built 19 Oct — `models/Ride.ts`, `components/journey/Ride*`, `ChangeTravelSheet`, `__tests__/rides.test.ts`) — `ride: { provider, state, confirmedAt, vehicleNumber }`; AP3 / AP4 on the journey screen; "Still waiting?" never alerts family by itself; vehicle number: free text, upper-cased, ≤12 chars, deleted with the trail | 3–4 days | — |
 | 3 ✅ | **Provider hand-off** (built 19 Oct — `providers/RideAppProvider.ts`, `implementations/rides/`, `services/RideHandoffService.ts`, `RideAppPicker`, `RideHandoffSheet`, `__tests__/rideHandoff.test.ts`) — ride port + Uber / Ola / Rapido adapters with pure link builders and exact-URL tests; AP1 list and AP2 sheet; a failed link keeps the journey in `getting_ride` | 3–4 days | `UBER_CLIENT_ID`; `OLA_XAPP_TOKEN` |
 | 4 ✅ | **Mum's view (AP5)** (built 19 Oct — `SharedRide` in `models/Ride.ts`, `GuardianRideTimeline`, `__tests__/rideFamilyView.test.ts`) — ride fields in the shared family status; a ride timeline on Watch live | 2–3 days | — |
-| 5 | **Server** — rules for ride fields; "getting an auto home" journey-start wording; vehicle number in SOS alerts; retention | 1–2 days | — |
+| 5 ✅ | **Server** (built 19 Oct — `firestore.rules`, `functions/src/alerts/rideWording.ts`) — rules for ride fields; "getting an auto home" journey-start wording; vehicle number in SOS alerts; retention | 1–2 days | — |
 | 6 | **Native** — nothing left on iOS (`expo-clipboard` added in Phase 2; no schemes needed, departure 15). Android: check `openURL` to `olacabs://` on Android 11+ | 1 day | Rebuild |
 | 7 | **Real devices** — the designer's QA list (§10), iPhone and **Android**, in India | — | Android phones |
 
@@ -91,6 +92,24 @@ the journey.
 - *Change travel* (AP3 card, and journey Options for any journey): a new mode
   without ending the journey; re-routes; a new ride mode waits afresh.
 - Firestore rules do not yet validate `ride` (Phase 5).
+
+## Phase 5 as built
+
+- **Rules:** a journey's `travelMode` must be one of the seven, and `ride`
+  null or exactly the app's shape — known states and apps, a timestamp for
+  `confirmedAt`, and a vehicle number of upper-case letters, digits and
+  spaces, at most 24 characters. Nothing else may be added to it (no driver
+  phone, for one). Emulator-tested.
+- **Journey-start alert:** "Priya is getting an auto to Home" for a ride, by
+  push and text; a walk reads as before.
+- **SOS:** the alert adds " In an auto, vehicle KA 01 AB 1234." — or " Was
+  getting an auto." before she confirmed. Push and text, from any SOS that
+  belongs to a ride journey, the hands-free one included.
+- **Retention:** the daily job clears a finished journey's vehicle number
+  when it deletes the trail, as the app does when the traveller deletes it.
+- Also in the rules, from the low-battery work: the low-battery mark can be
+  set once and never cleared or changed, so it cannot be used to text the
+  contacts repeatedly.
 
 ## Phase 4 as built
 

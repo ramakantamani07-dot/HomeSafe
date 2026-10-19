@@ -18,6 +18,7 @@ import {
   purgeLocationUpdates,
 } from '../shared/batch';
 import { deleteKeysFor } from '../sos/handsFree';
+import type { StoredJourney } from '../shared/types';
 
 /**
  * Data retention and account deletion.
@@ -84,6 +85,11 @@ export const enforceDataRetention = onSchedule('every 24 hours', async () => {
   let locationUpdatesDeleted = 0;
   for (const doc of [...completed.docs, ...cancelledOrMissed.docs]) {
     locationUpdatesDeleted += await purgeLocationUpdates(doc.ref);
+    // A ride's vehicle number goes with the trail (rides.md, Phase 2): it
+    // identifies the trip as surely as the route does.
+    if ((doc.data() as StoredJourney).ride?.vehicleNumber) {
+      await doc.ref.update({ 'ride.vehicleNumber': null });
+    }
   }
 
   logger.info(

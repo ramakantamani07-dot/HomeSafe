@@ -13,6 +13,7 @@ import { getAlertRecipients, sendAlerts } from '../shared/messaging';
 import { mapLink, textContacts } from './contactSms';
 import { localTime, marketForNumber } from '../networkLocation/config';
 import { SOS_ALERT_CATEGORY, firstDueAt } from '../sos/escalation';
+import { rideSosDetail } from './rideWording';
 import type {
   StoredJourney,
   StoredSOS,
@@ -48,9 +49,15 @@ export const onSOSTriggered = onDocumentCreated(
     const sos = event.data?.data() as StoredSOS | undefined;
     if (!sos || sos.status !== 'ACTIVE') return;
 
-    const userDoc = await db.doc(`users/${userId}`).get();
+    const [userDoc, journeyDoc] = await Promise.all([
+      db.doc(`users/${userId}`).get(),
+      sos.journeyId ? db.doc(`users/${userId}/journeys/${sos.journeyId}`).get() : Promise.resolve(null),
+    ]);
     const user = userDoc.data() as StoredUser | undefined;
     const userName = user?.name?.trim() || 'A contact';
+    // " In an auto, vehicle KA 01 AB 1234." — on a ride, the most useful fact
+    // there is (rides.md, departure 5).
+    const ride = rideSosDetail(journeyDoc?.data() as StoredJourney | undefined);
 
     const location = sos.location
       ? `${sos.location.latitude.toFixed(5)},${sos.location.longitude.toFixed(5)}`
@@ -67,15 +74,15 @@ export const onSOSTriggered = onDocumentCreated(
     await textContacts(
       sms,
       'contact-sos',
-      `wayLoc SOS: ${userName} needs help.${link ? ` Last location${when}: ${link}` : ''} Call them now — if you can't reach them, call the emergency services.`,
+      `wayLoc SOS: ${userName} needs help.${ride}${link ? ` Last location${when}: ${link}` : ''} Call them now — if you can't reach them, call the emergency services.`,
     );
 
     await sendAlerts(
       tokens,
       '🚨 SOS Alert',
       location
-        ? `${userName} has triggered an SOS! Last known location${when}: ${location}`
-        : `${userName} has triggered an SOS alert!`,
+        ? `${userName} has triggered an SOS!${ride} Last known location${when}: ${location}`
+        : `${userName} has triggered an SOS alert!${ride}`,
       {
         type: 'SOS_TRIGGERED',
         userId,

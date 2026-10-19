@@ -44,6 +44,34 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= maxLen;
     }
 
+    // How a journey is travelled (src/models/Place.ts TravelMode).
+    function isValidTravelMode(mode) {
+      return mode in ['walk', 'bus', 'bike', 'car', 'cab', 'auto', 'bikeTaxi'];
+    }
+
+    // A journey's ride (src/models/Ride.ts): null, or exactly the app's shape.
+    // Family and SOS alerts read it, so a vehicle number is checked to be
+    // what the app would store: upper-case letters, digits and spaces.
+    function isValidRide(ride) {
+      return ride == null || (
+        ride is map
+        && ride.keys().hasOnly(['state', 'openedApp', 'bookedWith', 'confirmedAt', 'vehicleNumber'])
+        && ride.state in ['getting_ride', 'in_ride']
+        && (ride.get('openedApp', null) == null || ride.openedApp in ['uber', 'ola', 'rapido'])
+        && (ride.get('bookedWith', null) == null || ride.bookedWith in ['uber', 'ola', 'rapido', 'other'])
+        && (ride.get('confirmedAt', null) == null || ride.confirmedAt is timestamp)
+        && (ride.get('vehicleNumber', null) == null
+            || (ride.vehicleNumber is string
+                && ride.vehicleNumber.size() <= 24
+                && ride.vehicleNumber.matches('^[A-Z0-9 ]+$')))
+      );
+    }
+
+    function journeyTravelValid() {
+      return isValidTravelMode(request.resource.data.get('travelMode', 'walk'))
+        && isValidRide(request.resource.data.get('ride', null));
+    }
+
     function validPushToken(value) {
       return value == null || isReasonableString(value, 4096);
     }
@@ -239,13 +267,21 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           // userId field in the document must match the path — prevents spoofing.
           && incomingHasField('userId', userId)
-          && isReasonableString(request.resource.data.get('destinationLabel', ''), 200);
+          && isReasonableString(request.resource.data.get('destinationLabel', ''), 200)
+          && journeyTravelValid();
         allow update: if isOwner(userId)
           // Ownership and creation time are immutable after the first write.
           && fieldUnchanged('userId')
           && fieldUnchanged('createdAt')
           && (fieldUnchanged('nextCheckInAt')
-              || isValidNextCheckIn(request.resource.data.get('nextCheckInAt', null)));
+              || isValidNextCheckIn(request.resource.data.get('nextCheckInAt', null)))
+          && journeyTravelValid()
+          // The low-battery mark is what texts the contacts (alerts/lowBattery.ts),
+          // on its first appearance. Once set it can be neither changed nor
+          // removed — otherwise clearing and re-setting it would text them
+          // again and again.
+          && (!('lowBattery' in resource.data)
+              || request.resource.data.get('lowBattery', null) == resource.data.lowBattery);
         allow delete: if isOwner(userId);
 
         // ── Location Updates ──────────────────────────────────────────────
