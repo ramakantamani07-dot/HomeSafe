@@ -42,6 +42,35 @@ compound.
 | SOS acknowledgements and escalation (same doc) | **Built (18 Oct)** — "I'm on it" from contacts and family; reminders at 2 and 5 min; nothing to the traveller's phone under duress | Real notifications between two phones on the deployed backend; DLT template for the reminder text |
 | Proposals, not built | Recorded | Keep less on the server (`DATA_RETENTION.md`); rides by deep link; safer routes; ideas beyond journey sharing — sections below |
 
+## India launch (decided 19 Oct 2026)
+
+WayLoc launches in **India**. That reorders the work: Android, language,
+where the data lives and Indian rules come before new features.
+
+| # | Must do | Why | State |
+|---|---|---|---|
+| 1 | **Android working end to end** | Most Indian phones run Android | Map blank (Google key), routes OSRM driving, safe places fixtures, Siri SOS iPhone-only; **never run on an Android phone** |
+| 2 | **Firestore and Functions in Mumbai (`asia-south1`)** | Latency, and closer to India's data rules. **Firestore's location cannot be changed after it is created** | Functions default to `us-central1` (also hard-coded in `FirebaseHandsFreeSosProvider`); no database yet — choose Mumbai at creation, or a new project if one exists in the US |
+| 3 | **TRAI DLT registration** | Carriers silently drop unregistered business SMS | Every template is listed (`DLT_TEMPLATE_*`); register with the SMS provider — weeks |
+| 4 | **DPDP Act review** | Consent, deletion, **verifiable** parental consent under 18 | Delete and export exist; under-18 is a checkbox only |
+| 5 | **Hindi**, then regional languages | Parents and grandparents often don't read English | English only — no translation library. ~1–2 weeks for the setup and Hindi, plus a native speaker's review |
+| 6 | **Google Play policies** | Background location (declaration + video), foreground services, SMS permissions | Not started |
+| 7 | **Real phone sign-in** (Firebase step 0) | Codes cost ~$0.01 in India | Blocked on the Firebase config file |
+
+**Simpler for India:** 112 everywhere (done); rides are India-only
+(`docs/features/rides.md`); Google maps on Android give the best Indian
+coverage (Ola Maps the cheaper alternative); UK-only items drop down the list.
+
+**Order:** (1) Firebase in Mumbai + phone sign-in + deploy; (2) Android basics
+on two or three phones including a cheap one; (3) DLT registration, started
+now, in parallel; (4) Hindi; (5) rides Phases 1–2, Auto first; (6) ride
+hand-off — Uber, then Ola; (7) DPDP and legal review; (8) Play Store
+submission.
+
+**Only you can:** create the Firebase project in `asia-south1`; choose an
+Indian SMS provider and start DLT; apply for Ola partner access; contact
+Rapido; get Android test phones; find a DPDP adviser.
+
 `AI5` was started early and deliberately: `AI4`'s "Feeling uneasy?" pill needs a
 destination, and a button that goes nowhere is worse than no button. It ships
 the two tiles the app can already do honestly — **Call guardian** and **Fake
@@ -319,7 +348,7 @@ places". Related, already built: nearby safe places on "Feeling uneasy?"
 (`SafePlace`, safest kinds first), and "Open places on the way" behind its
 flag (D4).
 
-**Rides — cab, auto, bike taxi (proposal, decided 13–17 Oct 2026, not built).**
+**Rides — cab, auto, bike taxi (decided 13–19 Oct 2026; plan in `docs/features/rides.md`, boards `assets/wayloc-rides-v2/`).**
 WayLoc stays the safety layer around any journey, not a ride-hailing app.
 
 - **Ride options, never price comparison** (decided). Show Uber, Ola, Rapido,
