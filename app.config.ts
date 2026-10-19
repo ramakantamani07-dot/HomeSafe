@@ -79,6 +79,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // Keychain storage (expo-secure-store) — true today. Revisit this if
       // any custom/non-standard cryptography is ever added.
       ITSAppUsesNonExemptEncryption: false,
+      // How people *say* the app's name. Siri matches "WayLoc help me" against
+      // the display name "wayLoc", but hears "way lock" and may write it as
+      // "Waylock" or "Way Lock" — then no phrase matches and the SOS never
+      // runs. These are the spoken forms Siri also accepts as the app's name
+      // (docs/features/hands-free-sos.md).
+      INAlternativeAppNames: [
+        { INAlternativeAppName: 'Way Lock', INAlternativeAppNamePronunciationHint: 'way lock' },
+        { INAlternativeAppName: 'Waylock', INAlternativeAppNamePronunciationHint: 'way lock' },
+        { INAlternativeAppName: 'Way Loc', INAlternativeAppNamePronunciationHint: 'way lock' },
+      ],
     },
   },
   android: {

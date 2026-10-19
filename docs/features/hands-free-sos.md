@@ -21,6 +21,12 @@ equal): "WayLoc help me", "Help me with WayLoc", "WayLoc SOS", "Send WayLoc SOS"
 The same action appears in Shortcuts, so it can be put on the Action Button or
 Back Tap.
 
+**How the name is heard.** The display name is "wayLoc", but people say "way
+lock", which Siri may write as "Waylock" or "Way Lock" — and then no phrase
+matches. `INAlternativeAppNames` (`app.config.ts`) gives Siri those spoken
+forms as names for the app (19 Oct 2026, after "WayLoc help me" did nothing on
+the first device test).
+
 Android ("WayLoc, help me" with an on-device listener, during journeys) is
 Phase 2.
 
