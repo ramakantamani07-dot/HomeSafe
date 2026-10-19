@@ -55,7 +55,7 @@ where the data lives and Indian rules come before new features.
 | 2 | **Firestore and Functions in Mumbai (`asia-south1`)** | Latency, and closer to India's data rules. **Firestore's location cannot be changed after it is created** | **Code done (19 Oct):** every function is defined in `asia-south1` (`functions/src/shared/region.ts`); the app calls that region (`getAppFunctions`, `FIREBASE_FUNCTIONS_REGION`), including the Siri SOS URL; a test keeps the two equal. Left: create the database in Mumbai — choose it at creation, or a new project if one exists in the US |
 | 3 | **TRAI DLT registration** | Carriers silently drop unregistered business SMS | Every template is listed (`DLT_TEMPLATE_*`); register with the SMS provider — weeks |
 | 4 | **DPDP Act review** | Consent, deletion, **verifiable** parental consent under 18 | Delete and export exist; under-18 is a checkbox only |
-| 5 | **Hindi**, then regional languages | Parents and grandparents often don't read English | English only — no translation library. ~1–2 weeks for the setup and Hindi, plus a native speaker's review |
+| 5 | **Hindi**, then regional languages | Parents and grandparents often don't read English | **Planned (19 Oct):** `docs/features/LANGUAGES.md` — ~1,000 strings, no Devanagari in the app's fonts; six phases, ~2½ weeks plus a native speaker's review; four decisions (L1–L4) open |
 | 6 | **Google Play policies** | Background location (declaration + video), foreground services, SMS permissions | Not started |
 | 7 | **Real phone sign-in** (Firebase step 0) | Codes cost ~$0.01 in India | Blocked on the Firebase config file |
 
