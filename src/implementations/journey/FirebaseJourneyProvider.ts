@@ -119,6 +119,8 @@ type StoredJourney = {
   routeDistanceMeters?: number;
   routeDurationSeconds?: number;
   initialEta?: Timestamp;
+  /** Set once when the battery went low; the server alerts on this edge. */
+  lowBattery?: { percent: number; at: Timestamp };
 };
 
 function journeysCol(db: Firestore, userId: string) {
@@ -154,6 +156,7 @@ function fromFirestore(id: string, data: StoredJourney): Journey {
     routeDistanceMeters: data.routeDistanceMeters ?? null,
     routeDurationSeconds: data.routeDurationSeconds ?? null,
     initialEta: data.initialEta ? data.initialEta.toDate() : null,
+    lowBatteryReportedAt: data.lowBattery ? data.lowBattery.at.toDate() : null,
   };
 }
 
@@ -275,6 +278,19 @@ export class FirebaseJourneyProvider implements JourneyProvider {
       routeDistanceMeters: distanceMeters,
       routeDurationSeconds: durationSeconds,
       initialEta: Timestamp.fromDate(initialEta),
+    });
+  }
+
+  async markLowBattery(
+    userId: string,
+    journeyId: string,
+    batteryPercent: number,
+    location: Coordinates | null,
+  ): Promise<void> {
+    await updateDoc(journeyRef(this.db, userId, journeyId), {
+      lowBattery: { percent: batteryPercent, at: Timestamp.now() },
+      // The freshest position goes with it: it is the one that gets sent.
+      ...(location ? { currentLocation: location, lastLocationAt: Timestamp.now() } : {}),
     });
   }
 

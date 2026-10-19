@@ -54,6 +54,7 @@ export class MockJourneyProvider implements JourneyProvider {
       routeDistanceMeters: null,
       routeDurationSeconds: null,
       initialEta: null,
+      lowBatteryReportedAt: null,
     };
     this.userStore(userId).set(id, { ...journey });
     return { ...journey };
@@ -132,6 +133,23 @@ export class MockJourneyProvider implements JourneyProvider {
       routeDistanceMeters: distanceMeters,
       routeDurationSeconds: durationSeconds,
       initialEta,
+    });
+  }
+
+  async markLowBattery(
+    userId: string,
+    journeyId: string,
+    _batteryPercent: number,
+    location: import('../../models/Journey').Coordinates | null,
+  ): Promise<void> {
+    await delay(100);
+    const store = this.userStore(userId);
+    const existing = store.get(journeyId);
+    if (!existing) throw new Error('Journey not found.');
+    store.set(journeyId, {
+      ...existing,
+      lowBatteryReportedAt: new Date(),
+      currentLocation: location ?? existing.currentLocation,
     });
   }
 

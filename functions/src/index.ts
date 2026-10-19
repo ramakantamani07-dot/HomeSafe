@@ -29,6 +29,7 @@ export {
   onSOSTriggered,
   onMissedCheckIn,
   onSafetyCheckEscalated,
+  onJourneyLowBattery,
   onJourneyStarted,
   onTrustedContactAdded,
   sendTestAlert,

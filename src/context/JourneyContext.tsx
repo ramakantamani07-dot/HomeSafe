@@ -23,6 +23,11 @@ interface JourneyContextValue {
   endJourney(): Promise<Journey | null>;
   cancelJourney(): Promise<void>;
   missedCheckIn(): Promise<void>;
+  /**
+   * Sends the last location once if the battery is below the journey's
+   * low-battery rule. Safe to call on every battery change; a no-op otherwise.
+   */
+  reportLowBattery(batteryPercent: number, location: Coordinates | null): Promise<void>;
   /** "Yes, I'm in" (AP3). `bookedWith` is the traveller's answer, when asked. */
   confirmInRide(bookedWith: RideBookedWith | null): Promise<void>;
   /** The ride app did not open: the journey keeps waiting, with no app claimed. */
@@ -60,6 +65,7 @@ export const JourneyContext = createContext<JourneyContextValue>({
   endJourney: async () => null,
   cancelJourney: async () => {},
   missedCheckIn: async () => {},
+  reportLowBattery: async () => {},
   confirmInRide: async () => {},
   clearOpenedApp: async () => {},
   setVehicleNumber: async () => {},
@@ -172,6 +178,15 @@ export function JourneyStateProvider({
     setActiveJourney(null);
   }, [userId, activeJourney, journeyService]);
 
+  const reportLowBattery = useCallback(
+    async (batteryPercent: number, location: Coordinates | null) => {
+      if (!userId || !activeJourney) return;
+      const updated = await journeyService.reportLowBattery(userId, activeJourney, batteryPercent, location);
+      if (updated !== activeJourney) setActiveJourney(updated);
+    },
+    [userId, activeJourney, journeyService],
+  );
+
   // Ride changes save first, then show what was saved — a ride the screen says
   // is confirmed must be one the journey record says is confirmed. Failures
   // throw to the screen, which says so.
@@ -252,6 +267,7 @@ export function JourneyStateProvider({
       endJourney,
       cancelJourney,
       missedCheckIn,
+      reportLowBattery,
       confirmInRide,
       clearOpenedApp,
       setVehicleNumber,
@@ -272,6 +288,7 @@ export function JourneyStateProvider({
       endJourney,
       cancelJourney,
       missedCheckIn,
+      reportLowBattery,
       confirmInRide,
       clearOpenedApp,
       setVehicleNumber,

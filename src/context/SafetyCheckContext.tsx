@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 import type { SafetyCheckReason } from '../models/AlertRules';
+import { isLowBatteryForAlert } from '../models/AlertRules';
 import type { SafetyCheck } from '../models/SafetyCheck';
 import {
   SAFETY_CHECK_COOLDOWN_MINUTES,
@@ -76,7 +77,7 @@ export function SafetyCheckStateProvider({
   children: React.ReactNode;
 }) {
   const { user } = useAuthContext();
-  const { activeJourney } = useJourneyContext();
+  const { activeJourney, reportLowBattery } = useJourneyContext();
   const { currentLocation } = useLocationTrackingContext();
   // Percent, not the 0–1 fraction: this value is written to the safety check as
   // `batteryPercent` and reaches guardians in the escalation alert.
@@ -120,6 +121,24 @@ export function SafetyCheckStateProvider({
   travelModeRef.current = travelMode;
   const latestRef = useRef({ route, eta, currentLocation, batteryPercent, rules, extraMinutes });
   latestRef.current = { route, eta, currentLocation, batteryPercent, rules, extraMinutes };
+
+  // ── Low battery: "Battery under 10% → Send last location" (screen 04) ──
+  // Once per journey. The phone only marks the journey; the server sends the
+  // last location, since a phone this low may be off before a send finishes.
+  // A failed mark (offline) is tried again on the next battery change.
+  const lowBatteryRules = activeJourney?.alertRules ?? null;
+  const lowBatteryReported = activeJourney?.lowBatteryReportedAt != null;
+  const markingLowBatteryRef = useRef(false);
+  useEffect(() => {
+    if (!journeyId || !lowBatteryRules || lowBatteryReported || markingLowBatteryRef.current) return;
+    if (!isLowBatteryForAlert(batteryPercent, lowBatteryRules)) return;
+    markingLowBatteryRef.current = true;
+    void reportLowBattery(batteryPercent, latestRef.current.currentLocation)
+      .catch(() => {})
+      .finally(() => {
+        markingLowBatteryRef.current = false;
+      });
+  }, [journeyId, lowBatteryRules, lowBatteryReported, batteryPercent, reportLowBattery]);
 
   const adjustedEta = useMemo(
     () => (eta ? new Date(eta.getTime() + extraMinutes * 60_000) : null),

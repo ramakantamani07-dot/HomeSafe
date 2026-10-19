@@ -24,6 +24,14 @@ export const DEFAULT_ALERT_RULES: AlertRules = {
   lowBatteryPercent: 10,
 };
 
+/**
+ * Whether the battery is low enough to send the last location (screen 04's
+ * "Battery under 10% → Send last location"). Sent once per journey.
+ */
+export function isLowBatteryForAlert(batteryPercent: number, rules: AlertRules): boolean {
+  return batteryPercent >= 0 && batteryPercent < rules.lowBatteryPercent;
+}
+
 /** Choices offered by the "Edit" link on screen 04. */
 export const LATE_THRESHOLD_OPTIONS = [5, 10, 15, 30] as const;
 export const NO_REPLY_OPTIONS = [1, 2, 5] as const;

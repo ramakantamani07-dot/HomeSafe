@@ -50,6 +50,11 @@ export interface Journey {
   routeDurationSeconds: number | null;
   /** Estimated arrival time calculated at journey start. Null until routing succeeds. */
   initialEta: Date | null;
+  /**
+   * When the low-battery alert was sent for this journey (screen 04: "Battery
+   * under 10% → Send last location"). Once per journey; null until then.
+   */
+  lowBatteryReportedAt: Date | null;
 }
 
 export type StartJourneyInput = {

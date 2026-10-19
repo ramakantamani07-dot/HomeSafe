@@ -41,6 +41,7 @@ compound.
 | Hands-free SOS (`features/hands-free-sos.md`) | **Phase 0 + 1 built (18 Oct)** — the app lock never holds back an SOS; "Siri, WayLoc help me", Action Button, Back Tap, Hindi and Indian English phrases; iOS 17+ | Install and try on the iPhone; whole path on the deployed backend; Phase 2 Android |
 | SOS acknowledgements and escalation (same doc) | **Built (18 Oct)** — "I'm on it" from contacts and family; reminders at 2 and 5 min; nothing to the traveller's phone under duress | Real notifications between two phones on the deployed backend; DLT template for the reminder text |
 | Rides Phases 1–3 (`features/rides.md`) | **Built (19 Oct)** — Cab, Auto, Bike taxi modes; Walk gets walking routes, everything on wheels driving routes (Car no longer shows a walking ETA); bus and bike times labelled as estimates; rides get a 10-min pickup allowance, 20 min before "stopped", a wider off-route margin and slower tracking. Ride state on the journey: "Are you in the auto now?" (AP3), vehicle number (AP4), Change travel, copy address (`expo-clipboard`). Hand-off: "Start Safe Journey & open Uber" (AP1 / AP2), Uber universal link; Ola behind `OLA_XAPP_TOKEN`. Tested | Uber checked on the iPhone (destination filled in). Production Client ID before launch; Ola token; Phases 4–7: Mum's view, server rules, Android |
+| Low-battery alert (screen 04 "Battery under 10% → Send last location") | **Built (19 Oct)** — was a known gap: nothing read `lowBatteryPercent`. The phone marks the journey once when the battery drops below the journey's threshold, with its latest position; `onJourneyLowBattery` sends the last location to contacts (push, or text `contact-low-battery`). An unknown battery reading (−1 on the simulator) no longer counts as empty. Tracking still slows at 15% — a different question (save power), so a different number | DLT id `DLT_TEMPLATE_CONTACT_LOW_BATTERY`; real notification on the deployed backend; not suppressed while charging (the port has no charging state) |
 | Proposals, not built | Recorded | Keep less on the server (`DATA_RETENTION.md`); rides by deep link; safer routes; ideas beyond journey sharing — sections below |
 
 ## India launch (decided 19 Oct 2026)
@@ -290,7 +291,6 @@ Firebase project, `.env`, `firebase deploy` of rules, indexes and functions
 | Support email is `hello@homesafeapp.com` | Terms, Privacy | Survived the rename — the domain is a real-world decision, not ours to invent |
 | EAS slug still registered as `homesafe` | expo.dev | Rename the project before the first EAS build or it rejects the slug |
 | Wordmark unreadable at icon size | `assets/icon.png` | ~8 px on a home screen; the symbol alone would read better |
-| **Low-battery promise not kept** (principle 4) | `review-journey.tsx` ("Battery under 10% → Send last location"), `AlertRules.lowBatteryPercent`, `LocationTrackingService` | Found 18 Oct. Nothing reads `lowBatteryPercent`: at `LOW_BATTERY_THRESHOLD` (15%, a different number) tracking only slows down, and no last-location message goes to anyone. Either send it (one push or text to the family with the last position, once per journey) or change the row to what happens. One threshold for both |
 | Place search on iPhone is Apple's (11 Oct) | `MapKitPlacesProvider`, `modules/place-search` | Place names and suggestions as you type, free. Thinner than Google for small local shops in India; Google Places still takes over if a key is set. Android keeps the system geocoder (addresses and postcodes only) |
 
 ### Android map services (decided 13 Oct 2026)
@@ -388,7 +388,7 @@ that would set WayLoc apart, each building on something already here:
 | Watch check-ins | "I'm OK" and SOS from Apple Watch / Wear OS | Check-in actions | Reachable when the phone is in a bag |
 | Guardian "start a journey?" nudge | If the usual time passes with no journey, family can ask — with consent | Ask "OK?" | Helps the habit without automatic tracking |
 | Evidence recording during SOS | Audio saved and uploaded securely | SOS | Powerful but sensitive: privacy and legal design first |
-| "Phone dying" last message | At low battery, send the last position and "my phone is about to die" | Battery tiers | Also fixes the low-battery gap above |
+| "Phone dying" last message | At low battery, send the last position and "my phone is about to die" | Battery tiers | Built during a journey, 19 Oct (status table, "Low-battery alert"); outside a journey not built |
 
 **Not pursued:** "safest route" or "safe area" scores (principle 4 — see Safer
 routes); crash or fall detection (iOS does not expose its own to other apps,

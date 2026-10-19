@@ -18,11 +18,21 @@ try {
   BatterySDK = null;
 }
 
+/**
+ * expo-battery reports -1 when the level is unknown (the simulator, some
+ * Android builds). The port's contract is "1.0 if unavailable" — passed
+ * through, -1 reads as an empty battery and would tell someone's family their
+ * phone is dying.
+ */
+function known(level: number): number {
+  return Number.isFinite(level) && level >= 0 && level <= 1 ? level : 1.0;
+}
+
 export class ExpoBatteryProvider implements BatteryProvider {
   async getBatteryLevel(): Promise<number> {
     if (!BatterySDK) return 1.0;
     try {
-      return await BatterySDK.getBatteryLevelAsync();
+      return known(await BatterySDK.getBatteryLevelAsync());
     } catch {
       return 1.0;
     }
@@ -31,7 +41,7 @@ export class ExpoBatteryProvider implements BatteryProvider {
   startMonitoring(onLevelChange: (level: number) => void): () => void {
     if (!BatterySDK) return () => {};
     const subscription = BatterySDK.addBatteryLevelListener((event) => {
-      onLevelChange(event.batteryLevel);
+      onLevelChange(known(event.batteryLevel));
     });
     return () => subscription.remove();
   }

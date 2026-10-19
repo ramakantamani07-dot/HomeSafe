@@ -24,6 +24,7 @@ Cloud Logging → Logs-based metrics, filtered on `jsonPayload.metric="<name>"`.
 | `hands_free_sos` | `outcome`, `platform`, `location` | any `unauthorised` spike (someone probing keys); `location: none` share rising |
 | `sos_ack` | `outcome` | `not-allowed` rising (people who think they should be able to respond can't) |
 | `sos_escalation` | `stage`, `pushed`, `texted` | **any** `stage: 2` — five minutes with nobody responding to an SOS; look at it |
+| `low_battery_alert` | `pushed`, `texted` | `pushed` and `texted` both 0 — a traveller's phone was dying and nobody was told |
 
 **Cost per lookup** = sum of `billedUnits` × the aggregator's unit price, per
 day. Zone checks are the steady cost (one unit per zone per 15 minutes while

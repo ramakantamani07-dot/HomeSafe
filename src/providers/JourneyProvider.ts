@@ -1,4 +1,4 @@
-import type { Journey, JourneyStatus, StartJourneyInput } from '../models/Journey';
+import type { Coordinates, Journey, JourneyStatus, StartJourneyInput } from '../models/Journey';
 import type { LocationUpdate } from '../models/LocationUpdate';
 import type { TravelMode } from '../models/Place';
 import type { Ride } from '../models/Ride';
@@ -58,6 +58,13 @@ export interface JourneyProvider {
     durationSeconds: number,
     initialEta: Date,
   ): Promise<void>;
+
+  /**
+   * Marks the journey's battery as low, with the latest position, once. The
+   * server sends the last location to the traveller's contacts on that edge
+   * (functions/src/alerts/lowBattery.ts).
+   */
+  markLowBattery(userId: string, journeyId: string, batteryPercent: number, location: Coordinates | null): Promise<void>;
 
   /**
    * Replaces how the journey is travelled: the mode and its ride ("Yes, I'm

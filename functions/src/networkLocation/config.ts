@@ -104,6 +104,7 @@ export type SmsTemplate =
   | 'contact-sos'
   | 'contact-sos-reminder'
   | 'contact-missed'
+  | 'contact-low-battery'
   | 'contact-journey'
   | 'contact-added'
   | 'contact-test'
@@ -166,6 +167,7 @@ export function renderSms(template: SmsTemplate, guardianName: string, details: 
     case 'contact-sos':
     case 'contact-sos-reminder':
     case 'contact-missed':
+    case 'contact-low-battery':
     case 'contact-journey':
     case 'contact-added':
     case 'contact-test':

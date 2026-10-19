@@ -3,7 +3,7 @@ import type { LocationProvider } from '../providers/LocationProvider';
 import type { NetworkProvider } from '../providers/NetworkProvider';
 import type { Coordinates, Journey } from '../models/Journey';
 import type { AlertRules } from '../models/AlertRules';
-import { DEFAULT_ALERT_RULES } from '../models/AlertRules';
+import { DEFAULT_ALERT_RULES, isLowBatteryForAlert } from '../models/AlertRules';
 import type { Place, TravelMode } from '../models/Place';
 import { DEFAULT_ARRIVAL_RADIUS_METERS } from '../models/Place';
 import type { Ride, RideApp, RideBookedWith } from '../models/Ride';
@@ -105,6 +105,24 @@ export class JourneyService {
       }
       throw err;
     }
+  }
+
+  /**
+   * "Battery under 10% → Send last location" (screen 04). Marks the journey
+   * once; the server sends the last location to the contacts. Returns the
+   * journey unchanged when it is not low enough or was already reported.
+   */
+  async reportLowBattery(
+    userId: string,
+    journey: Journey,
+    batteryPercent: number,
+    location: Coordinates | null,
+    now = new Date(),
+  ): Promise<Journey> {
+    if (journey.status !== 'ACTIVE' || journey.lowBatteryReportedAt) return journey;
+    if (!isLowBatteryForAlert(batteryPercent, journey.alertRules)) return journey;
+    await this.journeys.markLowBattery(userId, journey.id, batteryPercent, location);
+    return { ...journey, lowBatteryReportedAt: now, currentLocation: location ?? journey.currentLocation };
   }
 
   // ── Rides (docs/features/rides.md, Phase 2) ──────────────────────────────
@@ -233,6 +251,7 @@ export class JourneyService {
       routeDistanceMeters: null,
       routeDurationSeconds: null,
       initialEta: null,
+      lowBatteryReportedAt: null,
     };
   }
 }

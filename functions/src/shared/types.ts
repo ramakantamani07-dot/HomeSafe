@@ -55,13 +55,13 @@ export interface StoredSafetyCheck {
 
 // FCM data values must all be strings.
 export interface AlertData {
-  type: 'SOS_TRIGGERED' | 'MISSED_CHECKIN' | 'SAFETY_CHECK_ESCALATED' | 'JOURNEY_STARTED' | 'TEST_ALERT';
+  type: 'SOS_TRIGGERED' | 'MISSED_CHECKIN' | 'SAFETY_CHECK_ESCALATED' | 'JOURNEY_STARTED' | 'LOW_BATTERY' | 'TEST_ALERT';
   userId: string;
   userName: string;
   journeyId: string;
   timestamp: string;
   location: string; // "lat,lng" or "" when unknown
-  /** Present only on SAFETY_CHECK_ESCALATED. "" when the battery is unknown. */
+  /** On SAFETY_CHECK_ESCALATED and LOW_BATTERY. "" when the battery is unknown. */
   battery?: string;
   /** Present on SOS_TRIGGERED: which SOS "I'm on it" answers. */
   sosId?: string;

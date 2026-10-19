@@ -243,6 +243,7 @@ export const onSafetyCheckEscalated = onDocumentUpdated(
 );
 
 export { onJourneyStarted, onTrustedContactAdded, sendTestAlert } from './contacts';
+export { onJourneyLowBattery } from './lowBattery';
 
 /** How far behind the SOS a fix may be and still be called simply "last location". */
 const STALE_FIX_MS = 5 * 60 * 1000;
